@@ -32,7 +32,8 @@ import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface CurrencyPickerProps {
   readonly visible: boolean;
-  readonly selectedCurrency: CurrencyType;
+  readonly selectedCurrency: CurrencyType | null;
+  readonly contextSubtitle?: string;
   readonly allowedCurrencies?: readonly string[];
   readonly testID?: string;
   readonly onSelect: (currency: CurrencyType) => void;
@@ -126,6 +127,7 @@ function CurrencyListSeparator(): React.JSX.Element {
 export function CurrencyPicker({
   visible,
   selectedCurrency,
+  contextSubtitle,
   allowedCurrencies,
   testID,
   onSelect,
@@ -165,7 +167,7 @@ export function CurrencyPicker({
     ({ item }: { item: CurrencyInfo }) => (
       <CurrencyRow
         item={item}
-        isSelected={item.code === selectedCurrency}
+        isSelected={selectedCurrency !== null && item.code === selectedCurrency}
         onPress={() => handleSelect(item.code)}
       />
     ),
@@ -186,6 +188,7 @@ export function CurrencyPicker({
         <View className="flex-1 justify-end bg-black/50">
           <TouchableWithoutFeedback>
             <View
+              testID="currency-picker-sheet"
               className="rounded-t-[32px] bg-white dark:bg-slate-800 max-h-[80%]"
               style={{ paddingBottom: bottomInset }}
             >
@@ -195,9 +198,22 @@ export function CurrencyPicker({
               </View>
 
               {/* Title */}
-              <Text className="text-xl font-bold text-center text-slate-800 dark:text-white mb-3 px-5">
+              <Text
+                className={
+                  "text-xl font-bold text-center text-slate-800 dark:text-white px-5 " +
+                  (contextSubtitle ? "mb-1" : "mb-3")
+                }
+              >
                 {t("select_currency")}
               </Text>
+              {contextSubtitle ? (
+                <Text
+                  testID="account-review-currency-context"
+                  className="mx-5 mb-3 text-sm leading-5 text-slate-500 dark:text-slate-300"
+                >
+                  {contextSubtitle}
+                </Text>
+              ) : null}
 
               {/* Search */}
               <View className="mx-5 mb-3 flex-row items-center bg-slate-100 dark:bg-slate-700 rounded-xl px-3">

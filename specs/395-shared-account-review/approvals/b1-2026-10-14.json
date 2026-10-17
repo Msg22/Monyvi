@@ -1,0 +1,260 @@
+{
+  "date": "2026-10-14",
+  "status": "APPROVED",
+  "approvedManifestRevision": "sha256:cf447362f73c91f975f97ecf2295bce1ed8300213f701f6caab181ee997059a0",
+  "manifest": "../mockups/binding-package.json",
+  "approvedSourceHead": "46a85a90a62ffe2d720a17c0fc45177222fb300e",
+  "evidence": {
+    "source": "Owner reply in this chat",
+    "questionItemId": "[\"request_user_input_async\",\"call_335ad43901c14f3496f290423db633b2\",0]",
+    "quote": "Approve B1 bindings and R3 additions"
+  },
+  "scope": "All 23 exact scoped B1 combined revisions, pinned common contract, existing R3 visual and EN/AR copy additions; existing currency modal reuse; no new images. Frozen draft manifest/status headers preserved as historical approved inputs and superseded by this receipt.",
+  "dependencies": [
+    {
+      "file": "mockups/binding-contract.md",
+      "revision": "sha256:5717e4ab6dd4f2458c686565fb81c725bcf1a7d1197ebde3e167542716f48a68"
+    },
+    {
+      "file": "mockups/proposals/r3/interaction-notes.md",
+      "revision": "sha256:2b4c8a42cb01a0148ef4e4ee6a09f158b60357ac3bb045b28ecd50b47e1ca5d4"
+    },
+    {
+      "file": "mockups/adjustments.md",
+      "revision": "sha256:f25dd143c5859437d4602fccc70a23036f3416895d852d362d4a72158827a2b4"
+    }
+  ],
+  "specRevision": "sha256:e012f5a7d2edadc8bc1e2fa2ce03aeea56bc0c947dc02bfc2a3f166150e2c7d0",
+  "entries": [
+    {
+      "image": "mockups/references/r1/03-multiple-matches-en.png",
+      "imageRevision": "sha256:f0d49b61e744bba1041f8ccad30a0106fa1c010b2b3be001781306f235002480",
+      "sidecar": "mockups/references/r1/03-multiple-matches-en.binding.md",
+      "sidecarRevision": "sha256:11fcfe448684fde9196964e2f9fc45836e61510689ec18ec6b97b3e5ab920fed",
+      "bindingRevision": "sha256:efd6a4668623bc131b81d4b0e43f7ec1e5ecfd3ef6b9a6168ff338e9eade7deb",
+      "approvalRevision": "sha256:c33986e7f608ca8411c07295653d5d92bb1247c40eca489125d87ea3be089100",
+      "scope": "Per-transaction existing-account chooser; background contextual.",
+      "approvedSidecarRevision": "sha256:19f80e3acc624fae1d12ea29d6737c9f8b4a711f9011b416ef2cdc270f31ac92"
+    },
+    {
+      "image": "mockups/references/r1/07-edit-shared-draft-en.png",
+      "imageRevision": "sha256:0d814b8f3d163581e1ac0196d0acece661ad52898fe242482cc2cf032742969b",
+      "sidecar": "mockups/references/r1/07-edit-shared-draft-en.binding.md",
+      "sidecarRevision": "sha256:076c77080dc031d9557216c03f559f6c7b474a66e6beacbf870c5b19cf1cd1e5",
+      "bindingRevision": "sha256:0192895709f0aacebd8774fb9dea605dade04152d75d3bf9966a70f45a751656",
+      "approvalRevision": "sha256:f3ee3a278bb4394787c0596c059e98903e99adcaf119c000ca84fa6267340aeb",
+      "scope": "Foreground Edit suggested account sheet only; old background superseded.",
+      "approvedSidecarRevision": "sha256:0c4deaba63c81ecb580e13663d24d2ec1dcdf01bff3ae9de9659130e3408c5af"
+    },
+    {
+      "image": "mockups/references/r1/08-account-helper-en.png",
+      "imageRevision": "sha256:4625f88d83441bd5ecb90dade10265ad318c176503d765f8cdb06af07da65f57",
+      "sidecar": "mockups/references/r1/08-account-helper-en.binding.md",
+      "sidecarRevision": "sha256:43333df8f9a0e07462074c42b09497695aebfcb6d65025a5de54a3632f03d13b",
+      "bindingRevision": "sha256:2b3c0f5ee2c45d63d69b5a831fdd6a3949f7804683477b24fd63acd803b2daf5",
+      "approvalRevision": "sha256:b28eca632bdfb5dd0813d57bcd98a70e5fbda0c56565b801784db147412d31ce",
+      "scope": "Edit Account default flag/helper only; other form fields contextual.",
+      "approvedSidecarRevision": "sha256:9eb2b1ff3e066412c68ff4c11cde213e90bcfef04460251e03cbb5997b3c3830"
+    },
+    {
+      "image": "mockups/references/r1/11-currency-confirm-en.png",
+      "imageRevision": "sha256:48a52ee5bf582e3a3d44d4a97f2a679e844c4ff8fbc6973cf2d4df8ff84d4d55",
+      "sidecar": "mockups/references/r1/11-currency-confirm-en.binding.md",
+      "sidecarRevision": "sha256:69ccb0ad7a433bf7f87eefa7038da98dd45a76710c89f6bdbd9a49c1128cfb68",
+      "bindingRevision": "sha256:385cedfc9d91f755ccff294184e1c8cfc56355bcc16e9330ed3bb98fc45e6494",
+      "approvalRevision": "sha256:1f0d89880a048802dbc6194ca767f5b72c0369941af2d6b7cd108a4c5f21a60f",
+      "scope": "Foreground conflict confirmation sheet; extend with documented R3-03 other-currency action.",
+      "approvedSidecarRevision": "sha256:ed0e2282d85cdb9cf20b808438afd2ed81c5105074e9bec07322925dbc0db273"
+    },
+    {
+      "image": "mockups/references/r1/12-multiple-matches-ar.png",
+      "imageRevision": "sha256:9f848ba5595931a2f4c767b62237f49e4f18a4ed5c4ca9f7585ddc1d2cf5de23",
+      "sidecar": "mockups/references/r1/12-multiple-matches-ar.binding.md",
+      "sidecarRevision": "sha256:9cc0838338966862ae4c90c557c4f2918811281bea0f4048199f2edbaacba7b2",
+      "bindingRevision": "sha256:6509d1f450722cb19b4918305d8130ccde5bbfb6421f266f31af016bccbcf63b",
+      "approvalRevision": "sha256:ae414959cbcd23d1d02fc0c980a4b4f645fea23ed847859bc7c1da4e815ccb4e",
+      "scope": "Arabic RTL per-transaction existing-account chooser.",
+      "approvedSidecarRevision": "sha256:0b505a87a86fcefe61a547d0ec0550c614b9708773327cd2b879e2b601f6d646"
+    },
+    {
+      "image": "mockups/references/r2/01-unified-review-en.png",
+      "imageRevision": "sha256:ca26ac07c04550267d15c95f4e9ee55e50a6d644b249ed7163b3facc5b2d0a1b",
+      "sidecar": "mockups/references/r2/01-unified-review-en.binding.md",
+      "sidecarRevision": "sha256:ee4897bf4ce6843b89e7c198e1d038075f71075230ada78a83770cc58d5a3de6",
+      "bindingRevision": "sha256:63ac2a6b37355edd2cf0978216f5f19131cf56df1add266c7d2ef41684f3f725",
+      "approvalRevision": "sha256:2170f443d73806360a4bb79ad1f838aa43fc959256dfa44f910b72cee01abd62",
+      "scope": "Compact shared-group/issue/default grouping concept only; final detailed composition R3-05.",
+      "approvedSidecarRevision": "sha256:a21ccec7e2d87751c67ea629fe6924c36128dc9a63d839ffea22b82199d67088"
+    },
+    {
+      "image": "mockups/references/r2/02-individual-account-actions-en.png",
+      "imageRevision": "sha256:b44883958d569c8e6dddafdabc6b49b84979ccfbfadf6badcf85f83c233faa91",
+      "sidecar": "mockups/references/r2/02-individual-account-actions-en.binding.md",
+      "sidecarRevision": "sha256:f602024fc3d1575155cbe19bc711f1d03cd46c236ea6282ad9291ebe2a1753f4",
+      "bindingRevision": "sha256:b4fe7d39cf2a2b4e6f05d6139418a53749a86a34f7573c57d5d31446d4164c9d",
+      "approvalRevision": "sha256:c7eced836fb9a9b987afb49dbf2a4d1ae85766e339424b3f08708c2b5e5f9925",
+      "scope": "Foreground per-group action sheet only.",
+      "approvedSidecarRevision": "sha256:4ad3d0ad58a4b8b2d7ca3bc6edad1e1e47ccdcf33834bd8e0c63108e7733121f"
+    },
+    {
+      "image": "mockups/references/r2/03-all-suggested-accounts-en.png",
+      "imageRevision": "sha256:51888693f9da55b9d6c87e0499b76e182e833c7e61aa8e5602a61cd65006d8de",
+      "sidecar": "mockups/references/r2/03-all-suggested-accounts-en.binding.md",
+      "sidecarRevision": "sha256:6b0fa5f22439dbd41259bba205480787495d4df07976799f562d92f28f5a2092",
+      "bindingRevision": "sha256:a38b6f85984a0e2368ac2e757be43694dcd3ed543bed2f5cd3e63e51f8debc5b",
+      "approvalRevision": "sha256:07194c422eeb175ab105f724d5e881460305997bf4ff1cfea155930545360c94",
+      "scope": "Foreground View all suggestions list and independent group actions.",
+      "approvedSidecarRevision": "sha256:0c81358fa50e598fcc93097548b18afd775823e087f5ab0c315297f79896087e"
+    },
+    {
+      "image": "mockups/proposals/r3/01-add-account-default-en.png",
+      "imageRevision": "sha256:a05cffd7d98c84b6b3f47515df38f1a9dd9f003032d96bdb14e3c5474b19d02d",
+      "sidecar": "mockups/proposals/r3/01-add-account-default-en.binding.md",
+      "sidecarRevision": "sha256:ffe92dd3995f49ce881da1b6643d14b932f0e2f362a57ddea7b67170813d0408",
+      "bindingRevision": "sha256:66a7911a017944bc207bc8d2beefe1b657526babd67b92b08201ecdf7dc4ba61",
+      "approvalRevision": "sha256:a2726dfe337198d0e72ddee4defcf3cde05f62cc2ad256945b74297cbe1dbef0",
+      "scope": "Add Account default block after Initial balance, before SMS matching; surrounding form contextual.",
+      "approvedSidecarRevision": "sha256:692aa3685a525114470e0731589bdca607240da3ca84d19d0e13159f56751d13"
+    },
+    {
+      "image": "mockups/proposals/r3/02-add-first-cash-default-en.png",
+      "imageRevision": "sha256:59a766e554c48ccd342f3103955721c432ed1d025cb0f286bf47bdcec462ab6c",
+      "sidecar": "mockups/proposals/r3/02-add-first-cash-default-en.binding.md",
+      "sidecarRevision": "sha256:32e7340aca0d4e1e47718e3855da8e4a747051972f5f091ac0b33e124ff66330",
+      "bindingRevision": "sha256:32d8e0076211ff280ef2bbe6ee621d8cc525d3a1a5c236ce6f2cd488cbbd44d6",
+      "approvalRevision": "sha256:7f16d7666b4f5a3801d4e0c6930d820d970166eb6647970e59aa49d695b12084",
+      "scope": "First Add Account default block with Cash-specific helper.",
+      "approvedSidecarRevision": "sha256:4e301b691ddf5ea4944766ed4a7bed6454f767822de29605106d44f09f4d0c11"
+    },
+    {
+      "image": "mockups/proposals/r3/03-confirm-currency-other-en.png",
+      "imageRevision": "sha256:882f648018977185ac786781cf9560d3224a57fab8360e44f066d796751d3c1a",
+      "sidecar": "mockups/proposals/r3/03-confirm-currency-other-en.binding.md",
+      "sidecarRevision": "sha256:bf0117067003a3c8371ecee49211d509555767768ba9581be4c2a25d2fe4b517",
+      "bindingRevision": "sha256:66a1fd876b3f52cf21221cc08671988c1a7fec250dd1276ad998a579dee9caf4",
+      "approvalRevision": "sha256:93c86522d972ce038067bc253e35715629c1362cfb40ac56321ca415d452d342",
+      "scope": "Foreground conflict sheet with Choose another currency action.",
+      "approvedSidecarRevision": "sha256:896d291dd83d165c81ea80b4158e804778661a11d9c9619ca13380c07702862c"
+    },
+    {
+      "image": "mockups/proposals/r3/04-other-currency-picker-en.png",
+      "imageRevision": "sha256:125e36fee3daea262fc35efc64c12a3bb42b797511c68df5ec4191d362b4b804",
+      "sidecar": "mockups/proposals/r3/04-other-currency-picker-en.binding.md",
+      "sidecarRevision": "sha256:15fd19c2874e2714334e3d706ec497ec5af830693133d670d75175febb6faab4",
+      "bindingRevision": "sha256:a0f961a45b088dfddd902f5c6b6c98880efded824ecb560b4e3ce90ab80a6308",
+      "approvalRevision": "sha256:1a97ecf92acac1526471eeadb4c50647e3f60d42197f9bda2bfdfa803e9498ea",
+      "scope": "Transaction-context sub-label and existing CurrencyPicker reuse ONLY; custom chrome excluded by owner.",
+      "approvedSidecarRevision": "sha256:2b1fe802dd19778c2251b37cb06fc09d6867b808c6882a98938838d20e636d29"
+    },
+    {
+      "image": "mockups/proposals/r3/05-combined-review-en.png",
+      "imageRevision": "sha256:59928fdf5851225aa57a778d715bb9b90671e1eeff36de3aa9fd9fbd1b846815",
+      "sidecar": "mockups/proposals/r3/05-combined-review-en.binding.md",
+      "sidecarRevision": "sha256:3520038a40c7f51a501b50bd4a5f96d710db6fb811e16bb54938edd4a25ac4fb",
+      "bindingRevision": "sha256:a65148d5810f39f3a78db70572511f903111fbbde4f95bcb64fd2d85dd1a16c7",
+      "approvalRevision": "sha256:76355e32a5db32cfd47b12ad3c720489b28c9721de9aec70bbc651b9a7e5fcd7",
+      "scope": "Final combined Voice/SMS review information, filters, toolbar and row account states.",
+      "approvedSidecarRevision": "sha256:ab0167120d3ec14ad8b890e5636d0eadc76ac4ab51d4d0a1c9b0e1f2e68ca90a"
+    },
+    {
+      "image": "mockups/proposals/r3/06-removed-suggestion-undo-en.png",
+      "imageRevision": "sha256:68b93edf55e0ba834dcb24500248b6bae2a074dca266fca40f898b3a5b1c90b2",
+      "sidecar": "mockups/proposals/r3/06-removed-suggestion-undo-en.binding.md",
+      "sidecarRevision": "sha256:a0b5811831856b76d49973795d86c92cd9d283a9d0121ad03f4e5d92c13a6d60",
+      "bindingRevision": "sha256:180b80c7b9c6ca20a10e19044ee8206defe69a5b52eae689ace455720719aa6a",
+      "approvalRevision": "sha256:121ac845cbf94cbb92f7040dacabd643215a035072560b138f923ae7ea830919",
+      "scope": "Removed-suggestion recovery in separate four-row fixture.",
+      "approvedSidecarRevision": "sha256:410b3dda41e09dec9b5c2acbcef43fa2bd7e16374c2fd4d7f03312218028c5b0"
+    },
+    {
+      "image": "mockups/proposals/r3/07-default-only-en.png",
+      "imageRevision": "sha256:dc9a084051f79782d1b00a0bb8a9ecd446548824c64e5036f796de4c0b17fc47",
+      "sidecar": "mockups/proposals/r3/07-default-only-en.binding.md",
+      "sidecarRevision": "sha256:ce01aa35ec3194ff93682645040b6e63430e181c44d8f8246375ad72a3f3e680",
+      "bindingRevision": "sha256:1d364a95539746ec993e5a3a4afb71ecdd1559558ce5a6003a527e95738198ac",
+      "approvalRevision": "sha256:66ef741ac8676435ebabac4389fd4826f0ada4d42746eeae94be38120f0d0843",
+      "scope": "Default-only compact disclosure and review rows.",
+      "approvedSidecarRevision": "sha256:127f44d0136e518f4c25b783ac8fcb1c8856a0b0af4db2974c902aa155c99427"
+    },
+    {
+      "image": "mockups/proposals/r3/08-issues-only-en.png",
+      "imageRevision": "sha256:55f37f1886f08f176e6100aaab1d8e90de560fbe66405c89566586f7ecc580c8",
+      "sidecar": "mockups/proposals/r3/08-issues-only-en.binding.md",
+      "sidecarRevision": "sha256:e02bd09fc6a68cb8481b226550f23828e318e399cfd48bb6a4af9b7437cdf3dc",
+      "bindingRevision": "sha256:c631734146360c924dcf46a02252f213954e7dcc94a87f7a132ebd7f7c8282c3",
+      "approvalRevision": "sha256:79e13fdc452b67143115df54439cd0380d2c43c04cde878e1914ccaf6c5236d3",
+      "scope": "Compact unresolved-fields section without draft/default banners.",
+      "approvedSidecarRevision": "sha256:c095aa82f5dad27fd02e8407f8ed640a20394a1b9afd17c4c59baf4f7b687107"
+    },
+    {
+      "image": "mockups/proposals/r3/09-confirmed-feedback-en.png",
+      "imageRevision": "sha256:4d79c2dea9b513da041e8d3164de8f47491cc0ac9210c3da6244003f70a59f78",
+      "sidecar": "mockups/proposals/r3/09-confirmed-feedback-en.binding.md",
+      "sidecarRevision": "sha256:cfe1865d58455ca4b45ec6e76a7fdb01ba05462425a2daaea50ea7ca05cf6bb9",
+      "bindingRevision": "sha256:7a5b0513fe68651a1c2d1935bae52cf04867589b5d26fa3fedfb516a5aec3fb4",
+      "approvalRevision": "sha256:e3cde1b95b9aef817e7d193427476aad9ffdf9f130caae0df90dcab33a64da06",
+      "scope": "Confirmed-group status, selection feedback, filters and footer.",
+      "approvedSidecarRevision": "sha256:b67eaa7bd6d62746a6b44844a8f71e9b2840d5e84cf8db2518cc60e2438165f4"
+    },
+    {
+      "image": "mockups/proposals/r3/10-clean-review-en.png",
+      "imageRevision": "sha256:354b066ef4d4abd1136783a8bea2d567f4c25852b3358be310f6a329d57e25bc",
+      "sidecar": "mockups/proposals/r3/10-clean-review-en.binding.md",
+      "sidecarRevision": "sha256:1331f2f9d6963fd550318eb540af9bd4d3570b2df7bfa5e67a42e37329c9b4d5",
+      "bindingRevision": "sha256:66498ec7059341a70ac84ca76b52e6e4e391a8f73f243d1c653938f3cdde87a1",
+      "approvalRevision": "sha256:fc68ed3c20743f3e19917210f0e9217247b070e762c9edd60e4df39489ff50aa",
+      "scope": "Clean review without empty information containers.",
+      "approvedSidecarRevision": "sha256:bb554e9210748b8846e29f388cdb790ec0e6dafe1ec2ec8b06e490dd74d3918b"
+    },
+    {
+      "image": "mockups/proposals/r3/11-empty-selected-filter-en.png",
+      "imageRevision": "sha256:71cc1c2363906ad6e0ccd992e856b17f3db3c0b286638601813311657afd3b36",
+      "sidecar": "mockups/proposals/r3/11-empty-selected-filter-en.binding.md",
+      "sidecarRevision": "sha256:c780358154830dbdf10d1913d0e9e316032aa776267ea987fb7c0e603eb19f49",
+      "bindingRevision": "sha256:a287876749a138bb3ef8b1ee595c39478259a3724659ed6135b715ad0da1c5b4",
+      "approvalRevision": "sha256:db1daed31dd46701aa92bd47d437d4d97f1b845af02f3f39fa60fb9be72b8a23",
+      "scope": "Selected-filter empty recovery, distinct from recorder no-result state.",
+      "approvedSidecarRevision": "sha256:e5a496a2fd0a5797021616e31223e15896df549fd0693829626365e7a710dee1"
+    },
+    {
+      "image": "mockups/proposals/r3/12-default-why-en.png",
+      "imageRevision": "sha256:75da5cd763eb6bc28a98f0b7bf66bbda456459b3ef9b5429c8e518b725179807",
+      "sidecar": "mockups/proposals/r3/12-default-why-en.binding.md",
+      "sidecarRevision": "sha256:961c636edd3995930c0543c9c204561dbd32cdabf1ff89f11c8eb29df2fefcc6",
+      "bindingRevision": "sha256:e0b52e84bf091e1ad5eff40dffc7c8cb0361a1e1622e8b489aa4bf18ff7bba6d",
+      "approvalRevision": "sha256:b191d57bdd27de2f2ace9ebafca8a1cf1b50c53f4ef895dcc0144b16be2421b4",
+      "scope": "Foreground default explanation only; background contextual.",
+      "approvedSidecarRevision": "sha256:363fe3249d047d222ddb6cdc740829a0661491ba38d3f874e4a3af28db1d5eb1"
+    },
+    {
+      "image": "mockups/proposals/r3/13-group-replace-en.png",
+      "imageRevision": "sha256:56dd140e457207944c2ca4c55ec8257f27caaeb74b7cab045fd44ca5a2ee3c66",
+      "sidecar": "mockups/proposals/r3/13-group-replace-en.binding.md",
+      "sidecarRevision": "sha256:b6b97e6604271bf77832f24fbc1daa8a5a5c76da1204e3967da8c52e7d5a51a8",
+      "bindingRevision": "sha256:61419d01d68993d695413b424f222c9db366e86e35d9fd68594ce2a803fabb10",
+      "approvalRevision": "sha256:1188a1f932c8b0b4fc47a915574754fab0605facf9831bbbebc85f37152401aa",
+      "scope": "Foreground existing-account replacement opened from shared-group menu.",
+      "approvedSidecarRevision": "sha256:e39096844cf056a82699bef89838b02af8656bcb23a44f8ec3ecfc0d3e5f1637"
+    },
+    {
+      "image": "mockups/proposals/r3/14-sms-save-failure-en.png",
+      "imageRevision": "sha256:a2ac62e9eaf59c4a91cabd6b84b962f0226e4e12828d8945e17c585fb05f0696",
+      "sidecar": "mockups/proposals/r3/14-sms-save-failure-en.binding.md",
+      "sidecarRevision": "sha256:be463a6914359cefec868107687f23e4beb78623423c62e2f1f0247d9b25a257",
+      "bindingRevision": "sha256:b68e0e89a4729ac3961f7fd2d16408deadde63e663c7ccedcbe56da157fc0499",
+      "approvalRevision": "sha256:96ce301f396ac3ed8f4bf28dd60b84a89e097ffd02c24d388d363cd464269ac1",
+      "scope": "SMS failed-save recovery and existing action footer.",
+      "approvedSidecarRevision": "sha256:c7a5402bb5034bf9152b1c6053375f5a0e82dfa96927c62fece9fdbdafcdc67a"
+    },
+    {
+      "image": "mockups/proposals/r3/15-combined-review-ar.png",
+      "imageRevision": "sha256:e70d98381bb801d4dfb58fe1618b1864be43627c6879d8d3f3b26d326916de34",
+      "sidecar": "mockups/proposals/r3/15-combined-review-ar.binding.md",
+      "sidecarRevision": "sha256:6185355ad487f7326e37446f33c99e74db865d4ddf98b385d97e3eace77652df",
+      "bindingRevision": "sha256:8b9149e1759843cce605cfeae04829b8a137cde0cdfed5f210a0e321259a96b8",
+      "approvalRevision": "sha256:3afa8d8df81bcd67db4c3f420e0b759ab892793493ba2280037ddde13fa3c2ec",
+      "scope": "Arabic RTL final combined review, same semantics as R3-05.",
+      "approvedSidecarRevision": "sha256:26dcfbca5bbf28b1065761f79c729b6e2b138ddc53dcc57afc21b0a8445adcb8"
+    }
+  ]
+}

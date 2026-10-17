@@ -1,0 +1,811 @@
+import { isE2eTestMode } from "@/config/e2e-test-config";
+import {
+  computeSmsFingerprint,
+  type AccountReviewRequestContext,
+  type AccountReviewSession,
+} from "@monyvi/logic";
+import type {
+  AccountReviewAccountSnapshots,
+  AccountReviewLocalAccountSnapshot,
+} from "@/services/account-review-read-model-service";
+import manifest from "../../e2e/fixtures/shared-account-review.json";
+import {
+  CURRENT_OWNER,
+  ANOTHER_OWNER,
+  OWNER_CATEGORY_IDS,
+  getRoleId,
+  buildAccountRecordsForOwner,
+  buildScopedCategoryForOwner,
+  accountProviderProjection,
+  assertOwnedSessionReferencesForFixture,
+  type ScopedCategoryRecord,
+  type DescriptorScene,
+  type DescriptorRow,
+  type DescriptorIssueTag,
+} from "./account-review-fixture-test-fixtures";
+
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
+
+interface ScopedCategoryQuery {
+  readonly fetch: () => Promise<readonly ScopedCategoryRecord[]>;
+}
+interface ScopedCategoryScope {
+  readonly userId: string;
+  readonly queryOwned: (collection: {
+    readonly table: string;
+  }) => ScopedCategoryQuery;
+  readonly queryAccessibleCategories: (collection: {
+    readonly table: string;
+  }) => ScopedCategoryQuery;
+}
+
+let mockActiveOwnerId: string | null = CURRENT_OWNER;
+let mockSnapshotReadGate: Promise<void> | null = null;
+let mockNotifySnapshotStarted: (() => void) | null = null;
+const mockMissingAccountIds = new Set<string>();
+const mockDeletedAccountIds = new Set<string>();
+const mockForeignAccountIds = new Set<string>();
+const mockMissingCategoryIds = new Set<string>();
+const mockDeletedCategoryIds = new Set<string>();
+const mockForeignCategoryIds = new Set<string>();
+const mockAccountOverrides = new Map<
+  string,
+  Partial<AccountReviewLocalAccountSnapshot>
+>();
+const mockExtraAccounts: Array<{
+  readonly userId: string;
+  readonly account: AccountReviewLocalAccountSnapshot;
+}> = [];
+const mockCategoryScopeCalls: Array<{
+  readonly ownerId: string;
+  readonly mode: string;
+}> = [];
+
+function accountRecordsForOwner(
+  ownerId: string
+): AccountReviewLocalAccountSnapshot[] {
+  return buildAccountRecordsForOwner(ownerId, {
+    missingAccountIds: mockMissingAccountIds,
+    deletedAccountIds: mockDeletedAccountIds,
+    foreignAccountIds: mockForeignAccountIds,
+    accountOverrides: mockAccountOverrides,
+    extraAccounts: mockExtraAccounts,
+  });
+}
+
+function scopedCategoryForOwner(ownerId: string): ScopedCategoryRecord[] {
+  return buildScopedCategoryForOwner(ownerId, {
+    missingCategoryIds: mockMissingCategoryIds,
+    deletedCategoryIds: mockDeletedCategoryIds,
+    foreignCategoryIds: mockForeignCategoryIds,
+  });
+}
+
+const mockDatabaseWrite = jest.fn(
+  (): Promise<never> =>
+    Promise.reject(new Error("Fixture entry cannot write financial records"))
+);
+const mockUnscopedFetch = jest.fn(
+  (): Promise<never> =>
+    Promise.reject(new Error("Fixture reads must be authenticated and scoped"))
+);
+const mockProviderCall = jest.fn(
+  (..._args: readonly unknown[]): Promise<never> =>
+    Promise.reject(
+      new Error("Fixture entry cannot call an AI/provider endpoint")
+    )
+);
+const mockGetRequiredCurrentUserId = jest.fn(
+  (): Promise<string> =>
+    mockActiveOwnerId === null
+      ? Promise.reject(new Error("USER_REQUIRED"))
+      : Promise.resolve(mockActiveOwnerId)
+);
+
+const mockLoadAccountReviewAccountSnapshots = jest.fn(
+  async (): Promise<AccountReviewAccountSnapshots> => {
+    const ownerId = await mockGetRequiredCurrentUserId();
+    if (mockSnapshotReadGate !== null) {
+      mockNotifySnapshotStarted?.();
+      await mockSnapshotReadGate;
+    }
+    const accounts = accountRecordsForOwner(ownerId);
+    const providerContext: AccountReviewRequestContext = {
+      reviewContractVersion: "account-review/v2",
+      preferredCurrency: "EGP",
+      accounts: accounts.map(accountProviderProjection),
+    };
+    return {
+      ownerId,
+      preferredCurrency: providerContext.preferredCurrency,
+      accounts,
+      providerContext,
+    };
+  }
+);
+
+const mockGetCurrentUserDataScope = jest.fn(
+  (): Promise<ScopedCategoryScope> =>
+    mockGetRequiredCurrentUserId().then((userId): ScopedCategoryScope => {
+      const makeQuery = (
+        mode: string,
+        collection: { readonly table: string }
+      ): ScopedCategoryQuery => {
+        mockCategoryScopeCalls.push({ ownerId: userId, mode });
+        return {
+          fetch: (): Promise<readonly ScopedCategoryRecord[]> =>
+            Promise.resolve(
+              collection.table === "categories"
+                ? scopedCategoryForOwner(userId)
+                : []
+            ),
+        };
+      };
+      return {
+        userId,
+        queryOwned: (collection): ScopedCategoryQuery =>
+          makeQuery("owned", collection),
+        queryAccessibleCategories: (collection): ScopedCategoryQuery =>
+          makeQuery("accessible", collection),
+      };
+    })
+);
+
+// Use Node's real SHA-256 in Jest; Expo's native crypto bridge is unavailable
+// in this unit runner. This preserves real fingerprint/hash semantics.
+jest.mock("expo-crypto", () => {
+  const nodeCrypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA256" },
+    digestStringAsync: (_algorithm: string, input: string): Promise<string> =>
+      Promise.resolve(
+        nodeCrypto.createHash("sha256").update(input).digest("hex")
+      ),
+  };
+});
+
+jest.mock("@monyvi/db", () => ({
+  database: {
+    write: (): Promise<never> => mockDatabaseWrite(),
+    get: (table: string): object => ({
+      table,
+      query: (): object => ({
+        fetch: (): Promise<never> => mockUnscopedFetch(),
+      }),
+    }),
+  },
+}));
+jest.mock("@/services/supabase", () => ({
+  supabase: {
+    functions: {
+      invoke: (...args: readonly unknown[]): Promise<never> =>
+        mockProviderCall(...args),
+    },
+  },
+}));
+jest.mock("@/services/authenticated-edge-function-service", () => ({
+  invokeAuthenticatedEdgeFunction: (
+    ...args: readonly unknown[]
+  ): Promise<never> => mockProviderCall(...args),
+}));
+jest.mock("@/services/user-data-access", () => ({
+  getRequiredCurrentUserId: (): Promise<string> =>
+    mockGetRequiredCurrentUserId(),
+  getCurrentUserDataScope: (): ReturnType<typeof mockGetCurrentUserDataScope> =>
+    mockGetCurrentUserDataScope(),
+}));
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: (): ReturnType<
+    typeof mockLoadAccountReviewAccountSnapshots
+  > => mockLoadAccountReviewAccountSnapshots(),
+}));
+
+function hasDescriptorIssueTag(
+  row: DescriptorRow,
+  tag: DescriptorIssueTag
+): boolean {
+  const issueTags: readonly DescriptorIssueTag[] = row.issueTags;
+  return issueTags.includes(tag);
+}
+
+interface FixtureEntryModule {
+  readonly loadAccountReviewFixtureSession?: (
+    sceneId: string
+  ) => Promise<unknown>;
+}
+
+// Synchronous, real-module resolution; an absent T015 file is genuine Red.
+// This local module-import typing is NOT a mock loader or a review-state DTO.
+function resolveRuntimeFixtureEntry(): (sceneId: string) => Promise<unknown> {
+  const module = jest.requireActual<FixtureEntryModule>(
+    "@/services/account-review-fixture-service"
+  );
+  const loadFixture = module.loadAccountReviewFixtureSession;
+  if (typeof loadFixture !== "function") {
+    throw new Error("T015 fixture entry export is unavailable");
+  }
+  return loadFixture;
+}
+
+function parseHydratedSession(value: unknown): AccountReviewSession {
+  const { accountReviewSessionSchema } =
+    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic");
+  return accountReviewSessionSchema.parse(value);
+}
+
+function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
+  const loadFixture = resolveRuntimeFixtureEntry();
+  return loadFixture(sceneId);
+}
+
+function findScene(id: string): DescriptorScene {
+  const scene = manifest.scenes.find((candidate) => candidate.id === id);
+  if (!scene) {
+    throw new Error(`Missing synthetic #395 scene ${id}`);
+  }
+  return scene;
+}
+
+function assertNoFixtureSideEffects(): void {
+  expect(mockDatabaseWrite).not.toHaveBeenCalled();
+  expect(mockUnscopedFetch).not.toHaveBeenCalled();
+  expect(mockProviderCall).not.toHaveBeenCalled();
+}
+
+function assertOwnedSessionReferences(
+  session: AccountReviewSession,
+  scene: DescriptorScene,
+  ownerId: string
+): void {
+  assertOwnedSessionReferencesForFixture(
+    session,
+    scene,
+    ownerId,
+    accountRecordsForOwner(ownerId),
+    scopedCategoryForOwner(ownerId)
+  );
+}
+
+describe("T008 #395 bounded fixture descriptor contract", () => {
+  it("is synthetic, current-user-only, non-production and contains no hosted seed or runtime claims", () => {
+    expect(manifest.format).toBe(
+      "monyvi-account-review-fixture-descriptors/v1"
+    );
+    expect(manifest.synthetic).toBe(true);
+    expect(manifest.productionEntryAllowed).toBe(false);
+    expect(manifest.ownerBinding).toBe("authenticated-current-user-only");
+    expect(
+      manifest.scenarios.every((scenario) => !scenario.maestroExecuted)
+    ).toBe(true);
+    expect(
+      manifest.scenarios.every((scenario) => scenario.fixtureAuthoringOnly)
+    ).toBe(true);
+
+    const serialized = JSON.stringify(manifest);
+    expect(serialized).not.toMatch(/"ownerId"\s*:/);
+    expect(serialized).not.toMatch(/"accountNumber"\s*:/);
+    expect(serialized).not.toMatch(/"balance"\s*:/);
+    expect(serialized).not.toMatch(/"rawSmsBody"\s*:/);
+    expect(serialized).not.toMatch(/"accessToken"\s*:/);
+    expect(serialized).not.toMatch(/"password"\s*:/);
+    expect(serialized).not.toMatch(/"providerApiKey"\s*:/);
+    expect(serialized).not.toContain("localhost:54321");
+  });
+
+  it("describes a privacy-safe preferred-currency request context without requiring the future Zod export", () => {
+    const context = manifest.accountContext;
+    expect(context.reviewContractVersion).toBe("account-review/v2");
+    expect(context.preferredCurrency).toBe("EGP");
+    expect(context.accounts).toHaveLength(5);
+    expect(
+      context.accounts.every((account) => UUID_V4_PATTERN.test(account.id))
+    ).toBe(true);
+    expect(context.accounts.some((account) => account.type === "CASH")).toBe(
+      true
+    );
+    expect(context.accounts.some((account) => account.type === "BANK")).toBe(
+      true
+    );
+    expect(
+      context.accounts.some((account) => account.type === "DIGITAL_WALLET")
+    ).toBe(true);
+    expect(context.accounts.map((account) => account.id)).not.toContain(
+      manifest.excludedAccountRefs.deletedAccountId
+    );
+    expect(context.accounts.map((account) => account.id)).not.toContain(
+      manifest.excludedAccountRefs.foreignAccountId
+    );
+  });
+
+  it("maps every manual M01–M20 case to an explicit boundary without claiming E2E execution", () => {
+    const expectedIds = Array.from(
+      { length: 20 },
+      (_, index) => `M${String(index + 1).padStart(2, "0")}`
+    );
+    expect(manifest.scenarios.map((caseData) => caseData.id).sort()).toEqual(
+      expectedIds
+    );
+    const sceneIds = new Set(manifest.scenes.map((scene) => scene.id));
+    expect(sceneIds.size).toBe(manifest.scenes.length);
+    for (const entry of manifest.scenarios) {
+      expect(entry.requiredAssertion.trim()).not.toBe("");
+      expect(entry.ownerOrSeparateTestBoundary.trim()).not.toBe("");
+      for (const sceneId of entry.sceneIds) {
+        expect(sceneIds.has(sceneId)).toBe(true);
+      }
+    }
+    expect(
+      manifest.scenarios.find((value) => value.id === "M12")?.sceneIds
+    ).toEqual([]);
+    expect(
+      manifest.scenarios.find((value) => value.id === "M18")?.sceneIds
+    ).toEqual([]);
+    for (const id of ["M14", "M17", "M19", "M20"]) {
+      const boundary = manifest.scenarios.find((value) => value.id === id);
+      expect(boundary?.maestroExecuted).toBe(false);
+      expect(boundary?.ownerOrSeparateTestBoundary).toBeTruthy();
+    }
+  });
+
+  it.each([
+    { id: "r3-combined-en", total: 7, needsReview: 5, selected: 2 },
+    { id: "r3-combined-ar", total: 7, needsReview: 5, selected: 2 },
+    { id: "r3-removed-undo", total: 4, needsReview: 3, selected: 1 },
+    { id: "r3-default-only", total: 2, needsReview: 0, selected: 2 },
+    { id: "r3-issues-only", total: 4, needsReview: 4, selected: 0 },
+    { id: "r3-confirmed-feedback", total: 4, needsReview: 0, selected: 1 },
+    { id: "r3-clean", total: 2, needsReview: 0, selected: 2 },
+    { id: "r3-selected-empty", total: 3, needsReview: 0, selected: 0 },
+  ])(
+    "preserves B1 counts for $id: total $total / review $needsReview / selected $selected",
+    ({ id, total, needsReview, selected }) => {
+      const scene = findScene(id);
+      expect(scene.expectedCounts).toEqual({ total, needsReview, selected });
+      expect(scene.rows).toHaveLength(total);
+      expect(scene.rows.filter((row) => row.issueTags.length > 0)).toHaveLength(
+        needsReview
+      );
+      expect(scene.rows.filter((row) => row.selected)).toHaveLength(selected);
+      expect(
+        scene.rows.filter((row) => row.selected && row.issueTags.length > 0)
+      ).toHaveLength(0);
+    }
+  );
+
+  it("has valid stable UUID identifiers, real-shaped SMS fingerprints and consistent group linkage", () => {
+    const allIds = new Set<string>();
+    const accountIds = new Set(
+      manifest.accountContext.accounts.map((account) => account.id)
+    );
+    for (const accountId of accountIds) {
+      expect(accountId).toMatch(UUID_V4_PATTERN);
+      expect(allIds.has(accountId)).toBe(false);
+      allIds.add(accountId);
+    }
+    for (const scene of manifest.scenes) {
+      expect(scene.sessionId).toMatch(UUID_V4_PATTERN);
+      expect(allIds.has(scene.sessionId)).toBe(false);
+      allIds.add(scene.sessionId);
+
+      const fingerprints = new Set<string>();
+      const refs = new Set<string>();
+      for (const row of scene.rows) {
+        expect(row.rowId).toMatch(UUID_V4_PATTERN);
+        expect(row.categoryId).toMatch(UUID_V4_PATTERN);
+        expect(allIds.has(row.rowId)).toBe(false);
+        allIds.add(row.rowId);
+        expect(refs.has(row.sourceRef)).toBe(false);
+        refs.add(row.sourceRef);
+        if (scene.source === "SMS") {
+          expect(row.sourceFingerprint).toMatch(SHA_256_PATTERN);
+          expect(fingerprints.has(row.sourceFingerprint ?? "")).toBe(false);
+          fingerprints.add(row.sourceFingerprint ?? "");
+        } else {
+          expect(row.sourceFingerprint).toBeNull();
+        }
+        expect(row.groupId === null || row.accountId === null).toBe(true);
+        if (row.accountId !== null) {
+          expect(accountIds.has(row.accountId)).toBe(true);
+        }
+        if (row.toAccountId !== null) {
+          expect(accountIds.has(row.toAccountId)).toBe(true);
+        }
+      }
+      for (const group of scene.groups) {
+        expect(group.groupId).toMatch(UUID_V4_PATTERN);
+        expect(allIds.has(group.groupId)).toBe(false);
+        allIds.add(group.groupId);
+        expect(group.linkedRowIds.length).toBeGreaterThan(0);
+        for (const rowId of group.linkedRowIds) {
+          const match = scene.rows.find((row) => row.rowId === rowId);
+          expect(match?.groupId).toBe(group.groupId);
+        }
+      }
+      for (const row of scene.rows) {
+        if (row.groupId !== null) {
+          const parentGroup = scene.groups.find(
+            (group) => group.groupId === row.groupId
+          );
+          expect(parentGroup?.linkedRowIds).toContain(row.rowId);
+        }
+      }
+      expect(scene.expectedCounts.total).toBe(scene.rows.length);
+    }
+  });
+
+  it("distinguishes Cash default source exclusion from a valid independent ATM destination", () => {
+    const ordinarySms = findScene("sms-cash-ineligible");
+    const atmSms = findScene("sms-atm-transfer");
+    expect(ordinarySms.source).toBe("SMS");
+    expect(ordinarySms.expectedCounts).toEqual({
+      total: 1,
+      needsReview: 1,
+      selected: 0,
+    });
+    expect(ordinarySms.rows[0]?.accountId).toBeNull();
+    expect(atmSms.rows[0]?.isAtmWithdrawal).toBe(true);
+    expect(atmSms.rows[0]?.accountId).not.toBe(atmSms.rows[0]?.toAccountId);
+    expect(atmSms.rows[0]?.toAccountId).toBe(manifest.defaultAccountId);
+    expect(atmSms.rows[0]?.amountDecimal).toBe("25.05");
+  });
+
+  it("keeps proven omitted currency separate from conflicting unconfirmed currency", () => {
+    const omitted = findScene("voice-currency-omitted");
+    const conflict = findScene("r3-currency-conflict");
+
+    expect(omitted.rows[0]).toMatchObject({
+      currencyEvidenceState: "omitted",
+      accountEvidenceState: "absent",
+      currencyCode: manifest.accountContext.preferredCurrency,
+      accountId: manifest.defaultAccountId,
+      selected: true,
+      issueTags: [],
+    });
+    expect(conflict.rows[0]).toMatchObject({
+      currencyCode: null,
+      accountId: null,
+      selected: false,
+      issueTags: ["currency_confirmation_needed"],
+    });
+    expect(omitted.source).toBe("VOICE");
+    expect(conflict.source).toBe("SMS");
+  });
+
+  it("preserves confirmed-versus-selected independence and removal recovery facts", () => {
+    const confirmed = findScene("r3-confirmed-feedback");
+    expect(confirmed.groups).toHaveLength(2);
+    expect(
+      confirmed.groups.every((group) => group.status === "confirmed")
+    ).toBe(true);
+    expect(confirmed.rows.filter((row) => row.selected)).toHaveLength(1);
+    const removed = findScene("r3-removed-undo");
+    expect(removed.groups.some((group) => group.status === "removed")).toBe(
+      true
+    );
+    expect(
+      removed.rows.filter((row) =>
+        hasDescriptorIssueTag(row, "account_group_removed")
+      )
+    ).toHaveLength(2);
+    expect(removed.rows).toHaveLength(4);
+  });
+});
+
+describe("T008 future current-owner fixture entry (Red before T015)", () => {
+  const originalEnv = process.env;
+
+  it("validates the safe request catalogue with the canonical Zod schema once T005 exists", () => {
+    const { accountReviewRequestContextSchema } =
+      jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic");
+    const context = accountReviewRequestContextSchema.parse(
+      manifest.accountContext
+    );
+    expect(context.reviewContractVersion).toBe("account-review/v2");
+    expect(context.accounts).toHaveLength(5);
+  });
+
+  beforeEach((): void => {
+    jest.clearAllMocks();
+    mockActiveOwnerId = CURRENT_OWNER;
+    mockSnapshotReadGate = null;
+    mockNotifySnapshotStarted = null;
+    mockMissingAccountIds.clear();
+    mockDeletedAccountIds.clear();
+    mockForeignAccountIds.clear();
+    mockMissingCategoryIds.clear();
+    mockDeletedCategoryIds.clear();
+    mockForeignCategoryIds.clear();
+    mockAccountOverrides.clear();
+    mockExtraAccounts.length = 0;
+    mockCategoryScopeCalls.length = 0;
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: "test",
+      EXPO_PUBLIC_MONYVI_TEST_MODE: "e2e",
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: "fixture",
+    };
+  });
+
+  afterEach((): void => {
+    process.env = originalEnv;
+  });
+
+  it("accepts an explicit safe test-mode Voice entry and materializes the canonical current-user session", async () => {
+    expect(isE2eTestMode()).toBe(true);
+
+    const scene = findScene("r3-combined-en");
+    const session = parseHydratedSession(
+      await loadRuntimeFixtureSession(scene.id)
+    );
+    assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
+
+    expect(session.ownerId).toBe(CURRENT_OWNER);
+    expect(session.source).toBe("VOICE");
+    expect(session.rows).toHaveLength(7);
+    expect(session.rows.filter((row) => row.selected)).toHaveLength(2);
+    expect(session.groups).toHaveLength(2);
+    expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
+    expect(mockCategoryScopeCalls).toContainEqual({
+      ownerId: CURRENT_OWNER,
+      mode: "accessible",
+    });
+    assertNoFixtureSideEffects();
+  });
+
+  it("materializes SMS fingerprints in a current-owner session without calling hosted seed/write", async () => {
+    const scene = findScene("sms-review-restart");
+    const session = parseHydratedSession(
+      await loadRuntimeFixtureSession(scene.id)
+    );
+    assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
+
+    expect(session.ownerId).toBe(CURRENT_OWNER);
+    expect(session.source).toBe("SMS");
+    expect(session.rows).toHaveLength(1);
+    expect(session.rows[0]?.sourceFingerprint).toMatch(SHA_256_PATTERN);
+    expect(session.groups).toHaveLength(1);
+    // The loader constructs a session; only the real writer may subsequently Save.
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects fixture entry when E2E mode is off", async () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
+
+    expect(isE2eTestMode()).toBe(false);
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects fixture entry in production even with an E2E-looking environment", async () => {
+    process.env = {
+      ...process.env,
+      NODE_ENV: "production",
+      EXPO_PUBLIC_MONYVI_TEST_MODE: "e2e",
+    };
+
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
+  });
+
+  it("does not construct a fixture for a signed-out user or infer an owner from the static catalog", async () => {
+    mockActiveOwnerId = null;
+
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it("binds the same scene to two owners with distinct real-shaped account and category IDs", async () => {
+    const scene = findScene("r3-default-only");
+    const first = parseHydratedSession(
+      await loadRuntimeFixtureSession(scene.id)
+    );
+    assertOwnedSessionReferences(first, scene, CURRENT_OWNER);
+    expect(first.rows[0]?.assignment.state).toBe("existing");
+
+    mockActiveOwnerId = ANOTHER_OWNER;
+    const second = parseHydratedSession(
+      await loadRuntimeFixtureSession(scene.id)
+    );
+    assertOwnedSessionReferences(second, scene, ANOTHER_OWNER);
+    expect(second.rows[0]?.assignment.state).toBe("existing");
+
+    const firstAccountIds = new Set(
+      accountRecordsForOwner(CURRENT_OWNER).map(({ id }) => id)
+    );
+    const secondAccountIds = new Set(
+      accountRecordsForOwner(ANOTHER_OWNER).map(({ id }) => id)
+    );
+    expect([...secondAccountIds].some((id) => firstAccountIds.has(id))).toBe(
+      false
+    );
+    const firstChoice = first.rows[0]?.assignment;
+    const secondChoice = second.rows[0]?.assignment;
+    if (
+      firstChoice?.state !== "existing" ||
+      secondChoice?.state !== "existing"
+    ) {
+      throw new Error("A real current-owner default assignment is required");
+    }
+    expect(firstChoice.accountId).not.toBe(secondChoice.accountId);
+    expect(mockCategoryScopeCalls).toContainEqual({
+      ownerId: ANOTHER_OWNER,
+      mode: "accessible",
+    });
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects an in-flight hydration if the authenticated owner switches after scoped reads begin", async () => {
+    let release: () => void = (): void => undefined;
+    let notify: () => void = (): void => undefined;
+    const started = new Promise<void>((resolve) => {
+      notify = resolve;
+    });
+    mockSnapshotReadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockNotifySnapshotStarted = notify;
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    const inFlight = loadFixture("r3-default-only");
+    const observed = await Promise.race([
+      started.then(() => "scoped_read_started"),
+      inFlight.then(
+        () => "resolved_early",
+        () => "rejected_early"
+      ),
+    ]);
+    try {
+      expect(observed).toBe("scoped_read_started");
+      mockActiveOwnerId = ANOTHER_OWNER;
+    } finally {
+      release();
+    }
+    await expect(inFlight).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects relabeling another owner's static account IDs during user switching", async () => {
+    const scene = findScene("r3-default-only");
+    const first = parseHydratedSession(
+      await loadRuntimeFixtureSession(scene.id)
+    );
+    assertOwnedSessionReferences(first, scene, CURRENT_OWNER);
+
+    mockActiveOwnerId = ANOTHER_OWNER;
+    // A second owner has similar account names but not a current-owned default.
+    const otherCashId = getRoleId(ANOTHER_OWNER, "cash");
+    mockForeignAccountIds.add(otherCashId);
+    const otherOwner = await mockLoadAccountReviewAccountSnapshots();
+    expect(otherOwner.ownerId).toBe(ANOTHER_OWNER);
+    expect(otherOwner.accounts.map(({ id }) => id)).not.toContain(otherCashId);
+    expect(otherOwner.accounts.map(({ id }) => id)).not.toContain(
+      manifest.defaultAccountId
+    );
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture(scene.id)).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it.each([
+    { reason: "missing", unavailable: mockMissingAccountIds },
+    { reason: "deleted", unavailable: mockDeletedAccountIds },
+    { reason: "foreign", unavailable: mockForeignAccountIds },
+  ])(
+    "rejects a $reason referenced account absent from the active owned snapshot",
+    async ({ unavailable }) => {
+      const cashId = getRoleId(CURRENT_OWNER, "cash");
+      unavailable.add(cashId);
+      const snapshot = await mockLoadAccountReviewAccountSnapshots();
+      expect(snapshot.accounts.map(({ id }) => id)).not.toContain(cashId);
+
+      const loadFixture = resolveRuntimeFixtureEntry();
+      await expect(loadFixture("r3-default-only")).rejects.toThrow();
+      assertNoFixtureSideEffects();
+    }
+  );
+
+  it.each([
+    { reason: "missing", unavailable: mockMissingCategoryIds },
+    { reason: "deleted", unavailable: mockDeletedCategoryIds },
+    { reason: "foreign", unavailable: mockForeignCategoryIds },
+  ])(
+    "rejects a $reason category that is not accessible for the current owner",
+    async ({ unavailable }) => {
+      const categoryId = OWNER_CATEGORY_IDS[CURRENT_OWNER];
+      if (!categoryId)
+        throw new Error("Missing current-owner category fixture");
+      unavailable.add(categoryId);
+      const scope = await mockGetCurrentUserDataScope();
+      const categories = await scope
+        .queryAccessibleCategories({
+          table: "categories",
+        })
+        .fetch();
+      expect(categories).toEqual([]);
+
+      const loadFixture = resolveRuntimeFixtureEntry();
+      await expect(loadFixture("r3-default-only")).rejects.toThrow();
+      assertNoFixtureSideEffects();
+    }
+  );
+
+  it("rejects an ambiguous matching bank role rather than choosing one by name", async () => {
+    const existing = accountRecordsForOwner(CURRENT_OWNER).find(
+      ({ id }) => id === getRoleId(CURRENT_OWNER, "qnbEveryday")
+    );
+    if (!existing) throw new Error("Synthetic account role is unavailable");
+    mockExtraAccounts.push({
+      userId: CURRENT_OWNER,
+      account: {
+        ...existing,
+        id: "2eea0000-3950-4000-8000-000000001099",
+      },
+    });
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-clean")).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects a bank role whose card and currency disagree despite an identical nickname", async () => {
+    mockAccountOverrides.set(getRoleId(CURRENT_OWNER, "qnbEveryday"), {
+      cardLast4: "7777",
+      currency: "USD",
+    });
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-clean")).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it.each(manifest.scenes)(
+    "hydrates $id through the REAL fixture service and canonical session schema",
+    async (scene) => {
+      const session = parseHydratedSession(
+        await loadRuntimeFixtureSession(scene.id)
+      );
+      assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
+      // Fingerprints must originate from the synthetic SMS source itself,
+      // never the unrelated 64-hex labels in the descriptor catalogue.
+      for (const row of session.rows) {
+        if (row.source !== "SMS") continue;
+        const fingerprint = await computeSmsFingerprint({
+          sender: row.transaction.senderDisplayName,
+          body: row.transaction.rawSmsBody,
+          receivedAtMs: row.transaction.date.getTime(),
+        });
+        expect(row.sourceFingerprint).toBe(fingerprint);
+      }
+
+      expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
+      expect(mockLoadAccountReviewAccountSnapshots).toHaveBeenCalled();
+      expect(mockCategoryScopeCalls).toContainEqual({
+        ownerId: CURRENT_OWNER,
+        mode: "accessible",
+      });
+      assertNoFixtureSideEffects();
+    }
+  );
+
+  it("rejects unregistered fixtures instead of silently opening an empty or production review", async () => {
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("missing-private-scenario")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
+  });
+});

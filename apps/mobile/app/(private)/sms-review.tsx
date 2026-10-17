@@ -10,6 +10,20 @@ import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useSmsReviewDraftQueue } from "@/hooks/useSmsReviewDraftQueue";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import {
+  assertRuntimeOwner,
+  captureAccountReviewRuntimeSave,
+  saveCapturedAccountReview,
+  type AccountReviewRuntimeSaveCapture,
+} from "@/services/account-review-runtime-save";
+import { loadOrBootstrapOwnedSmsReviewSession } from "@/services/account-review-legacy-bootstrap-service";
+import {
+  accountReviewSessionSchema,
+  type AccountReviewSession,
+  type ParsedSmsTransaction,
+  type ReviewableTransaction,
+} from "@monyvi/logic";
 import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
 import {
   type UseSmsReviewUndoResult,
@@ -39,10 +53,6 @@ import type {
 import type { VolatileSmsReviewUndoItem } from "@/services/sms-review-draft-repository";
 import { logger } from "@/utils/logger";
 import { Ionicons } from "@expo/vector-icons";
-import type {
-  ParsedSmsTransaction,
-  ReviewableTransaction,
-} from "@monyvi/logic";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import React, {
@@ -168,6 +178,29 @@ export default function SmsReviewScreen(): React.JSX.Element {
     clearTransactions,
   } = useSmsScanContext();
   const queue = useSmsReviewDraftQueue();
+  const { userId: activeUserId, isResolvingUser } = useCurrentUser();
+  const liveV2SessionRef = useRef<AccountReviewSession | null>(null);
+  const v2SaveRef = useRef<AccountReviewRuntimeSaveCapture | null>(null);
+  const v2SaveInFlight = useRef(false);
+  const onCurrentV2Session = useCallback(
+    (value: AccountReviewSession | null) => {
+      liveV2SessionRef.current = value;
+    },
+    []
+  );
+  const invalidOwnedQueue =
+    queue.queueId !== null &&
+    (queue.userId !== activeUserId ||
+      isResolvingUser ||
+      queue.items.some((item) => item.queueId !== queue.queueId));
+  // Existing owned V1 queues are upgraded by the authenticated V2 facade;
+  // queue display rows alone never authorize an SMSV2 Save.
+  const canonicalOwnedQueue =
+    !queue.isLoading &&
+    !invalidOwnedQueue &&
+    queue.queueId !== null &&
+    queue.userId !== null &&
+    queue.items.length > 0;
   const undo = useSmsReviewUndo();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
@@ -388,6 +421,97 @@ export default function SmsReviewScreen(): React.JSX.Element {
       showToast,
       t,
       unresolvedCandidates.length,
+    ]
+  );
+
+  /** V2: freeze the exact owned session, never call the legacy SMS Save. */
+  const handleCanonicalSave = useCallback(
+    async (selectedSession: AccountReviewSession): Promise<void> => {
+      if (v2SaveInFlight.current) return;
+      v2SaveInFlight.current = true;
+      setIsSaving(true);
+      try {
+        const checked = accountReviewSessionSchema.parse(selectedSession);
+        if (
+          !canonicalOwnedQueue ||
+          !queue.queueId ||
+          !queue.userId ||
+          checked.source !== "SMS" ||
+          checked.ownerId !== queue.userId ||
+          checked.sessionId !== queue.queueId ||
+          queue.userId !== activeUserId ||
+          isResolvingUser ||
+          checked.rows.some((row) => row.source !== "SMS") ||
+          (liveV2SessionRef.current &&
+            JSON.stringify(liveV2SessionRef.current) !==
+              JSON.stringify(checked))
+        )
+          throw new Error("account_review_sms_session_scope_changed");
+        const storedFingerprints = new Set(
+          queue.items.map((item) => item.transaction.smsFingerprint)
+        );
+        const checkedFingerprints = checked.rows.flatMap((row) =>
+          row.source === "SMS" ? [row.sourceFingerprint] : []
+        );
+        if (
+          storedFingerprints.size !== queue.items.length ||
+          checkedFingerprints.length !== storedFingerprints.size ||
+          checkedFingerprints.some(
+            (fingerprint) => !storedFingerprints.has(fingerprint)
+          )
+        )
+          throw new Error("account_review_sms_display_queue_changed");
+        const capture = captureAccountReviewRuntimeSave(
+          checked,
+          v2SaveRef.current
+        );
+        v2SaveRef.current = capture;
+        // A retained V2 route callback must not invoke financial Save after
+        // logout or actor switch, even if React has not rerendered yet.
+        // The financial service independently repeats its owner/CAS fences.
+        await assertRuntimeOwner(capture.ownerId);
+        const result = await saveCapturedAccountReview(
+          capture,
+          (ownerId, queueId) =>
+            loadOrBootstrapOwnedSmsReviewSession({
+              expectedOwnerId: ownerId,
+              queueId,
+            })
+        );
+        if (
+          result.kind !== "committed" &&
+          result.kind !== "replay" &&
+          result.kind !== "cleanup_only"
+        )
+          throw new Error("account_review_sms_save_uncommitted");
+        clearTransactions();
+        setIsLeavingAfterSave(true);
+        router.replace("/(private)/(tabs)/transactions");
+      } catch (error: unknown) {
+        logger.warn("smsReview.canonicalSave.failed", {
+          errorName: error instanceof Error ? error.name : "unknown",
+        });
+        showToast({
+          type: "error",
+          title: t("save_error"),
+          message: t("sms_review_save_failed_message"),
+        });
+      } finally {
+        setIsSaving(false);
+        v2SaveInFlight.current = false;
+      }
+    },
+    [
+      canonicalOwnedQueue,
+      queue.queueId,
+      queue.userId,
+      queue.items,
+      activeUserId,
+      isResolvingUser,
+      clearTransactions,
+      router,
+      showToast,
+      t,
     ]
   );
 
@@ -623,7 +747,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
     />
   );
 
-  if (queue.isLoading || isLeavingAfterSave) {
+  if (queue.isLoading || isLeavingAfterSave || invalidOwnedQueue) {
     return <SmsReviewLoadingState title={t("review_transactions_title")} />;
   }
 
@@ -673,22 +797,49 @@ export default function SmsReviewScreen(): React.JSX.Element {
       <StatusBar style="auto" />
       <TransactionReview
         transactions={transactions}
-        selectionOverrides={selectionOverrides}
+        accountReview={
+          canonicalOwnedQueue && queue.userId && queue.queueId
+            ? {
+                input: {
+                  mode: "SMS",
+                  ownerId: queue.userId,
+                  sessionId: queue.queueId,
+                  queueId: queue.queueId,
+                },
+                onSaveSelected: handleCanonicalSave,
+                onSessionChange: onCurrentV2Session,
+              }
+            : undefined
+        }
+        selectionOverrides={
+          canonicalOwnedQueue ? undefined : selectionOverrides
+        }
         onSelectionChange={handleSelectionChange}
         onSelectionChanges={handleSelectionChanges}
         onTransactionChange={handleTransactionChange}
         onDiscardItem={handleDiscardItem}
-        onSave={handleSave}
-        onDiscard={handleRequestDiscardAll}
+        onSave={
+          canonicalOwnedQueue
+            ? () =>
+                Promise.reject(
+                  new Error("account_review_v2_legacy_save_forbidden")
+                )
+            : handleSave
+        }
+        onDiscard={
+          canonicalOwnedQueue ? handleReviewLater : handleRequestDiscardAll
+        }
         onReviewLater={handleReviewLater}
         undoBanner={
-          undo.undoItem && undo.discardedName
-            ? {
-                discardedName: undo.discardedName,
-                onUndo: handleUndoDiscard,
-                onClose: handleCloseUndo,
-              }
-            : undefined
+          canonicalOwnedQueue
+            ? undefined
+            : undo.undoItem && undo.discardedName
+              ? {
+                  discardedName: undo.discardedName,
+                  onUndo: handleUndoDiscard,
+                  onClose: handleCloseUndo,
+                }
+              : undefined
         }
         isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}

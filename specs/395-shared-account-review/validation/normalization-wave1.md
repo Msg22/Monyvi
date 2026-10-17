@@ -1,0 +1,707 @@
+# #395 T014-P — Pure normalization checkpoint (PLAN + TESTS ONLY)
+
+**Source lease:**
+`codex/395-normalization-worker@4f9d65e1c6c35501b161fb2e17dc68482f5e1d0d`;
+independent of frozen SQL worker. Governance
+`main@7838df64eb9b3828c6e8f1a02f590b008d5435fd`, approved workflow/persona
+`8a96f74c09a5c3d62ac37f1d965c80d10605fce0`, frozen
+`specs/395-shared-account-review/{spec,plan,tasks,data-model,contracts/*}@7e27eb55c642dccef44f4b977a8712ab320ecd18`.
+Core source `de3f016707cd6520a8163b6898ddaa2bcedb0c26`; group identity proposal
+`core-wave1.md@b718290d`.
+
+**Grant:** Only
+`packages/logic/src/account-review/__tests__/{normalization.test.ts,normalization-fixtures.ts}`
+and this new report. No `normalization.ts`, `identity.ts`, barrel/schema, mobile
+adapter, SQL, Edge, provider, execution, PR/issue or task edits. Core
+exclusively owns T011 generator; UI owns T015 fixtures. T014-P pure logic
+precedes T012/T013 transport and future T014-M mobile merge by owner's technical
+reorder.
+
+## Observed source and required callable boundary
+
+- Branch already contains canonical
+  `account-review/{parser-schemas,review-schemas,schema-primitives,schemas}.ts`
+  and existing test-only `normalization-fixtures.ts` / `normalization.test.ts`.
+  `normalization.ts` is absent: Root's earlier creation Red is a
+  **missing-module load failure**, not behavioral Red/Green. Root previously
+  reported T009 schemas **65/65 PASS**, T006 **23/23 PASS**; neither proves
+  normalization.
+- Proposed exact pure entrypoint, subject to separate **production** grant:
+  `normalizeAccountReviewParserResult(input: AccountReviewNormalizationInput): Promise<AccountReviewSession>`
+  in `packages/logic/src/account-review/normalization.ts`. Discriminated `VOICE`
+  / `SMS` inputs: stable owner/session/sourceRevision and logical requestKey,
+  canonical Zod financial/advisory rows plus existing mapped
+  `ParsedVoiceTransaction` / `ParsedSmsTransaction`, accessible category UUID
+  map, owned active account snapshots + preferred currency, validated original
+  Voice transcript or SMS submitted message ID/body/sender/original fingerprint,
+  injected existing **type-only** `Sha256Provider.digestUtf8`.
+- Return **only canonical `AccountReviewSession`** validated by
+  `accountReviewSessionSchema`: correct owner, source, revision, rows, pending
+  groups, reciprocal links and null assignments; never a copied mobile DTO. Pure
+  logic performs no DB writes, default-account acceptance, selection,
+  confirmation, reducer transitions, amount conversion, provider request, or
+  logging of evidence/identity hash inputs.
+- Trust gates: reject invalid owner/session, out-of-scope snapshots and
+  inaccessible category UUID; preserve actual mapped financial
+  amount/type/date/category. Validate Voice UTF-16 spans against the returned
+  original transcript, SMS spans against the specific submitted message
+  body/sender and fingerprint, plus reciprocal alias/group membership. Invalid
+  advisory provenance/foreign candidate/unsupported currency means **unresolved
+  and hard reason for an otherwise valid financial row**, not implicit
+  omission/default or silent record deletion. V1 becomes `legacy_unknown`.
+  Malformed financial records retain existing source recovery; no SMS
+  fingerprint reassignment or second provider call.
+
+## Frozen shared group identity: one reusable helper for T014-P and T027
+
+- Future pure `packages/logic/src/account-review/identity.ts`:
+  `deriveAccountReviewGroupIdentity(input: {ownerId: AccountReviewSession["ownerId"]; sessionId: AccountReviewSession["sessionId"]; source: AccountReviewSession["source"]; identity: Pick<AccountReviewGroup,"name"|"type"|"currency"|"institutionId"|"providerDisplayName"|"cardLast4"|"senderNames">; hashProvider: Sha256Provider}): Promise<Pick<AccountReviewGroup,"evidenceKey"|"groupId">>`.
+  Use canonical Zod-derived types and a **type-only** hash-provider import; do
+  not implement it in this grant.
+- Exact digest preimage:
+  `JSON.stringify(["monyvi.account-review.group-identity","v1",ownerId,sessionId,source,name,type,currency,institutionId,providerDisplayName,cardLast4,senderNames])`,
+  with explicit nulls and listed ordering. Canonical grounded
+  name/provider/senders: NFC → Unicode-trim → collapse `/\\s+/gu` to one space →
+  lowercase without locale. Opaque institution ID exact; four-digit card suffix
+  exact (including leading zeroes); null not a wildcard; group-level validated
+  sender aliases normalized, distinct and ASCII/code-unit sorted, **never
+  accumulated per member**. Do not call group helper without proven type and
+  known currency.
+- `evidenceKey=await hashProvider.digestUtf8(preimage)` (64 lowercase hex);
+  `groupId` is RFC-9562 UUIDv8 projection of first 16 SHA-256 bytes (set version
+  nibble at hex position 12 to 8; variant nibble 16 to `(n&3)|8`). No secondary
+  hash or copied enum. Same grounded account metadata yields same pending group
+  across aliases/chunks/membership size; incompatible
+  identity/card/type/currency/owner/session must not merge.
+- Never hash requestKey, provider model alias, transactionRef, message
+  ID/fingerprint, linked rows/count/order, amount, category, spans, raw
+  transcript/SMS body, arrival ordinal, mutable revision or persisted user
+  nickname chosen after confirmation **into the group key**. Alias and span
+  compatibility remain independently checked for **each** member; group identity
+  is not permission to confirm, select, save or create.
+
+## Separate row multiplicity/identity; explicit correction to Core's old collision note
+
+- Row hash namespace
+  `["monyvi.account-review.row-identity","v1",ownerId,sessionId,source,sourceRecordKey,sourceFinancialKey,occurrence]`;
+  **NOT the group preimage**. SMS sourceRecordKey uses original validated
+  message ID + SMS fingerprint under existing source one-message/dedup rules (no
+  invented multi-record SMS); Voice sourceRecordKey uses the stable **logical
+  recording** request identity, not ephemeral retry/chunk alias. Finance key
+  freezes canonical original decimal amount, type, date, category-system name
+  and source counterparty/description **once at first parse**. No source
+  body/transcript/model transactionRef/arrival position in the hash.
+- **New approved correction:** Two legitimate same-recording Voice entries can
+  be financially indistinguishable. Do **not** collapse, drop or reject the
+  whole session. Build a **complete immutable source-snapshot multiset**,
+  partition equal row-key candidates and allocate deterministic occurrence
+  suffixes `0..n-1` independent of response order/rechunk; derive one UUIDv8
+  rowId per occurrence. Stable row-ID **set** across alias and order
+  permutations is provable, but physical attribution between perfectly
+  indistinguishable entries is not.
+- **Partial/edited arrival:** A first partial occurrence may retain its
+  allocated row ID as the multiset grows. T014-M/T027 must merge against
+  retained local row IDs/source generations and revisions; preserve selections,
+  user account/currency overrides and tombstones; late new occurrence stays new
+  and unselected. If the source adds/retracts an indistinguishable event after
+  user edits with no independent stable anchor, fail the ambiguous rebind into
+  recoverable unresolved state, **not** silently move an existing edit to
+  another row or regenerate old IDs. This is a future stateful adapter/reducer
+  guard, not something the stateless first-session normalizer can prove. Another
+  logical Voice recording must use distinct row identities even for identical
+  text; sharing same account group remains possible within one session.
+- Original parser source `transactionRef`/suggestionRef only bind validated
+  **within that response**. Do not let them determine account group identity or
+  occurrence identity across retries; no distinct SMS fingerprint dedup changes
+  or extra AI/provider calls.
+
+## Test additions and validation boundary
+
+- Preserved all preexisting named normalization assertions. Imported only the
+  **two** Core `de3f0167` test discriminant narrowings (`VOICE`
+  originalTranscript, `SMS` fingerprint/body). Synthetic additions reuse
+  canonical response types and existing parsed transaction fixtures, one actual
+  spoken "twice" transcript, distinct response aliases, no customer data or
+  copied DTO/unsafe casts.
+- Added six focused tests: identical legitimate Voice rows survive and link one
+  pending group; IDs remain a **set** across reversed/re-aliased same-session
+  retry and first partial result; later independent coffee entry does not
+  renumber identical lunches; another logical Voice recording yields distinct
+  row IDs without changing account-identity digest; exact ordered group hash +
+  UUIDv8 projection; grounded name/provider/group-level sender normalization.
+- Root tests are still needed:
+  `npm test -w @monyvi/logic -- --runInBand --runTestsByPath src/account-review/__tests__/normalization.test.ts`
+  and actual Prettier/strict TS checks, with files **under 900 lines after
+  formatter**. GitHub author cannot claim runtime PASS or behavioral Red while
+  `../normalization` is missing. If a grouped canonical result cannot satisfy
+  the pending schema or chunk disambiguation safety, block production and report
+  exact failing fixture instead of weakening tests.
+- Source-writing, native/worker delegation, schema/Edge/SQL/mobile changes,
+  provider calls and local commands **not authorized**. Await Root's independent
+  Red, decisions on the stateful merge boundary and a separate implementation
+  grant; freeze after this tests/report publication.
+
+## T014-P implementation source checkpoint — 2026-10-15 (root Green pending)
+
+**Approved implementation scope:**
+`packages/logic/src/account-review/normalization.ts`, `identity.ts`, and
+cohesive `normalization-{types,financial,evidence,groups}.ts`; tests
+`__tests__/normalization.test.ts`, NEW
+`__tests__/normalization-identity.test.ts`, plus additive named exports in
+`packages/logic/src/index.ts`. Previous `normalization-fixtures.ts` remains
+unchanged; no schema/Edge/SQL/mobile/contract/task file mutation.
+
+**Pure helper graph:** `normalization.ts` → `normalization-financial.ts` (scoped
+input, original financial-to-mapped correlation, original SMS fingerprint,
+category UUID, exact amount/type/date checks) → `normalization-evidence.ts`
+(request-scoped UTF-16 Voice and SMS body/sender spans, owned candidate and
+currency certainty) → `normalization-groups.ts` (strict pending-only reciprocal
+suggestions); `identity.ts` supplies SHA-256 group+row domains and UUIDv8
+conversion; `normalization-types.ts` derives typed Voice/SMS source inputs from
+canonical schema and existing `ParsedVoiceTransaction`/`ParsedSmsTransaction`.
+Identity helpers share the existing injected `Sha256Provider` as a type-only
+import.
+
+**Identity:** one exact T004 ordered group preimage
+`["monyvi.account-review.group-identity","v1",ownerId,sessionId,source,normalized grounded identity fields...]`
+with verified name/type/known currency/provider/institution/card/group-level
+sender aliases; null is not wildcard and no model alias, requestKey, row count,
+source body or membership participates. Digest validated as lowercase 64-hex
+before RFC-9562 UUIDv8 projection. Row namespace is independent: stable logical
+Voice recording request key or original SMS ID+fingerprint, canonical original
+financial key and deterministic occurrence index within identical finance-key
+buckets.
+
+**Multiplicity and safety:** An immutable first-session snapshot retains
+distinct identical Voice items as separate unselected row IDs. Reorder/rechunk
+and same-session retry preserve **row-ID sets**; a different logical recording
+gives different IDs. Attribution of indistinguishable physical twins is
+impossible from the parser alone. Later partial results, selection/revision/user
+overrides, tombstones, durable SMS snapshots and exact conflict-aware rebinding
+remain **T014-M/T027**, not a stateless rebuild. Malformed advisory data
+degrades to unresolved with hard reason without dropping valid mapped finance;
+source-financial mismatch, invalid scoped category or owner, and unrelated SMS
+message identity reject rather than invent financial values or provider calls.
+No default assignment, confirmation, selection, persisted accounts, amount
+conversion or SMS fingerprint change is implemented.
+
+**Test split:** original 25 named normalization test definitions (29
+parameterized scenarios) retained in `normalization.test.ts`, including Core's
+two source-discriminator TS narrowings. Six previously authored Voice
+multiplicity/identity tests moved intact to `normalization-identity.test.ts`;
+one additional direct typed-helper test covers exact group identity, card suffix
+distinction and malformed SHA rejection. Both new/cohesive test files are below
+900 lines before formatting; Root must check **after Prettier** and all expanded
+scenarios.
+
+**Actual evidence:** Root previously confirmed missing `../normalization`
+creation Red with zero behavioral assertions run, and separately T009 65/65 plus
+T006 23/23. This connector-only author has **not** executed Jest, tsc,
+formatter, lint, providers, Edge generation, device, DB, local commands or CI.
+Actual normalization Green, type correctness, coverage, privacy, fixture parity
+and formatting are Root's independent batched gates. Do not infer PASS from
+GitHub blobs.
+
+**Boundary:** frozen `parser-schemas.ts`, `parser-advisory-validation.ts`,
+`review-schemas.ts`, `schema-primitives.ts`, generated vocabulary and T011 work
+are read-only; only early additive named public barrel exports were authorized.
+Root must inspect unexpected schema/source conflicts, verify no source module
+exceeds 900 formatted lines and helpers remain under 50, then accept/reassign
+any necessary defects. No production SQL/Sync, no stateful UI command, no
+PR/issue or deployment authority. Source ownership **FREEZES** after
+publication.
+
+## T014-P strict type boundary repair — 2026-10-15 (Root Green pending)
+
+- **Root actual coherent batch at `0511cd4262c28f89be2beaf1a0ae67a6309c0425`:**
+  normalization + identity + canonical schemas **103/103 PASS** (Root counts
+  **38** expanded normalization scenarios, correcting this report's historical
+  35 count), after formatting. These are actual Jest runtime results, **not** a
+  TypeScript Green.
+- **Actual blocker:** strict logic/mobile TypeScript **TS2345** in formatted
+  `normalization.ts:123` at `financialMatches(entry, row)`. The local
+  `ValidatedAdvisory.rows: readonly RowAdvisory[]` declaration discarded
+  required financial discriminants/fields even though `readAdvisory` parsed full
+  canonical Zod Voice/SMS rows.
+- **Narrow source change:** introduce `ValidatedAdvisoryRow` as the **exact**
+  union of `AccountReviewVoiceResponseV2["transactions"][number]` and
+  `AccountReviewSmsResponseV2["transactions"][number]`; retain that type
+  throughout `ValidatedAdvisory.rows` and `financialMatches`. `advisoryFor`
+  still returns the existing safe evidence-only `RowAdvisory | null` boundary
+  after the full financial match. No casts, copied DTO, schema relaxation or
+  change in runtime branch/financial comparison.
+- **Verification pending:** Root must rerun strict logic/mobile TypeScript,
+  scoped Prettier/test/privacy and inspect Core's ongoing independent read-only
+  review. No commands/tests executed by this remote author; `103/103` is
+  explicitly Root's prior run of `0511`, not a rerun of the correction. Source
+  ownership freezes after this bounded publication.
+
+## T014-P ESLint maintenance following T014-M plan publication (2026-10-15)
+
+- Root's repo-eslint-with-`--rulesdir` review identified `no-bitwise` at the
+  UUIDv8 variant nibble in `identity.ts` and matching
+  `normalization-identity.test.ts`, plus `require-await` on the malformed-hash
+  fake `digestUtf8`. This correction uses mathematically equivalent
+  `(n % 4) + 8` for hexadecimal nibble `n ∈ [0,15]`, and an explicit
+  `Promise.resolve("bad")` typed `Promise<string>`. Neither digest preimage nor
+  UUIDv8 output changes.
+- The owned normalization financial helper uses the supported named `Decimal`
+  import already evidenced in repository Edge contracts; this is import-style
+  only. No suppression, new dependency/API, canonical schemas, Core/parser files
+  or tests removed. Existing Root result remains **103/103 PASS (38
+  normalization + 65 canonical)** on the pre-maintenance source; Root will rerun
+  coherent tests, TypeScript, and custom-rules ESLint; worker did not execute
+  any.
+- T014-M planning report `normalization-wave2.md` is unchanged, no mobile/SQL
+  work authorized; source ownership freezes after this narrow publication.
+
+## B1–B4 independent regression Red preparation — 2026-10-15 (TESTS ONLY)
+
+**Authority and actual evidence:** Core's accepted **read-only**
+`specs/395-shared-account-review/validation/normalization-independent-typescript-review.md`
+at `3665f9eb`, actual blob `e531d0709894268f0900af07a21e52e1cb791568` (55 source
+lines, reviewed `0511cd42`), identifies B1–B4. That report itself performed _no
+execution_. Root separately **reproduced B1–B4 behavior on
+`5be676ddf9a8bb7b08a23cf2eedb4bb2205497b8`**, beyond the 103 passing
+pre-maintenance tests. This worker has **not** run these new tests, a typecheck
+or a provider. A focused, fresh Root Red is still required against the new
+tests-only commit.
+
+**Scoped new files:**
+`packages/logic/src/account-review/__tests__/{normalization-safety.test.ts,normalization-safety-fixtures.ts}`
+and this report only. The existing `normalization.test.ts`,
+`normalization-identity.test.ts`, their fixtures, `normalization*.ts`,
+`identity.ts`, index and all canonical parser/review schemas remain
+byte-identical. Preserve all existing **38 expanded normalization cases**, plus
+**65** canonical cases; the new suite has four positive baselines, four targeted
+B1–B4 negative assertions and a C1 rejection control.
+
+| Finding                             | Exact current source boundary and required negative                                                                                                                                                                                                                                                                                                                                                        | Positive control                                                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **B1** cross-SMS alias              | `normalization-evidence.ts` `normalizeRowEvidence` sets `sourceRef` to model `transactionRef`, while `normalization-groups.ts::isProvenAlias` locates SMS by `id===row.sourceRef \|\| fingerprint===row.sourceFingerprint`. A's alias equals B's submitted ID; B has CIB sender, A QNB; B's alias must **not** authorize A's CIB sender group. Use original A `financial.messageId + smsFingerprint` only. | Two real submitted QNB SMS IDs/fingerprints with one grounded pending QNB group               |
+| **B2** currency omission conflict   | `normalization-evidence.ts::normalizeEvidenceCurrency` promotes `currencyEvidence.state:"omitted"` directly to preferred EGP when financial and mapped currency are both **USD non-null**. Preserve exact USD transaction amount/category; review remains unconfirmed with hard currency blocker.                                                                                                          | True null financial currency and `omitted` produces captured `known EGP / preferred_omission` |
+| **B3** scoped candidate identity    | `normalization-evidence.ts::candidatesOwned` checks owner/type/currency/card/institution but not known owned **name/provider**. Grounded QNB evidence must not retain a candidate owned BANK named "Unrelated bank", provider "Unrelated", even when its UUID is genuinely owned.                                                                                                                          | Same owned BANK, provider/name truly QNB, is advisory candidate only (not T019 acceptance)    |
+| **B4** Voice mapped finance pairing | `normalization-financial.ts::assertMappedFinance/makeVoiceEntries` matches amount/type/date/category/currency but not distinguishable `counterparty` and original `description→mapped.note`. Reversed mapped Lunch/Coffee must keep stable rowId→original merchant/note, despite equal amounts.                                                                                                            | Aligned Lunch/Coffee mapped rows with two distinct identities                                 |
+| **C1** contract control             | One financial record per SMS remains required; duplicate original messageId/fingerprint with new transaction alias must **reject** (existing SQL048 unique owner/fingerprint). No multi-record SMS implementation or serializer change.                                                                                                                                                                    | Same test uses fully valid v2 first record and unique response-local alias                    |
+
+**I1 ATM destination handoff proposal only:** Current pure normalizer validates
+`toAccountEvidence` but canonical `AccountReviewRow` does not retain it;
+`toAssignment:null` loses a valid explicit Cash destination. At separate
+T014-M/T019/Core **coordinated approval**, prefer the **minimal additive
+canonical row field** `toAccountEvidence: AccountReviewAccountEvidence | null`
+with scope/UTF-16/owner validation, carried locally to T019 for eventual choice;
+no auto-Cash/default acceptance, invented DB field, second DTO or cloud copy. If
+the frozen row contract cannot be amended, Root must approve a narrowly typed
+transient companion using the existing canonical `AccountReviewAccountEvidence`
+keyed by owner/session/rowId/original SMS identity before T014-M, not silently
+discard evidence. **Schemas remain read-only in this grant.**
+
+**T010 corrected read-model fact:** Root's published reviewed integration
+`9a8987a8087db886d9b9244182ef8e8128016621` includes
+`apps/mobile/services/account-review-read-model-service.ts` blob
+`05bcd808ace33084d440e72c119f91d39dd03414` and test blob
+`ea32944137df9a4e0fba30eb5d262a5c88381f6d`. Exact ABI
+**`loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>`
+takes ZERO arguments**, returns scoped
+`ownerId,preferredCurrency,accounts + isDefault,providerContext` and checks auth
+internally. This supersedes the prior T010-not-retrievable note in the already
+frozen wave2 plan; do not rebuild T010 or invent an `expectedUserId` argument.
+Reviewed main `ac11a03b` historical migration consumes 089, so proposed future
+SQL #395 slots remain 090/091 pending separate root allocation, not part of this
+lane.
+
+**Next gate:** Root runs **actual** targeted Red and confirms positive controls
+pass, B1–B4 fail for the expected behavioral reasons (not a loader/type crash),
+with `normalization-safety.test.ts` / `normalization-safety-fixtures.ts` under
+900 formatted lines and helpers under 50. C1 continues to reject. After Red,
+Root may separately grant source repair. No production, SQL, schema, index,
+mobile, T014-M plan, provider, native, commands, local test runner or PR/issue
+mutation here. Publish this tests-only checkpoint, then **FREEZE**.
+
+## T014-P B1–B4 source repair — Root Green/re-review pending (2026-10-15)
+
+- **Root actual behavioral Red against
+  `4da44890437d70cca4fdbddff9bdc66664b4e813`:** 9 safety cases, **5 PASS / 4
+  expected FAIL**. B1 wrongly suggested despite cross-message alias, B2 known
+  rather than unconfirmed, B3 retained unrelated owned candidate, B4 swapped
+  financial row ID. All four positives and the C1 duplicate-message rejection
+  PASS; no loader/tool failure. Previous coherent 103 legacy
+  normalization/identity/schema assertions had passed before this source change.
+  **No source Green or new type/lint/format PASS is claimed.**
+- **B1 — sender origin:** `NormalizedRowEvidence.sourceMessageId` now preserves
+  the validated _financial_ SMS `messageId` separately from its response-local
+  `transactionRef`. `normalization-groups.ts::isProvenAlias` looks up the
+  original submitted SMS only when **both** that ID and the original row
+  fingerprint match; SMS account names are **not** interchangeable with
+  submitted sender names. Voice retains the scoped grounded-name alias behavior.
+  Original two-message order and financial/provider refs remain independent.
+- **B2 — financial contradiction:** a v2 `currencyEvidence.state:"omitted"`
+  alongside non-null financial/mapped USD when captured preferred is EGP yields
+  `unconfirmed / conflicting`, preserved observed code and supported candidates,
+  plus `currency_confirmation_needed`. Never rewrites the mapped USD transaction
+  or amount; valid null omission remains preferred EGP.
+- **B3 — owned candidate:** model candidate UUID now requires active owned scope
+  and original type/currency/card/institution **plus** grounded, NFC-normalized
+  name/provider/approved sender identity. When a sender is necessary for an SMS
+  source candidate, obtain it from the original submitted
+  **messageId+fingerprint**, not model alias or claimed account name. Source
+  candidates with ungrounded account-evidence state fail closed; ATM destination
+  candidate checking retains a separate destination role (no source-sender
+  substitution). Wrong-owner/incompatible IDs clear candidate list, add hard
+  `account_evidence_invalid`, and keep the valid financial row.
+- **B4 — distinct Voice mapping:** `normalization-financial.ts` now matches
+  _both_ original `counterparty` (null maps to undefined) and original
+  `description` to mapped `note`, **in addition** to
+  amount/type/date/category/currency. A reversed distinguishable Lunch/Coffee
+  mapping therefore cannot silently bind merchant B to row ID A; two truly
+  identical legitimate Voice entries still receive distinct deterministic
+  occurrence IDs.
+- **Fixture fidelity:** the prior synthetic default `makeParsedVoice()` had
+  **omitted the real mapper's counterparty** and used `note:"Synthetic lunch"`
+  instead of the raw financial `description:"Lunch at the canteen"`. Corrected
+  to `counterparty:"Lunch"` and matching note. The independently spoken Coffee
+  row now maps `counterparty:"Coffee"` to its actual raw financial value. No
+  assertion deleted/relaxed or real production matching weakened to accommodate
+  the synthetic discrepancy.
+- **Changed paths only:** `normalization-evidence.ts`,
+  `normalization-groups.ts`, `normalization-financial.ts`,
+  `__tests__/normalization-fixtures.ts`, this validation report.
+  `normalization.ts`, `identity.ts`, `normalization-types.ts`, all existing test
+  assertions/safety fixtures, index, canonical schemas, mobile/Edge/SQL and
+  frozen contracts unchanged. I1 canonical destination evidence still belongs to
+  Core's separate test-first/schema grant; no unilateral row/schema extension or
+  duplicate DTO.
+- **Root next:** rerun coherent **103 previous assertions + 9 safety cases**,
+  strict logic/mobile TypeScript, repo custom-rules ESLint, formatted helper
+  (<50 lines) and file (<900 lines) guards, privacy/source-contract parity and
+  independent Core re-review. This connector-only lane executed **no**
+  tests/commands/providers. Publish source candidate and **FREEZE** for Root
+  verification before any further production grant.
+
+## I1 destination producer tests-first checkpoint — 2026-10-15 (Root Red pending)
+
+**Scoped authorization and source:** new
+`packages/logic/src/account-review/__tests__/normalization-destination.test.ts`,
+new `normalization-destination-fixtures.ts`, this report, and a
+**type-annotation-only lint repair** in existing `normalization-fixtures.ts`. No
+normalization producer/schema/index, app, SQL, Edge, contract or tasks writes.
+Parent
+`codex/395-normalization-worker@0c4e03c1fe3c3ed9b6c1d1e368a9e21fa7f6f628`;
+Core's independent canonical I1 patch `2b92fe087c1895cbd8ed22463acef5302b1b4035`
+reviewed directly (`review-schemas.ts` blob
+`388c2504213da3fa99dcbc8b441ef0e6f360daac`). The producer branch **does not
+cherry-pick or copy** that schema; use Jest
+`toHaveProperty("toAccountEvidence", ...)` while working against its old row
+output type.
+
+**Root's actual gate before these new tests:** combined previous `0c4e`
+producer + Core `2b92` canonical source **142/142 PASS** (112 existing
+normalization+identity+safety and 30 Core I1-schema), strict logic/mobile
+TypeScript **0 errors**, Edge Node **19 PASS**, prior named production helpers
+under 50 and formatted files under 900. These are **Root-supplied** results for
+the previous combined source, _not_ I1 producer Green. Root also identified a
+genuine repo-ESLint `explicit-function-return-type` error on the nested `span`
+helper in `normalization-fixtures.ts` (formatted line 431); the only test-helper
+fix adds the exact canonical `AccountReviewEvidenceSpan` type import and return
+annotation, with no behavior change.
+
+**Core I1 ABI:**
+`commonReviewRow.toAccountEvidence=accountReviewAccountEvidenceSchema.nullable().default(null)`
+materializes a **required local parsed output**
+`AccountReviewAccountEvidence|null`; old/omitted input parses to null. Voice and
+non-ATM SMS forbid non-null proof; ATM SMS forbids contextual proof.
+`toAssignment` is a _different_ choice field and remains null before T019. No
+provider request field, separate DTO, DB column or fallback. **Actual producer
+conflict:** `normalization-evidence.ts` currently computes one
+`validDestination` boolean inside `isAccountEvidenceValid` (so a bad Cash
+endpoint can erase good BANK source evidence), while
+`normalization.ts::prepareRow` omits the newly required destination proof. Also
+the existing canonical provider-envelope validator rejects _cross-message_
+destination spans, so a future producer must salvage independently valid
+original source fields and sanitize only the invalid destination through
+canonical **existing** evidence validators; do not loosen Core's parser schema
+or treat invalid destination as null/absent.
+
+**New fixtures and assertions:** 9 named test definitions / **15 expanded
+cases** (7 parameterized invalid destinations). Source is synthetic
+`QNB ATM withdrawal EGP 50 to Cash` with actual admitted SMS
+ID/body/sender/fingerprint, parsed `isAtmWithdrawal:true`, BANK source
+`accountEvidence`, explicit EGP currency, existing category UUID, and
+independently grounded Cash `toAccountEvidence`. Valid controls require exact
+Cash proof surviving on the local canonical row, separate source BANK pending
+group, captured known currency, `toAssignment:null` and no selection/default
+authorization; explicit unmatched `Office Cash` and valid uncertain Cash remain
+**distinct** from true null/absent. Another control retains proof with ambiguous
+currency but no destination assignment. Legacy/v1, existing
+`transaction.toAccountId`, ordinary Voice and non-ATM SMS cannot invent proof or
+account choice.
+
+**Invalid matrix:** foreign candidate UUID, owned Cash USD against EGP source,
+wrong destination BANK type, conflicting card suffix, incompatible provider,
+forged same-message body substring, and a second submitted CIB message's valid
+`Cash` substring incorrectly referenced from original QNB ATM. Every case
+requires a sanitized local `toAccountEvidence` in `uncertain` state with **empty
+untrusted spans/candidate IDs**, `account_evidence_invalid` +
+`cash_transfer_review`, `toAssignment:null`, while **valid QNB BANK source
+proof, reciprocal pending group, original amount/category/EGP/fingerprint**
+remain intact. SMS one-financial-record-per-fingerprint remains C1;
+cross-message fixture adds only a second _submitted source_ for provenance,
+**not** another parsed transaction. No actual provider call/mocks/unsafe casts.
+
+**Root next:** merge/read Core's separately frozen canonical `2b92` into local
+test context only, execute actual focused destination **Red** (positive controls
+ideally pass except proof-field missing, invalid cases distinguish
+source-contamination), verify source/fixture TypeScript + repo custom ESLint and
+formatted file/function limits, then grant producer source implementation
+separately. This remote writer did **not** execute Jest, tsc, ESLint, formatter,
+Deno, provider, simulator or commands. Existing 142 assertions and all preceding
+safety tests remain unchanged. I1 consumer resolution, default choice, durable
+writer and SQL are outside this grant. **Publish tests-only, FREEZE, await Root
+Red.**
+
+## I1 producer proof handoff — source candidate, Root Green pending (2026-10-15)
+
+**Root actual focused Red:** after combining normalization worker `0c4e03c1`
+with Core I1 canonical source `2b92fe087c1895cbd8ed22463acef5302b1b4035`, the 15
+new destination scenarios produced **12 FAIL / 3 PASS**, with no module/load
+errors. The failure classes were dropped valid Cash destination proof and
+invalid destination proof invalidating separately valid BANK source evidence.
+Earlier combined 142/142, 19 Edge Node and strict logic/mobile TS PASS referred
+to the **pre-I1-producer** source; neither result certifies this candidate. This
+remote worker has not run Jest, TypeScript, ESLint, Prettier, provider,
+emulator, local commands or database checks.
+
+**Core authority, independent source check:** `review-schemas.ts` Core blob
+`388c2504213da3fa99dcbc8b441ef0e6f360daac` defines
+`commonReviewRow.toAccountEvidence: accountReviewAccountEvidenceSchema.nullable().default(null)`.
+Parsed output is canonical proof or null; ordinary Voice/non-ATM proof is null,
+ATM contextual proof rejected; `toAssignment` stays separate. No schema,
+contract, Edge generator, barrel/index, db or provider patch belongs to this
+owner.
+
+**Producer changes, no source/business expansion:**
+
+1. `normalization-evidence.ts::normalizeRowEvidence` no longer conjoins ATM
+   destination validity with BANK source validity. Existing source account
+   evidence, owner-scoped candidate checks, original SMS source fingerprint,
+   known/unconfirmed currency, and alias/group constraints remain unchanged. Its
+   existing canonical source span and owned-candidate functions are made
+   reusable inside the same pure logic package, without exported barrel API
+   changes.
+2. NEW `normalization-destination.ts::normalizeAtmDestinationEvidence` accepts
+   **unknown** raw provider proof; parses it with the **existing closed**
+   `accountReviewAccountEvidenceSchema`; verifies ATM original submitted
+   `messageId + smsFingerprint + body`, local UTF-16 body/sender spans, CASH
+   role, owner/type/currency/card/provider candidate compatibility. Valid
+   explicit named/unmatched Cash, valid uncertain, valid canonical absent, and
+   null remain distinct; ambiguous review currency may retain independently
+   valid proof but never assigns an endpoint.
+   Invalid/foreign/wrong-card/provider/type/currency/source proof returns
+   sanitized canonical `uncertain` with null identity and empty spans/candidate
+   IDs, not null or absent.
+3. `normalization.ts::prepareRow` emits `toAccountEvidence` as **local canonical
+   field** with `toAssignment:null`, zero selection/confirmation. Invalid proof
+   adds a hard `account_evidence_invalid`, while the existing ATM path retains
+   `cash_transfer_review`; valid BANK account evidence and pending group still
+   survive. No default, legacy `transaction.toAccountId`, amount/currency
+   conversion or creation authority.
+4. **Cross-message parser-envelope failure:** a forged destination
+   `evidenceSpans.sourceRef` may make the **whole** provider v2 canonical
+   envelope fail even if the source financial/evidence fields are correct.
+   `recoverSmsDestinationOnly` masks **only** `toAccountEvidence` in a temporary
+   in-memory candidate and re-runs the **unchanged complete**
+   `accountReviewSmsResponseV2Schema.safeParse`. Recovery succeeds only if every
+   other original v2 field, source span, financial record, reciprocal
+   suggestion, and version still passes unchanged canonical validators. The
+   original destination is held as **unknown** by validated response-local row
+   ref and independently checked/sanitized; no invalid proof is silently made
+   absent. If validation still fails, preserve the existing
+   unresolved/legacy-known-safe source fallback. No raw response logged, no
+   relaxed/copy Zod schema or extra provider call.
+5. No change to B1–B4 normalization source behavior, original 38 Voice/SMS
+   normalization scenarios, 9 safety cases, 30 Core I1-schema cases, newly
+   authored 15 destination cases, one-financial-record-per-SMS C1, deterministic
+   indistinguishable Voice multiplicity, SMS fingerprint handling or ownership
+   policy. T019/T027/T014-M remain exclusive owners of account choice, stateful
+   merge, revisions, source readiness and persistence.
+
+**Exact bounded paths:** `packages/logic/src/account-review/normalization.ts`,
+`normalization-evidence.ts`, NEW `normalization-destination.ts` and this
+`normalization-wave1.md` only. No canonical schema/index/test, mobile, SQL,
+contract, generated artifact, provider, native worker or PR mutation. Static
+source shape before publication: helpers under 50 raw lines, source files under
+900 raw lines, no explicit `any` or unsafe casts; post-formatter/runtime gates
+remain **Root-owned**. Root must combine the existing frozen Core `2b92` source,
+rerun focused **15 I1 cases**, all previous **142** assertions, strict
+logic/mobile TypeScript and repo custom ESLint, canonical/Edge privacy-hash
+parity, formatter limits and independent reviewer. **SOURCE CANDIDATE — NOT
+VERIFIED GREEN — FREEZE after publication.**
+
+## I1 lint-only successor — Root logic/mobile functional Green, custom ESLint rerun pending
+
+- **Root actual coherent source batch on
+  `b9795784e6f739be8be67ae6e513d95b101fface` integrated with Core I1:**
+  **157/157 logic assertions PASS** (142 prior + 15 producer destination),
+  **71/71 mobile tests PASS**. This is actual Root-reported functional Green for
+  the **parent**, not a test run of the lint successor. Root reports one genuine
+  owned lint error: `normalization-destination.ts` formatted line 57, `eqeqeq`
+  on `rawProof != null`. The earlier `normalization-fixtures.ts` nested span
+  return annotation is now lint-clean.
+- **Exact correction:** `rawProof !== null && rawProof !== undefined` replaces
+  the single loose-null check within the non-ATM branch. This is logically
+  equivalent for **all JavaScript values**, including legacy `undefined`,
+  explicit `null`, and valid non-null supplied destination values. No parser,
+  proof validation, currency, fallback, selection, state or transport change; no
+  schema/index/app/Edge/SQL/contract/test edit and no lint suppression.
+- **Source ownership:** the one-line fix and this report are the only updated
+  files. Root will rerun custom-rules ESLint and coherent clean production type
+  gates after excluding intentionally held future T035 UI/null-prop Red tests.
+  Future T014-M facade tests/input seam and F-R2 independent source re-review
+  remain separate pending work; no mobile writer is leased here. No execution,
+  provider calls, native commands or self-approval in this lane. **FROZEN after
+  publication.**
+
+## F-R2 approved SMS source/destination role regression tests — TESTS ONLY, Root Red pending
+
+**Source:** Independent F-R2 peer review (read-only b979 packet), with two
+**real Root runtime reproductions** on
+`b9795784e6f739be8be67ae6e513d95b101fface`. Root supplied actual owned
+lower-case UUIDs, current EGP, original SMS UTF-16 body/sender spans and
+compatible current-owner snapshots; do not rely on reviewer's invalid sample
+`acct-cash-1`. On that source: (R1) ordinary SMS body/sender `Cash`, explicit
+Cash identity and eligible owned Cash UUID with approved sender alias retained
+apparently valid Cash source candidate (only account_needed); (R2) ATM valid QNB
+BANK source copied into destination proof, `type:null` and candidate UUID
+pointing to owned BANK QNB retained that BANK as eligible Cash destination (only
+cash_transfer_review). **Both are existing approved SMS-source
+BANK/DIGITAL_WALLET exclusion and ATM Cash-only destination constraints**, not
+new policy; T019 later blocking acceptance is not a substitute for producer
+evidence validity. Root separately reported preceding I1 source functional
+**157/157 logic + 71/71 mobile PASS** on b979; 18b7 is the strict-null lint
+successor. These are NOT passes for the newly authored role cases.
+
+**Owned tests-only paths:** updates confined to
+`__tests__/{normalization-safety.test.ts,normalization-safety-fixtures.ts,normalization-destination.test.ts,normalization-destination-fixtures.ts}`
+and this report. No production normalizer/destination/evidence/groups/financial,
+canonical schema, index, app, SQL, provider, frozen contract or independent
+reviewer changes. All old **157** logic assertions preserved, including C1
+one-financial-row-per-SMS, I1 previous 15 destinations, and B1–B4.
+
+**New role tests (five tests):**
+
+- Ordinary SMS positive: owned BANK QNB, grounded EGP and explicit source BANK
+  remains a conservative advisory candidate, not T019 assignment.
+- Ordinary SMS negative: admitted original body `Cash purchase EGP 50` and
+  sender `Cash`, valid body and sender UTF-16 spans, owned active Cash EGP with
+  approved `senderNames:["Cash"]`, actual UUID; explicit source Cash with that
+  candidate must become blocked `uncertain`, empty candidate list,
+  `account_evidence_invalid`, no group/selection/default. No provider-side
+  alias/currency mismatch is used as an early failure.
+- Ordinary SMS additional negative: **explicit source type Cash with zero
+  candidates** must likewise be blocked; the empty array cannot make `.every`
+  authorize an ineligible source identity. This does NOT prohibit inert
+  `absent/uncertain` source evidence.
+- ATM destination positive: valid explicit Cash destination with `type:null`,
+  **no candidate IDs**, exact original `Cash` span, known EGP and BANK source
+  retains proof as inert/unselected with `toAssignment:null`, not automatically
+  invalidated solely because the type hint is missing.
+- ATM destination negative: original ATM QNB BANK source proof duplicated as
+  destination, `type:null`, with actual **owned BANK QNB UUID** candidate, valid
+  source's body+sender spans and compatible EGP and current-owner
+  name/provider/sender snapshots. Candidate role is BANK despite null hint;
+  destination must sanitize to canonical `uncertain`, empty spans/candidate IDs,
+  add `account_evidence_invalid`, retain valid BANK source pending group,
+  current financial/category/fingerprint, Cash transfer review and
+  `toAssignment:null`.
+
+**Extra tagged-v2 missing-required destination test (two tests), same lease:**
+Root reproduced a malformed-advisory bypass: original ordinary non-ATM SMS v2
+omitted **only the required** `toAccountEvidence` property, while
+`recoverSmsDestinationOnly` redacted every SMS row (including non-ATM) to null
+and treated original `undefined` as legacy-compatible absence. Runtime
+erroneously retained known EGP/explicit QNB/pending QNB group **without**
+`account_evidence_invalid`. The added negative fixture derives from real
+`makeSmsInput`, strips just the required field by destructuring (no cast/copied
+DTO), confirms the unchanged canonical v2 provider schema rejects it, preserves
+mapped amount/currency/category/fingerprint, and requires a hard
+invalid-advisory reason. A positive control confirms ordinary v2 with **explicit
+null** destination remains canonical and lacks that reason. Old v1/legacy
+`undefined` compatibility remains allowed as local `toAccountEvidence:null`;
+never reinterpret a tagged-v2 missing required field as valid absence. Future
+production may restrict destination-only recovery to actual ATM rows, or retain
+an explicit invalid-field flag. No raw provider schema relaxation or test
+weakening is authorized.
+
+**Expected new scenarios:** original 157 Root-observed logic assertions **plus
+seven focused tests**, subject to actual Jest expansion/count by Root; existing
+71/71 mobile evidence is unaffected. Positive controls and
+null-type/no-candidate inert paths must remain Green while the three substantive
+role failures and one malformed-v2 recovery failure go genuinely Red (not
+load/type failure). Strict TypeScript, custom-rules ESLint, Prettier helpers
+under 50 / formatted files under 900, all previous 157 logic checks and
+Edge/contract privacy must be rerun by Root **after** the tests-only commit.
+This connector author has executed **no** Jest/tsc/ESLint/format/provider/native
+commands, does not claim new runtime results. Producer source **FROZEN** until
+actual test Red and a separate narrow production grant; independent review
+remains independent.
+
+## F-R2 role and tagged-v2 strictness repair — source candidate, Root Green pending
+
+**Root actual behavioral Red on `561381ff652d356a84a960e86be16c019f951396`:**
+focused F-R2 suite **4 expected FAIL / 3 positive PASS**, **24 prior cases
+skipped**; genuine account-role and malformed-required-field behavior failures,
+not a loader/tooling problem. Evidence retained by Root in
+`.tmp/normalization-roles-creation-red.log` (Root-local; this remote author has
+not read that path). Root's earlier **157/157 logic + 71/71 mobile PASS**
+applied to the previous implementation before these added cases and must not be
+presented as Green for this correction.
+
+**Minimal producer correction (no product/contract rule change):**
+
+1. `normalization-evidence.ts::candidatesOwned`, source SMS: an **explicit**
+   `type:"CASH"` account evidence is invalid **even if
+   `candidateAccountIds:[]`**; this closes the empty-`.every` bypass. For each
+   provided source candidate, its **actual owned account type** must be `BANK`
+   or `DIGITAL_WALLET`, independently of model-supplied `type` (including null).
+   Independently grounded valid source BANK/WALLET remains accepted.
+   Uncertain/absent zero-candidate evidence is not newly forbidden or treated as
+   explicit.
+2. The same shared `candidatesOwned`, destination SMS: an actual owned candidate
+   must be **`CASH`** regardless of provider `type:null` or asserted `CASH`; a
+   real QNB BANK owner ID cannot become a Cash endpoint. A grounded `type:null`
+   proof with zero candidates remains valid but **inert**, pending T019 manual
+   review; no automatic endpoint/default/selection.
+3. `normalization-destination.ts::normalizeAtmDestinationEvidence` non-ATM
+   branch: `invalid: rawProof !== null` replaces
+   `invalid: rawProof !== null && rawProof !== undefined`. When a tagged-v2 row
+   is missing its **required** `toAccountEvidence`, the unchanged full canonical
+   provider schema still rejects it; `recoverSmsDestinationOnly` retains that
+   raw `undefined` while canonically revalidating the other fields. This
+   producer flags the missing field with hard `account_evidence_invalid`,
+   keeping known EGP/source evidence and the original financial
+   amount/category/fingerprint. Legitimate tagged-v2 **explicit null** is
+   accepted. A v1/old-server row yields `null` from `destinationFor` and remains
+   compatible; no parser schema relaxation, fabricated omission or replay.
+4. All source/destination roles stay **proof-only**: no account resolution, Cash
+   default selection, transfer assignment, group confirmation, source financial
+   mutation, provider/Edge call or stateful merge. Previous B1–B4 and I1
+   validations, one financial record per SMS, and valid Voice Cash remain
+   unmodified.
+
+**Exact source scope:** only
+`packages/logic/src/account-review/normalization-evidence.ts`,
+`normalization-destination.ts`, plus this validation report. No changes to
+`normalization.ts`, financial/group/identity/types, any tests/fixtures,
+canonical parser/review schemas, index, contracts, provider/mobile UI, DB/SQL or
+other workers. The two source helper files are under 900 raw lines; all named
+source helpers are under 50 raw lines, with explicit function returns already
+present, no `any`/casts/lint suppression. Root owns actual post-Prettier checks.
+
+**Root next:** merge the corrected source with Core canonical I1, rerun the **7
+F-R2 cases** (four formerly Red, three controls), previous **157 logic
+assertions**, **71 mobile tests**, strict production logic/mobile TypeScript,
+custom-rules ESLint, canonical/Edge generation+Node+Deno parity,
+privacy/formatter/function limits, and independent source review. This connector
+author has run **no tests/commands/provider/device** and does not certify new
+runtime Green. **SOURCE PUBLISHED / FREEZE / STOP.** T014-M Voice source adapter
+remains future separately granted work.

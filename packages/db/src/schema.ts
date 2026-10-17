@@ -10,7 +10,7 @@ import { METAL_HISTORICAL_RATE_CACHE_TABLES } from "./local-schema/metal-histori
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 30,
+  version: 31,
   tables: [
     tableSchema({
       name: "account_financial_effects",
@@ -257,6 +257,11 @@ export const schema = appSchema({
         { name: "state", type: "string" },
         { name: "updated_at", type: "number" },
         { name: "user_id", type: "string", isIndexed: true },
+        {
+          name: "local_recovery_snapshot_json",
+          type: "string",
+          isOptional: true,
+        },
       ],
     }),
 

@@ -687,6 +687,9 @@ interface MockClientOptions {
   readonly profileRows?: unknown[];
   readonly transactionRows?: unknown[];
   readonly transferRows?: unknown[];
+  readonly accountRows?: unknown[];
+  readonly bankDetailRows?: unknown[];
+  readonly accountSmsSenderRows?: unknown[];
 }
 
 function createMockClient(
@@ -763,6 +766,15 @@ function createMockClient(
         if (table === "profiles") {
           options.profileRows?.push(rows);
         }
+        if (table === "accounts" && Array.isArray(rows)) {
+          options.accountRows?.push(...rows);
+        }
+        if (table === "bank_details" && Array.isArray(rows)) {
+          options.bankDetailRows?.push(...rows);
+        }
+        if (table === "account_sms_senders" && Array.isArray(rows)) {
+          options.accountSmsSenderRows?.push(...rows);
+        }
         if (table === "transactions" && Array.isArray(rows)) {
           options.transactionRows?.push(...rows);
         }
@@ -789,3 +801,171 @@ function createMockClient(
     }),
   };
 }
+
+describe("#395 T008/T015 local-only Voice account review E2E profile", () => {
+  it("requires explicit account-review selection and exact local mode without changing ordinary seeds", () => {
+    const baseline = getE2eFixture({});
+    const selected = getE2eFixture({
+      E2E_FIXTURE_PROFILE: "account-review",
+      E2E_SUPABASE_MODE: "local",
+    });
+    expect(baseline.seedScope).toBe("e2e");
+    expect(selected.seedScope).toBe("e2e-account-review");
+    expect(selected.requiresLocalSupabase).toBe(true);
+    expect(selected).not.toBe(baseline);
+    expect(getE2eFixture({})).toBe(baseline);
+    expect(() =>
+      getE2eFixture({
+        E2E_FIXTURE_PROFILE: "account-review",
+        E2E_SUPABASE_MODE: "remote",
+      })
+    ).toThrow("account_review_e2e_local_only");
+    expect(() =>
+      getE2eFixture({
+        E2E_FIXTURE_PROFILE: "account-review",
+      })
+    ).toThrow("account_review_e2e_local_only");
+  });
+
+  it("fails an explicit remote profile before any hosted/client write, even if passed directly to the seeder", async () => {
+    const selected = getE2eFixture({
+      E2E_FIXTURE_PROFILE: "account-review",
+      E2E_SUPABASE_MODE: "local",
+    });
+    const ops: string[] = [];
+    const mockClient = createMockClient(ops);
+    const local = getE2eSeedConfig({
+      E2E_SUPABASE_MODE: "local",
+      E2E_LOCAL_JWT_SECRET: "local-test-jwt-secret-with-enough-length",
+    });
+    await expect(
+      seedE2eData(
+        mockClient,
+        {
+          ...local,
+          mode: "remote",
+          userId: "user-e2e",
+        },
+        selected
+      )
+    ).rejects.toThrow("account_review_e2e_local_only");
+    expect(ops).toEqual([]);
+  });
+
+  it("binds an opted-in locally seeded five-role profile plus a third distinguishable QNB choice with physical leading-zero card semantics", async () => {
+    const selected = getE2eFixture({
+      E2E_FIXTURE_PROFILE: "account-review",
+      E2E_SUPABASE_MODE: "local",
+    });
+    const operations: string[] = [];
+    const accounts: unknown[] = [],
+      bankDetails: unknown[] = [],
+      senders: unknown[] = [];
+    const client = createMockClient(operations, {
+      accountRows: accounts,
+      bankDetailRows: bankDetails,
+      accountSmsSenderRows: senders,
+    });
+    const local = getE2eSeedConfig({
+      E2E_SUPABASE_MODE: "local",
+      E2E_LOCAL_JWT_SECRET: "local-test-jwt-secret-with-enough-length",
+    });
+    await seedE2eData(client, { ...local, userId: "user-e2e" }, selected);
+    const rows = accounts as Array<{
+      id: string;
+      user_id: string;
+      name: string;
+      type: string;
+      currency: string;
+      institution_id?: string | null;
+      provider_display_name?: string | null;
+      is_default: boolean;
+    }>;
+    const bankRows = bankDetails as Array<{
+      account_id: string;
+      card_last_4: number;
+    }>;
+    const senderRows = senders as Array<{
+      account_id: string;
+      sender_name: string;
+    }>;
+    expect(rows.filter((a) => a.is_default)).toHaveLength(1);
+    const cash = rows.find((a) => a.name === "Cash");
+    expect(cash).toMatchObject({
+      user_id: "user-e2e",
+      type: "CASH",
+      currency: "EGP",
+      is_default: true,
+    });
+    expect(
+      rows.find(
+        (a) =>
+          a.name === "QNB Everyday" &&
+          bankRows.some((b) => b.account_id === a.id && b.card_last_4 === 7)
+      )
+    ).toMatchObject({
+      type: "BANK",
+      institution_id: "qnb",
+      provider_display_name: "QNB",
+    });
+    expect(
+      rows.find(
+        (a) =>
+          a.name === "QNB Savings" &&
+          bankRows.some((b) => b.account_id === a.id && b.card_last_4 === 9221)
+      )
+    ).toBeTruthy();
+    const thirdQnb = rows.find(
+      (a) =>
+        a.name === "QNB Premier" &&
+        bankRows.some((b) => b.account_id === a.id && b.card_last_4 === 4402)
+    );
+    expect(thirdQnb).toMatchObject({
+      user_id: "user-e2e",
+      type: "BANK",
+      currency: "EGP",
+      institution_id: "qnb",
+      provider_display_name: "QNB",
+    });
+    // Three owned QNB accounts are selectable, but active known-provider
+    // account identity must stay unique without relying on card suffixes.
+    const qnbChoices = rows.filter(
+      (a) =>
+        a.type === "BANK" &&
+        a.currency === "EGP" &&
+        a.institution_id === "qnb" &&
+        a.provider_display_name === "QNB"
+    );
+    expect(qnbChoices).toHaveLength(3);
+    expect(qnbChoices.map((a) => a.name).sort()).toEqual([
+      "QNB Everyday",
+      "QNB Premier",
+      "QNB Savings",
+    ]);
+    expect(
+      new Set(qnbChoices.map((a) => a.name.trim().toLowerCase())).size
+    ).toBe(3);
+    expect(new Set(qnbChoices.map((a) => a.id)).size).toBe(3);
+    expect(
+      rows.find(
+        (a) =>
+          a.name === "CIB Main" &&
+          bankRows.some((b) => b.account_id === a.id && b.card_last_4 === 5566)
+      )
+    ).toMatchObject({
+      institution_id: "cib",
+      provider_display_name: "CIB",
+    });
+    expect(rows.find((a) => a.name === "Wallet")).toMatchObject({
+      type: "DIGITAL_WALLET",
+      currency: "USD",
+      provider_display_name: "Mobile Wallet",
+    });
+    expect(senderRows.some((r) => r.sender_name === "CIB")).toBe(true);
+    expect(senderRows.some((r) => r.sender_name === "WALLET")).toBe(true);
+    expect(rows.every((r) => r.user_id === "user-e2e")).toBe(true);
+    expect(operations).toContain("upsert:accounts:6");
+    expect(operations).toContain("upsert:bank_details:4");
+    expect(operations).toContain("upsert:account_sms_senders:5");
+  });
+});

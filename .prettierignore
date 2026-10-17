@@ -20,3 +20,12 @@ specs/389-voice-usage-limits/mockups/transaction-voice-daily-limit-en.binding.md
 specs/389-voice-usage-limits/mockups/transaction-voice-daily-limit-ar.binding.md
 specs/389-voice-usage-limits/mockups/transaction-manual-compact-b.binding.md
 specs/389-voice-usage-limits/mockups/voice-controls-r2-green-gray-proposal.binding.md
+# Preserve imported approval provenance and R3 image/copy fingerprints.
+specs/395-shared-account-review/mockups/references/
+specs/395-shared-account-review/mockups/provenance/
+specs/395-shared-account-review/mockups/proposals/r3/manifest.json
+specs/395-shared-account-review/mockups/proposals/r3/interaction-notes.md
+specs/395-shared-account-review/mockups/adjustments.md
+specs/395-shared-account-review/mockups/**/*.binding.md
+specs/395-shared-account-review/mockups/binding-contract.md
+specs/395-shared-account-review/mockups/binding-package.json

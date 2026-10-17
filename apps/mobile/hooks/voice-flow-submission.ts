@@ -1,5 +1,8 @@
 import { randomUUID } from "expo-crypto";
-import { voiceRequestKeySchema } from "@monyvi/logic";
+import {
+  accountReviewSessionSchema,
+  voiceRequestKeySchema,
+} from "@monyvi/logic";
 import type {
   AiVoiceParserOptions,
   AiVoiceParserSuccess,
@@ -119,13 +122,26 @@ export function serializeAiReviewParams(
   aiResult: AiVoiceParserSuccess,
   originTabIndex: number
 ): Record<string, string> {
-  return {
+  // Preserve original Voice data and route navigation. Only the validated
+  // optional T054 canonical session adds a V2 transport parameter.
+  const base = {
     transactions: JSON.stringify(aiResult.transactions),
     transcript: aiResult.transcript,
     originalTranscript: aiResult.originalTranscript,
     detectedLanguage: aiResult.detectedLanguage,
     originTabIndex: String(originTabIndex),
   };
+  if (aiResult.reviewSession === undefined) return base;
+
+  const session = accountReviewSessionSchema.parse(aiResult.reviewSession);
+  if (
+    session.source !== "VOICE" ||
+    session.rows.some((row) => row.source !== "VOICE") ||
+    session.rows.length !== aiResult.transactions.length
+  ) {
+    throw new Error("account_review_voice_route_session_invalid");
+  }
+  return { ...base, reviewSession: JSON.stringify(session) };
 }
 
 export function buildParserPayload(

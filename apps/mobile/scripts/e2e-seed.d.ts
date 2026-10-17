@@ -40,6 +40,8 @@ export interface E2eBudgetFixtureRows {
 
 export interface E2eFixture {
   readonly seedScope: string;
+  /** Only the explicitly selected #395 profile requests local-only admission. */
+  readonly requiresLocalSupabase?: boolean;
   readonly buildExtraRows?: (args: {
     readonly categoryIds: Readonly<Record<string, string>>;
     readonly currentTimestamp: string;
@@ -70,10 +72,12 @@ export function getE2eSeedConfig(
 
 export function seedE2eData(
   client: unknown,
-  config: E2eSeedConfig
+  config: E2eSeedConfig,
+  fixture?: E2eFixture
 ): Promise<{ readonly userId: string }>;
 
 export function resetE2eData(
   client: unknown,
-  config: E2eSeedConfig
+  config: E2eSeedConfig,
+  fixture?: E2eFixture
 ): Promise<{ readonly userId: string }>;

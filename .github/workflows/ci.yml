@@ -90,6 +90,15 @@ jobs:
       - name: Test Repository Scripts
         run: npm run test:scripts
 
+      - name: Test WatermelonDB Sync Writer Hook Patcher
+        run: npm run test:watermelon-sync-hooks
+
+      - name: Check Account Review Edge Generated Contracts
+        run: npm run account-review:edge:check
+
+      - name: Test Account Review Edge Contracts
+        run: npm run test:account-review:edge
+
       - name: Test Email Verification Resend Edge Contract
         run: >-
           node --experimental-strip-types --test
@@ -149,12 +158,27 @@ jobs:
           npx supabase test db --local supabase/tests/account_financial_action_rpc_test.sql
           npx supabase test db --local supabase/tests/account_financial_effects_test.sql
           npx supabase test db --local supabase/tests/account_edit_balance_adjustment_test.sql
+          npx supabase test db --local supabase/tests/account_create_default_recovery_outcome.test.sql
+          npx supabase test db --local supabase/tests/review_account_guard_ownership.test.sql
+          npx supabase test db --local supabase/tests/account_default_integrity.test.sql
+          npx supabase test db --local supabase/tests/review_effect_tuple_guard.test.sql
+          npx supabase test db --local supabase/tests/review_batch_save_mapping.test.sql
+          npx supabase test db --local supabase/tests/review_batch_save.test.sql
+          npx supabase test db --local supabase/tests/account_create_default.test.sql
+          npx supabase test db --local supabase/tests/review_outcome_replay.test.sql
+          npx supabase test db --local supabase/tests/review_contract_boundaries.test.sql
           npx supabase test db --local supabase/tests/metals_issue285_reconciliation_test.sql
           npx supabase test db --local supabase/tests/metals_issue284_persistence_test.sql
           npx supabase test db --local supabase/tests/metals_dispose_rate_snapshots_test.sql
           npx supabase test db --local supabase/tests/atomic_market_rate_snapshots_test.sql
           npx supabase test db --local supabase/tests/market_snapshot_publication_test.sql
           npx supabase test db --local supabase/tests/email_verification_resend_limits_test.sql
+
+      # #395 races require local-only privileged dblink setup. Keep ALL
+      # ordinary RLS/security pgTAP cases above on their original postgres role.
+      - name: Run account review owner concurrency pgTAP
+        run: node scripts/test-account-review-concurrency.js
+        timeout-minutes: 15
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js

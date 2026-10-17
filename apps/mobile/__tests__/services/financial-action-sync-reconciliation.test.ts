@@ -1,13 +1,83 @@
+import { createHash } from "node:crypto";
+import { database, type FinancialActionGroup } from "@monyvi/db";
+import {
+  createFinancialActionGroup,
+  getFinancialActionGroup,
+} from "../../services/financial-action-foundation-repository";
 import {
   createFinancialActionReconciliationService,
   FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
   type FinancialActionReconciliationBundle,
 } from "../../services/financial-action-reconciliation-service";
-import { parseFinancialActionEnvelopeJson } from "@monyvi/logic";
+import {
+  parseFinancialActionEnvelopeJson,
+  serializeFinancialActionEnvelope,
+} from "@monyvi/logic";
 import {
   createFinancialActionPushCoordinator,
   createFinancialActionSyncService,
 } from "../../services/financial-action-sync-service";
+
+// Only replace the app/native database construction boundary. The imported
+// financial factories, validators, collectors and injected protocol tests stay
+// real; no financial result or recovery rule is mocked to bypass admission.
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", () => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const models = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models");
+  const adapter = new Adapter({ schema });
+  return {
+    ...models,
+    database: new wm.Database({
+      adapter,
+      modelClasses: models.LEDGER_MODEL_CLASSES,
+    }),
+    __adapter: adapter,
+  };
+});
+// Real canonical hashing and owned lookup replace the old two-field object.
+// Only the unavailable native digest and current auth identity are controlled.
+jest.mock("expo-crypto", () => {
+  const crypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, value: string): Promise<string> => {
+      if (algorithm !== "SHA-256") throw new Error("unexpected_test_digest");
+      return Promise.resolve(
+        crypto.createHash("sha256").update(value, "utf8").digest("hex")
+      );
+    },
+    randomUUID: (): string => crypto.randomUUID(),
+  };
+});
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("20000000-0000-4000-8000-000000000002"),
+}));
+beforeAll(async () => {
+  const { __adapter } = jest.requireMock<{
+    readonly __adapter: import("@nozbe/watermelondb/adapters/sqlite").default;
+  }>("@monyvi/db");
+  await __adapter.initializingPromise;
+});
+beforeEach(async () => {
+  await database.write(() => database.unsafeResetDatabase());
+});
 
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000002";
@@ -18,14 +88,44 @@ const TRANSACTION_ID = "70000000-0000-4000-8000-000000000007";
 const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
 const SNAPSHOT_HASH = "a".repeat(64);
 
-function actionRecord(): {
+function actionIdentity(actionId = ACTION_ID): {
   readonly payloadHash: string;
   readonly payloadJson: string;
 } {
+  const envelope = parseFinancialActionEnvelopeJson(smsPayloadJson());
+  const payloadJson = serializeFinancialActionEnvelope({
+    ...envelope,
+    actionId,
+  });
   return {
-    payloadHash: "a".repeat(64),
-    payloadJson: '{"fixture":true}',
+    payloadHash: createHash("sha256").update(payloadJson, "utf8").digest("hex"),
+    payloadJson,
   };
+}
+
+/** Persist an original model through the real foundation, not a structural cast.
+ * Lifecycle calls stay injected in these existing transport-factory unit tests;
+ * the real linked financial-write suites own local-completeness coverage. */
+async function actionRecord(): Promise<FinancialActionGroup> {
+  const identity = actionIdentity();
+  const created = await createFinancialActionGroup({
+    envelope: parseFinancialActionEnvelopeJson(identity.payloadJson),
+    hashProvider: {
+      digestUtf8: (text: string): Promise<string> =>
+        Promise.resolve(
+          createHash("sha256").update(text, "utf8").digest("hex")
+        ),
+    },
+  });
+  expect(created.kind).toBe("created");
+  const record = await getFinancialActionGroup(ACTION_ID);
+  if (!record) throw new Error("genuine_legacy_root_missing");
+  expect(record).toBe(created.record);
+  expect(record.payloadHash).toBe(identity.payloadHash);
+  expect(record.payloadJson).toBe(identity.payloadJson);
+  expect(record.userId).toBe(USER_ID);
+  expect(record.actionId).toBe(ACTION_ID);
+  return record;
 }
 
 function rejectedBundle(
@@ -146,8 +246,9 @@ function smsPayloadJson(snapshotHash = SNAPSHOT_HASH): string {
 
 describe("dedicated financial action sync", () => {
   it("submits one canonical root and records an accepted outcome", async () => {
+    const record = await actionRecord();
     const repository = {
-      getFinancialActionGroup: jest.fn(() => Promise.resolve(actionRecord())),
+      getFinancialActionGroup: jest.fn(getFinancialActionGroup),
       markFinancialActionGroupSyncPending: jest.fn(() => Promise.resolve()),
       markFinancialActionGroupSyncFailed: jest.fn(() => Promise.resolve()),
       recordFinancialActionGroupServerOutcome: jest.fn(() => Promise.resolve()),
@@ -156,6 +257,9 @@ describe("dedicated financial action sync", () => {
       Promise.resolve({
         accountRevisions: [{ accountId: ACCOUNT_ID, revision: "8" }],
         actionId: ACTION_ID,
+        effectiveEventId: null,
+        holdingRevision: null,
+        serverAcceptedAt: "2026-09-01T12:00:01.000Z",
         status: "accepted",
       })
     );
@@ -167,8 +271,8 @@ describe("dedicated financial action sync", () => {
     await service.syncAction(ACTION_ID);
 
     expect(invoke).toHaveBeenCalledWith({
-      payloadHash: "a".repeat(64),
-      payloadJson: '{"fixture":true}',
+      payloadHash: record.payloadHash,
+      payloadJson: record.payloadJson,
     });
     expect(
       repository.recordFinancialActionGroupServerOutcome
@@ -176,9 +280,10 @@ describe("dedicated financial action sync", () => {
   });
 
   it("keeps transport failures retryable without fabricating an outcome", async () => {
+    await actionRecord();
     const transportError = new Error("offline");
     const repository = {
-      getFinancialActionGroup: jest.fn(() => Promise.resolve(actionRecord())),
+      getFinancialActionGroup: jest.fn(getFinancialActionGroup),
       markFinancialActionGroupSyncPending: jest.fn(() => Promise.resolve()),
       markFinancialActionGroupSyncFailed: jest.fn(() => Promise.resolve()),
       recordFinancialActionGroupServerOutcome: jest.fn(() => Promise.resolve()),
@@ -220,14 +325,12 @@ describe("dedicated financial action sync", () => {
     const result = await coordinator.coordinatePush([
       {
         actionId: ACTION_ID,
-        payloadHash: "a".repeat(64),
-        payloadJson: '{"accepted":true}',
+        ...actionIdentity(),
         state: "local_complete",
       },
       {
         actionId: "10000000-0000-4000-8000-000000000009",
-        payloadHash: "b".repeat(64),
-        payloadJson: '{"stale":true}',
+        ...actionIdentity("10000000-0000-4000-8000-000000000009"),
         state: "sync_failed",
       },
     ]);
@@ -269,8 +372,7 @@ describe("dedicated financial action sync", () => {
       coordinator.coordinatePush([
         {
           actionId: ACTION_ID,
-          payloadHash: "a".repeat(64),
-          payloadJson: '{"accepted":true}',
+          ...actionIdentity(),
           state: "accepted",
         },
       ])

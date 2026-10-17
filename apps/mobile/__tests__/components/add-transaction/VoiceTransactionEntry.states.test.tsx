@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import type { ReactTestInstance } from "react-test-renderer";
 
 import {
   getTestInstanceParent,
@@ -731,9 +732,13 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
       expect(screen.queryByTestId("voice-action-stop")).toBeNull();
 
-      const submit: unknown = screen.getByTestId("voice-action-submit");
-      const center: unknown = screen.getByTestId(secondId);
-      const discard: unknown = screen.getByTestId("voice-action-discard");
+      const submit: ReactTestInstance = screen.getByTestId(
+        "voice-action-submit"
+      );
+      const center: ReactTestInstance = screen.getByTestId(secondId);
+      const discard: ReactTestInstance = screen.getByTestId(
+        "voice-action-discard"
+      );
       // React tree order (not translated flex-row-reverse) proves the stable
       // physical LEFT/CENTER/RIGHT identity even for RTL content.
       expectPhysicalRecorderOrder(submit, center, discard);

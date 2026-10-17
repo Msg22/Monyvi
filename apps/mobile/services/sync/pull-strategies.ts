@@ -1,7 +1,6 @@
 import type { Database } from "@nozbe/watermelondb";
 import {
   INVALID_LEGACY_ID_PULL_ROW,
-  remapFinancialActionRootIds,
   remapVerifiedLegacyMetalPullIds,
   type PulledRow,
 } from "./metal-dedicated-identity-pull";
@@ -13,14 +12,15 @@ import type {
 import { logger } from "@/utils/logger";
 import { parseCanonicalDecimal } from "@monyvi/logic";
 
-import { assertCanonicalMetalRevision } from "../metal-financial-action-adapter";
 import { getCurrentUserId, supabase } from "../supabase";
 import { SYNCABLE_TABLES } from "./config";
+import { createSnapshotRetentionCutoffIso } from "./historical-recovery";
 import {
-  normalizeFinancialEffectTimestamp,
+  EXACT_TEXT_PULL_ERROR_CODE,
+  normalizeDedicatedPullRecord,
+  normalizePulledExactText,
   shapeFinancialPullRecords,
 } from "./financial-pull-shaping";
-import { createSnapshotRetentionCutoffIso } from "./historical-recovery";
 import { createSyncTableError } from "./errors";
 import {
   PULL_PAGE_SIZE,
@@ -44,7 +44,7 @@ import type {
 
 export const SYNC_PULL_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_pull_auth_scope_lost",
-  INVALID_EXACT_TEXT: "sync_invalid_exact_text",
+  INVALID_EXACT_TEXT: EXACT_TEXT_PULL_ERROR_CODE,
   INVALID_METAL_OBSERVATION_PAGE: "sync_invalid_metal_observation_page",
   INVALID_PULL_ROW: INVALID_LEGACY_ID_PULL_ROW,
 } as const;
@@ -281,181 +281,6 @@ function transformObservationRow(
     unit: row.unit,
     value_decimal: row.valueDecimal,
   });
-}
-
-function normalizeExactTextColumn(
-  record: Record<string, unknown>,
-  alias: string,
-  target: string,
-  validate: (value: string) => void
-): Record<string, unknown> {
-  const value = record[alias];
-  if (value !== null && typeof value !== "string") {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
-  }
-  if (typeof value === "string") {
-    try {
-      validate(value);
-    } catch {
-      throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
-    }
-  }
-  const normalized = { ...record, [target]: value };
-  delete normalized[alias];
-  return normalized;
-}
-
-function validateCanonicalDecimal(value: string): void {
-  parseCanonicalDecimal(value);
-}
-
-function validateSerializedJson(value: string): void {
-  JSON.parse(value);
-}
-
-function validateCanonicalAccountRevision(value: string): void {
-  if (!/^(0|[1-9]\d*)$/.test(value) || BigInt(value) > 9223372036854775807n) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
-  }
-}
-
-function validateSignedMinorUnits(value: string): void {
-  if (!/^-?(0|[1-9]\d*)$/.test(value)) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
-  }
-  const parsed = BigInt(value);
-  if (parsed < -9223372036854775807n || parsed > 9223372036854775807n) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
-  }
-}
-
-function normalizeDedicatedPullRecord(
-  table: MetalDedicatedPullTable,
-  record: Record<string, unknown>
-): Record<string, unknown> {
-  if (table === "account_financial_effects") {
-    const revision = normalizeExactTextColumn(
-      record,
-      "accepted_account_revision_text",
-      "accepted_account_revision",
-      validateCanonicalAccountRevision
-    );
-    const amount = normalizeExactTextColumn(
-      revision,
-      "amount_minor_units_text",
-      "amount_minor_units",
-      validateSignedMinorUnits
-    );
-    return normalizeFinancialEffectTimestamp(
-      amount,
-      SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW
-    );
-  }
-  if (table === "financial_action_groups") {
-    const accountGuards = normalizeExactTextColumn(
-      record,
-      "account_guards_json_text",
-      "account_guards_json",
-      validateSerializedJson
-    );
-    const outcome = normalizeExactTextColumn(
-      accountGuards,
-      "outcome_json_text",
-      "outcome_json",
-      validateSerializedJson
-    );
-    return normalizeExactTextColumn(
-      outcome,
-      "payload_json_text",
-      "payload_json",
-      validateSerializedJson
-    );
-  }
-  if (table === "metal_action_evidence") {
-    const canonicalRevision = normalizeExactTextColumn(
-      record,
-      "canonical_holding_revision_text",
-      "canonical_holding_revision",
-      assertCanonicalMetalRevision
-    );
-    const payload = normalizeExactTextColumn(
-      canonicalRevision,
-      "domain_payload_json_text",
-      "domain_payload_json",
-      validateSerializedJson
-    );
-    return normalizeExactTextColumn(
-      payload,
-      "expected_holding_revision_text",
-      "expected_holding_revision",
-      assertCanonicalMetalRevision
-    );
-  }
-  if (table === "metal_lifecycle_events") {
-    return normalizeExactTextColumn(
-      record,
-      "payload_json_text",
-      "payload_json",
-      validateSerializedJson
-    );
-  }
-  if (table === "metal_rate_references") {
-    return normalizeExactTextColumn(
-      record,
-      "value_decimal_text",
-      "value_decimal",
-      validateCanonicalDecimal
-    );
-  }
-  return normalizePulledExactText("metal_holding_states", record);
-}
-
-function normalizePulledExactText(
-  table:
-    | GenericUserOwnedPullTableName
-    | ChildTableName
-    | "metal_holding_states",
-  record: Record<string, unknown>
-): Record<string, unknown> {
-  if (table === "assets") {
-    return normalizeExactTextColumn(
-      record,
-      "purchase_price_decimal_text",
-      "purchase_price_decimal",
-      validateCanonicalDecimal
-    );
-  }
-  if (table === "asset_metals") {
-    const weight = normalizeExactTextColumn(
-      record,
-      "weight_grams_decimal_text",
-      "weight_grams_decimal",
-      validateCanonicalDecimal
-    );
-    return normalizeExactTextColumn(
-      weight,
-      "purity_factor_decimal_text",
-      "purity_factor_decimal",
-      validateCanonicalDecimal
-    );
-  }
-  if (table === "metal_holding_states") {
-    return normalizeExactTextColumn(
-      record,
-      "financial_revision_text",
-      "financial_revision",
-      assertCanonicalMetalRevision
-    );
-  }
-  if (table === "accounts" || table === "recurring_payments") {
-    return normalizeExactTextColumn(
-      record,
-      "financial_revision_text",
-      "financial_revision",
-      validateCanonicalAccountRevision
-    );
-  }
-  return { ...record };
 }
 
 function pullSelect(
@@ -773,35 +598,70 @@ export async function pullMetalDedicatedTable(
     (row) => readPullCursor(row, "updated_at")
   );
 
-  // PostgREST supports the exact-value `::text` projection above, but the
-  // Supabase select-string type parser cannot infer rows containing casts.
-  // PR385 retains unresolved local financial roots/effects until their
-  // existing reconciliation completes and admits missing canonical evidence.
-  // Compare immutable identity against the exact raw PostgREST text first.
+  // Financial roots are *decoded* here, but their local physical IDs,
+  // private evidence, terminal state and delete authority belong to the
+  // ACTUAL synchronize() application writer. Do not consult local roots or
+  // remap IDs in this network callback; the database-bound SDK writer hook
+  // calls prepareOwnedFinancialActionRootPull against current local rows.
+  //
+  // Keep deleted root records as full incoming candidates (not string-only
+  // deleted IDs), so that hook can verify action/owner/hash identity and
+  // remap a legacy physical ID before deciding whether to delete. A
+  // partial or malformed root tombstone fails closed in the writer instead
+  // of silently dropping a protected root and advancing the checkpoint.
+  if (table === "financial_action_groups") {
+    if (!database && records.length > 0) {
+      throw new Error("financial_action_root_pull_database_required");
+    }
+    // PR385 suppresses unresolved roots by default. Existing internal opt-in
+    // admits a bounded AccountAdd candidate or a claimed accepted registered
+    // Review candidate to the actual SDK writer. Only that writer validates
+    // SQL091/SQL090 receipts, immutable ownership and private physical evidence
+    // before applying/ACKing; nonterminal Review roots remain withheld.
+    const admissible = await shapeFinancialPullRecords(
+      table,
+      records,
+      userId,
+      database,
+      { admitAcceptedAddToProtectedWriter: true }
+    );
+    return {
+      created: [],
+      updated: admissible.map((record) =>
+        transformFromSupabase(
+          table,
+          normalizeDedicatedPullRecord(table, record)
+        )
+      ),
+      deleted: [],
+    };
+  }
+
+  // Preserve current Main's exact-value casts and legacy Metal identity
+  // reconciliation. These Metal event/evidence remaps are independent of
+  // the owned financial-root/private-state authorization performed above.
+  // Other dedicated tombstones need only verified row identity; PostgREST
+  // may omit their exact-text aliases. Live rows validate every alias.
   const protectedRecords = await shapeFinancialPullRecords(
     table,
     records,
     userId,
     database
   );
-  // Current-main exact-text normalization remains strict for active rows.
-  // Tombstones may omit exact-text columns; keep their remote ID/owner facts.
   const normalizedRecords = protectedRecords.map((record) =>
     record.deleted === true
       ? record
       : (normalizeDedicatedPullRecord(table, record) as PulledRow)
   );
   const remappedRecords =
-    table === "financial_action_groups"
-      ? await remapFinancialActionRootIds(normalizedRecords, userId, database)
-      : table === "metal_action_evidence" || table === "metal_lifecycle_events"
-        ? await remapVerifiedLegacyMetalPullIds(
-            table,
-            normalizedRecords,
-            userId,
-            database
-          )
-        : normalizedRecords;
+    table === "metal_action_evidence" || table === "metal_lifecycle_events"
+      ? await remapVerifiedLegacyMetalPullIds(
+          table,
+          normalizedRecords,
+          userId,
+          database
+        )
+      : normalizedRecords;
   const deleted = remappedRecords
     .filter((record) => record.deleted === true)
     .map((record) => record.id);

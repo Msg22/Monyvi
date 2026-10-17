@@ -43,6 +43,13 @@ function readAllowedCategories(categoryTree: string): ReadonlySet<string> {
   return categories;
 }
 
+/** Reuse the existing v1 accessible-category set in v2 finance gating. */
+export function smsProviderAccessibleCategories(
+  categoryTree: string
+): ReadonlySet<string> {
+  return readAllowedCategories(categoryTree);
+}
+
 function normalizeProviderTransaction(value: unknown): unknown {
   if (!isRecord(value) || value.cardLast4 !== "") return value;
 

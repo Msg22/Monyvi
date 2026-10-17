@@ -291,6 +291,117 @@ Business rules:
   exact account evidence, but if no confident account match exists they must
   return no match for user review instead of guessing.
 
+#### Approved Voice/SMS account review target — issue #395
+
+Approved specification and B1 mockups on 2026-10-14; **implementation pending**.
+These are the agreed target rules for `specs/395-shared-account-review/spec.md`,
+not a claim that the current parser/review implements them.
+
+- Use an eligible active owned default when no account is identified and the
+  known currency matches, regardless of account count. Explain this choice in
+  review and keep it editable; remove only the account blocker.
+- Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
+  destination resolve separately. Only genuinely absent destination evidence
+  permits eligible same-currency default Cash, then sole eligible Cash; explicit
+  or uncertain `toAccountEvidence` requires a compatible owned choice. Current
+  ATM Save uses an existing eligible Cash (default/sole/manual) or a genuine
+  already-canonical confirmed referenced destination group; it never invents a
+  new Cash destination group/account. Regular transfers require reliable proof
+  or explicit choices and distinct endpoints.
+- Proven currency omission uses the preferred currency. Ambiguous, conflicting
+  or unsupported currency requires confirmation before automatic account
+  assignment. Currency correction preserves the numeric amount without
+  conversion.
+- Explicit named unmatched accounts do not fall back to default. Suggest shared
+  drafts only with compatible explicit name/type/provider/card evidence and the
+  same known currency; ambiguous matches require a per-row choice. Similar names
+  alone cannot merge conflicting accounts/cards.
+- Each suggestion supports independent confirm/edit/replace/remove. Confirmation
+  affects account assignment, selects no other row and creates no real account.
+  Selecting an otherwise valid row may confirm its group with visible
+  disclosure; only that row becomes selected. Preserve all other review reasons.
+- Removal retains transactions and invalidates only affected
+  assignment/selection; unchanged input cannot regenerate it immediately. Undo
+  cannot overwrite later edits. SMS choices/removals survive Review
+  later/restart; Voice stays session-only.
+- Create only draft accounts referenced by valid selected financial entries at
+  final Save, with one atomic idempotent revision-guarded financial action.
+  Preserve existing financial outcomes, exact amount rules, source fingerprints
+  and owned references; no AI bank-balance inference or extra parsing call for
+  review actions. Compatible independently confirmed Voice Cash accounts in
+  different currencies may be created together; there is no one-Cash-per-Save
+  restriction. Each account has its own approved currency and exact selected
+  minor-unit effects, with zero inferred opening balance.
+- First-active default applies to **every** account created by review Save:
+  Cash, Bank and Wallet. Freeze one `creationDefaultSnapshot` (existing closed
+  DefaultSnapshot shape, sorted active owned IDs and current default or null)
+  exactly when any review account is created. If its captured active set is
+  empty, exactly the **first actual frozen created-account UUID in canonical
+  ASCII order** is default; all other new accounts are false. If the captured
+  set is nonempty, every new account is nondefault and any existing or
+  intentionally missing default remains unchanged. Validate this under one
+  owner-wide logical-state CAS with at-most-one default, action replay and
+  atomic rollback. Confirmation creates/changes no account or default; review
+  never clears a prior default separately. This does **not** change Add's
+  existing `expectedDefaultSnapshot`, user-controlled default intent, or Edit.
+- Add Account exposes Edit's Default flag: first active account ON/disabled;
+  later accounts start OFF, preserving existing/no default. ON replaces prior
+  default only after successful creation; unsaved toggle/cancel/failure changes
+  no persisted default. Helper is source/type-aware. Existing unrelated form
+  rules stay.
+- Reuse the existing currency modal with transaction context and honest
+  unconfirmed selection. Opening/cancelling applies nothing; do not build a new
+  picker.
+
+#### #395 first-release scope — human decision (2026-10-17)
+
+The first release preserves the already approved Voice/SMS shared-account
+review, Add/default UI and selected-Save behavior, with **authenticated
+ownership, atomic local Save, rollback and immutable retry/duplicate protection,
+and safe push/pull/ACK handling**. An unknown, rejected, stale or unverifiable
+server result is **not success**: keep the local financial data, unsynced/dirty
+action state and necessary private proof for later resolution; do not silently
+acknowledge, overwrite, compensate or delete it.
+
+Advanced Add compensation-carrier encoding, financial-successor chain
+reconstruction and elaborate rejected-Add/historical restoration are **deferred
+from first-release gates**, not approved for deletion or safety relaxation. The
+following October 16 private-recovery direction is preserved as historical
+future technical design; it must not be mistaken for functionality already
+implemented or mandatory Green for the narrowed initial release. The approved
+spec and B1 decisions remain unchanged. See
+[the #395 controlling first-release scope](../../specs/395-shared-account-review/validation/first-release-scope.md),
+which also preserves the unshipped experimental carrier suite's published SHA.
+
+#### #395 technical storage decision — private local recovery (2026-10-16)
+
+**Status:** Approved implementation direction under the existing #395 Voice/SMS
+review and atomic selected-Save rules above; **not yet implemented or
+deployed**. This is a **technical storage/retention and privacy
+reconciliation**, not a new product behavior or customer-visible choice. The
+feature's accepted spec/approved B1/review Save semantics remain unchanged. The
+separately reviewed Constitution VII 1.8.0 exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) authorizes strictly device-only
+Watermelon migration routing, not a hosted migration.
+
+| Storage scope               | Approved target / boundary                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device-owned root extension | Existing `financial_action_groups` receives nullable **Watermelon-only** `local_recovery_snapshot_json`, accessed via non-generated `localRecoverySnapshotJson`. Old roots remain null; unresolved newly committed review roots require private recovery data. No Supabase column, public generated type, server action field or dummy SQL.                                                                     |
+| Versioned local upgrade     | Reserve Watermelon migration **31** after current 30; generator-consumed local-only declaration, regenerated schema/non-generated model and repeatable local migration/parity tests must be committed together. This has **not** been applied.                                                                                                                                                                  |
+| Private evidence            | Local strict `account-review-local-save/v1` has nine keys: version, action/owner/session, SMS drafts, created entity refs, default preimages, actual sorted predecessor IDs and `queuePreimage`. It binds captured owned preimages to actual prepared postimages in the same atomic writer; it is not the public financial tuple.                                                                               |
+| SMS restoration boundary    | Preserve recoverable unexpired draft choices. A proven automatic `pruned_empty` queue may be restored by exact original owned header only when no current owned queue exists. Explicit discard/reset, expired entries and a newer queue cannot be resurrected. At each draft's **inclusive 30-day parsedAt cutoff**, purge only that expired entry's raw recovery data; leave valid unexpired siblings.         |
+| Voice and sync privacy      | No durable Voice transcript/audio/review session. Private SMS evidence is excluded from Supabase payload/RPC/outbox, `payloadJson`, `outcomeJson`, logs and generic push; dedicated owned root pull must preserve validated local evidence without accepting server-supplied private fields. The opaque `frozenIntentDigest` and financial envelope `payloadHash` stay distinct from the local recovery record. |
+| Recovery ordering           | A rejected grouped action reconciles at most once after authenticated root/postimage/effect/child/default verification. Restore no newer overwritten choice; unresolved optimistic default/active-set predecessor actions must reach canonical acceptance before dependent actions push.                                                                                                                        |
+
+The complete technical guard, retention variants and task coverage are recorded
+in `specs/395-shared-account-review/contracts/local-recovery.md`,
+`contracts/wire-shapes.md` and the existing
+**T043/T044/T048/T049/T050/T051/T053/T074** tasks. No new table in Supabase,
+action format, business approval, default rule or runtime fallback is inferred.
+Local storage and pull implementation still require fresh tests-first Red,
+Speckit analysis, scope-specific source authorization and independent
+database/security review.
+
 ### Bank Details And SMS Senders
 
 Bank details are child rows owned through an account. They store only bank-

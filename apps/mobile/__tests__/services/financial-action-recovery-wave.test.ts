@@ -1,8 +1,18 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { database, type FinancialActionGroup } from "@monyvi/db";
+import {
+  createFinancialActionGroup,
+  getFinancialActionGroup,
+} from "../../services/financial-action-foundation-repository";
+import { legacyEditBalanceEnvelope } from "../../../../packages/logic/src/financial-actions/__tests__/review-batch-save-fixtures";
 import { resolve } from "node:path";
 
 import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
-import { canonicalizeFinancialActionEnvelope } from "@monyvi/logic";
+import {
+  canonicalizeFinancialActionEnvelope,
+  serializeFinancialActionEnvelope,
+} from "@monyvi/logic";
 
 import {
   createFinancialActionReconciliationService,
@@ -14,6 +24,68 @@ import {
 } from "@/services/financial-action-sync-service";
 import { collectAccountFinancialActionPushBundles } from "@/services/sync/account-protected-fields";
 import { validateTransactionForm } from "@/validation/transaction-validation";
+
+// Only replace the app/native database construction boundary. The imported
+// financial factories, validators, collectors and injected protocol tests stay
+// real; no financial result or recovery rule is mocked to bypass admission.
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", () => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const models = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models");
+  const adapter = new Adapter({ schema });
+  return {
+    ...models,
+    database: new wm.Database({
+      adapter,
+      modelClasses: models.LEDGER_MODEL_CLASSES,
+    }),
+    __adapter: adapter,
+  };
+});
+// Genuine Foundation/Watermelon root. Only native crypto and actor I/O
+// are substituted; there is no financial writer or acceptance-proof mock.
+jest.mock("expo-crypto", () => {
+  const crypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, bytes: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        throw new Error("invalid_test_digest_algorithm");
+      return Promise.resolve(
+        crypto.createHash("sha256").update(bytes, "utf8").digest("hex")
+      );
+    },
+    randomUUID: (): string => crypto.randomUUID(),
+  };
+});
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("20000000-0000-4000-8000-000000000002"),
+}));
+beforeAll(async () => {
+  const { __adapter } = jest.requireMock<{
+    readonly __adapter: import("@nozbe/watermelondb/adapters/sqlite").default;
+  }>("@monyvi/db");
+  await __adapter.initializingPromise;
+});
+beforeEach(async (): Promise<void> => {
+  await database.write(() => database.unsafeResetDatabase());
+});
 
 const ROOT = resolve(__dirname, "../../../..");
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
@@ -44,7 +116,7 @@ function pushChanges(
       deleted: [],
       updated: [],
     },
-  } as unknown as SyncPushArgs["changes"];
+  };
 }
 
 function validEnvelope(): TestFinancialActionEnvelope {
@@ -62,6 +134,7 @@ function validEnvelope(): TestFinancialActionEnvelope {
           accountId: ACCOUNT_ID,
           amountMinorUnits: "-100",
           currency: "EGP",
+          effectId: EFFECT_ID,
         },
       ],
       domainMutation: {
@@ -98,6 +171,79 @@ function validEnvelope(): TestFinancialActionEnvelope {
     },
     payloadVersion: "account.balance-effects/v1",
     userId: USER_ID,
+  };
+}
+
+/** Registered LEGACY account edit; immutable bytes, hash and actual owned root. */
+function legacyIdentity(): {
+  readonly envelope: ReturnType<typeof canonicalizeFinancialActionEnvelope>;
+  readonly payloadHash: string;
+  readonly payloadJson: string;
+} {
+  const original = legacyEditBalanceEnvelope.payload.domainMutation.records[0];
+  if (!original) throw new Error("missing_registered_legacy_account_mutation");
+  const envelope = canonicalizeFinancialActionEnvelope({
+    ...legacyEditBalanceEnvelope,
+    actionId: ACTION_ID,
+    userId: USER_ID,
+    domainReferenceId: ACCOUNT_ID,
+    accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+    payload: {
+      ...legacyEditBalanceEnvelope.payload,
+      accountEffects: [
+        {
+          accountId: ACCOUNT_ID,
+          amountMinorUnits: "2500",
+          currency: "EGP",
+          effectId: EFFECT_ID,
+        },
+      ],
+      domainMutation: {
+        records: [
+          { ...original, after: { ...original.after, id: ACCOUNT_ID } },
+        ],
+      },
+      domainRecordRefs: [ACCOUNT_ID],
+    },
+  });
+  const payloadJson = serializeFinancialActionEnvelope(envelope);
+  const payloadHash = createHash("sha256")
+    .update(payloadJson, "utf8")
+    .digest("hex");
+  return { envelope, payloadJson, payloadHash };
+}
+
+async function ownedLegacyRoot(): Promise<FinancialActionGroup> {
+  const identity = legacyIdentity();
+  const created = await createFinancialActionGroup({
+    envelope: identity.envelope,
+    hashProvider: {
+      digestUtf8: (bytes: string): Promise<string> =>
+        Promise.resolve(
+          createHash("sha256").update(bytes, "utf8").digest("hex")
+        ),
+    },
+  });
+  expect(created.kind).toBe("created");
+  const owned = await getFinancialActionGroup(ACTION_ID);
+  if (!owned) throw new Error("missing_genuine_owned_legacy_action");
+  expect(owned).toBe(created.record);
+  expect(owned.userId).toBe(USER_ID);
+  expect(owned.actionId).toBe(ACTION_ID);
+  expect(owned.payloadHash).toBe(identity.payloadHash);
+  expect(owned.payloadJson).toBe(identity.payloadJson);
+  return owned;
+}
+
+function legacyCandidate(
+  owned: FinancialActionGroup,
+  state: FinancialActionPushCandidate["state"]
+): FinancialActionPushCandidate {
+  return {
+    actionId: owned.actionId,
+    payloadHash: owned.payloadHash,
+    payloadJson: owned.payloadJson,
+    state,
   };
 }
 
@@ -149,7 +295,7 @@ function rejectedBundle(): FinancialActionReconciliationBundle & {
         ],
       },
     ],
-    domain: "transactions",
+    domain: "accounts",
     effects: [
       {
         acceptedAccountRevision: "8",
@@ -163,7 +309,7 @@ function rejectedBundle(): FinancialActionReconciliationBundle & {
       },
     ],
     localSmsReviewDraftSnapshot: null,
-    payloadJson: "{}",
+    payloadJson: legacyIdentity().payloadJson,
     state: "rejected_compensating",
     userId: USER_ID,
   };
@@ -190,6 +336,7 @@ describe("issue #242 recovery-wave client contracts", () => {
       status: "accepted",
     });
     const markPending = jest.fn().mockResolvedValue(undefined);
+    const owned = await ownedLegacyRoot();
     const recover = jest.fn().mockResolvedValue(undefined);
     const dependencies = {
       invokeAccountFinancialActionRpc: invokeRpc,
@@ -198,6 +345,8 @@ describe("issue #242 recovery-wave client contracts", () => {
         .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       reconcileFinancialActionGroup: recover,
+      getFinancialActionGroup,
+      database,
       recordFinancialActionGroupServerOutcome: jest
         .fn()
         .mockResolvedValue(undefined),
@@ -206,12 +355,7 @@ describe("issue #242 recovery-wave client contracts", () => {
         actionId: string
       ) => Promise<void>;
     };
-    const candidate: FinancialActionPushCandidate = {
-      actionId: ACTION_ID,
-      payloadHash: "a".repeat(64),
-      payloadJson: "{}",
-      state: "reconciliation_incomplete",
-    };
+    const candidate = legacyCandidate(owned, "reconciliation_incomplete");
 
     const result = await createFinancialActionPushCoordinator(
       dependencies

@@ -70,9 +70,14 @@ export type AppSyncDatabaseChangeSet = SyncDatabaseChangeSet & {
   [TableName in SupabaseTablesNames]?: SyncTableChangeSet;
 };
 
-export interface SupabaseWriteQuery extends PromiseLike<{ error: unknown }> {
+export interface SupabaseWriteQuery extends PromiseLike<{
+  readonly error: unknown;
+  readonly data?: ReadonlyArray<Readonly<{ id: string }>> | null;
+  readonly count?: number | null;
+}> {
   eq(column: string, value: string): SupabaseWriteQuery;
   in(column: string, values: readonly string[]): SupabaseWriteQuery;
+  select(columns: "id"): SupabaseWriteQuery;
 }
 
 export interface SupabaseWriteTable {
@@ -83,5 +88,8 @@ export interface SupabaseWriteTable {
     records: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>,
     options: { readonly onConflict: string }
   ): PromiseLike<{ error: unknown }>;
-  update(values: Record<string, unknown>): SupabaseWriteQuery;
+  update(
+    values: Record<string, unknown>,
+    options?: { readonly count: "exact" }
+  ): SupabaseWriteQuery;
 }

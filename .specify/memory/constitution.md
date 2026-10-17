@@ -1,4 +1,31 @@
 <!--
+Sync Impact Report — 2026-10-16
+- Version change: 1.7.0 -> 1.8.0 (MINOR, new narrowly scoped device-only
+  migration exception; not a cosmetic PATCH).
+- Modified principle: VII. Local-First Migrations. Supabase-owned/syncable DDL
+  still requires sequential local SQL, while strictly private Watermelon-only
+  fields/tables require versioned local migration and durable local generation.
+- Added sections/principles: None outside the expanded VII exception.
+- Removed principles: None.
+- Agent guidance updated in the same policy artifact:
+  .agent/rules/database-migrations.md,
+  .agent/rules/specify-rules.md,
+  .agents/skills/offline-financial-systems/SKILL.md.
+- Added detailed policy: docs/architecture/device-local-migration-policy.md.
+- Speckit plan/spec/tasks templates inspected; unchanged in this workflow-only
+  scope. AGENTS.md and all other workflows remain unchanged per exclusive
+  ownership; the Constitution is authoritative when older blanket migration
+  wording is encountered.
+- No business logic changed; docs/business/business-decisions.md unchanged.
+  Feature-specific #395 local recovery storage and any schema/generator edits
+  remain exclusively owned by the separate feature implementation.
+- No Supabase, Watermelon, code, SQL, generated type, or hosted deployment
+  changes in this amendment. No checks/formatters run here; Root must review
+  impact, independently validate generator and migration parity before
+  feature adoption, and publish this as a separate workflow-only PR.
+-->
+
+<!--
 Sync Impact Report
 - Version change: 1.6.0 -> 1.7.0
 - Amendment date: 2026-09-05
@@ -223,36 +250,78 @@ The Monyvi monorepo uses npm workspaces + Nx with strict dependency direction.
 
 ### VII. Local-First Migrations
 
-All database schema changes (DDL) MUST go through local SQL migration files.
+Every database schema change MUST be versioned, source-controlled, and verified
+through an approved **local-first** migration path. Classify each proposed
+field/table by authority **before** migration: Supabase-owned/syncable versus
+genuinely device-only WatermelonDB storage.
 
-- Create `.sql` migration files in `supabase/migrations/` for every schema
-  change (tables, columns, triggers, functions, indexes, RLS policies, enums).
-- Follow the existing numbering convention:
-  `supabase/migrations/NNN_descriptive_name.sql`.
-- Run `npm run db:push` to apply local migrations to the remote Supabase
-  database.
-- Run `npm run db:migrate` to regenerate WatermelonDB schema, types, and local
-  watermelon migrations from the latest SQL migration.
-- Run `npm run db:sync-local` when you need to ensure that `schema.ts` and
-  `supabase-types.ts` are up-to-date without pushing to remote. This also picks
-  up the latest local migration into the WatermelonDB schema. Use this instead
-  of `db:migrate` when the remote database is already up-to-date and you only
-  need to refresh local generated files.
-- **NEVER** use the Supabase MCP tool's `apply_migration` or `execute_sql` for
-  DDL changes. **NEVER** make schema changes directly in the Supabase dashboard.
-- The Supabase MCP tool MAY be used for **read-only** operations (querying data,
-  checking schema, listing tables, inspecting logs).
-- Commit both the migration file and generated schema changes together.
-- **Bringing existing Supabase tables into WatermelonDB:** When adding an
-  existing Supabase table to WatermelonDB sync (removing it from
-  `EXCLUDED_TABLES` in both `transform-schema.js` and
-  `sql-to-watermelon-migration.js`), you MUST manually add a `createTable` step
-  to `packages/db/src/migrations.ts` and bump the schema version. The
-  auto-generation script cannot detect this because no `CREATE TABLE` exists in
-  the latest SQL migration.
-- **DROP COLUMN:** WatermelonDB has no `dropColumn` migration primitive. Dropped
-  columns remain in local SQLite but are ignored. No WatermelonDB migration is
-  needed for column drops.
+**Server-owned and syncable DDL (existing rule, unchanged):**
+
+- All PostgreSQL schema, functions, triggers, indexes, enums, RLS policies,
+  server-owned fields and syncable contract changes MUST originate in numbered
+  local `supabase/migrations/NNN_descriptive_name.sql` files. Never perform DDL
+  through Supabase MCP `apply_migration`/`execute_sql` or the dashboard.
+  Supabase MCP MAY be used for read-only inspection.
+- Regenerate the applicable WatermelonDB migrations/schema/models and public
+  Supabase types from the authoritative local SQL/type source. Preserve every
+  generated public field/type and all authenticated RLS, owner, immutable
+  financial-action, expected-revision CAS and idempotency requirements.
+- A hosted `db:push` or other remote deployment MUST have its **own explicit
+  approval**; local implementation and schema-generation authorization do not
+  imply hosted mutation. The current `npm run db:migrate` command runs `db:push`
+  first, so it is NOT a safe local-only verification command.
+  `npm run db:sync-local` is the existing local regeneration path when its
+  prerequisites are met, not permission to deploy.
+
+**Narrow device-only WatermelonDB migration exception:**
+
+- A genuinely device-only field/table, including a private local column on an
+  otherwise syncable WatermelonDB table, MAY have **no** corresponding Supabase
+  column/table/migration **only if** the feature's approved technical scope
+  explicitly establishes local-only ownership and excludes the data from every
+  Supabase pull/push, RPC, financial action envelope, outbox, outcome, analytics
+  and diagnostic/logging path. Do not create a dummy cloud column to carry a
+  private snapshot. A server-owned financial field, shared financial state,
+  protected balance/revision, or cloud-reconciled action result cannot be
+  reclassified as device-only to evade CAS, RLS, ownership, or sync.
+- Device-only DDL MUST have an ordered, versioned WatermelonDB migration in
+  `packages/db/src/migrations.ts` and a durable generator-consumed local schema
+  declaration/override. The WatermelonDB schema version MUST advance in the same
+  feature change. Ensure regeneration preserves the local extension on an
+  existing server-generated table and retains all server-owned columns and
+  generated public types. Use non-generated model extensions for device-only
+  fields; NEVER hand-edit generated `schema.ts`, `models/base/*`, or
+  `supabase-types.ts` as the authority.
+- Commit the local migration, local override/generator, required non-generated
+  model declarations, generated Watermelon schema/exports and tests
+  **together**. Prove repeatable local regeneration/parity, fresh install,
+  upgrade from an existing database, restart, ownership scope, atomic
+  failure/rollback, non-destructive recovery and pull/upsert preservation. A
+  device-only column on a syncable parent MUST be excluded from remote
+  serialization and retained through owned cloud refreshes; never copy remote
+  data into the private field. Private recovery preimages MUST remain on-device
+  with explicit retention and cleanup. No schema reset, remote backfill or
+  server deployment is authorized by this exception.
+- This exception changes only technical migration routing, not business behavior
+  or financial/sync semantics. Specific feature storage declarations, migration
+  numbers and sync exclusions require their own scoped implementation,
+  tests-first evidence and independent DB/security review. Stop for unproven
+  local-only classification, missing generator parity, privacy leakage or
+  owner/CAS/RLS uncertainty. See
+  `docs/architecture/device-local-migration-policy.md` for the verification
+  checklist and command boundaries.
+
+**Retained compatibility rules:**
+
+- When bringing an existing Supabase table into WatermelonDB sync (removing it
+  from `EXCLUDED_TABLES` in both `transform-schema.js` and
+  `sql-to-watermelon-migration.js`), manually add its `createTable` step to
+  `packages/db/src/migrations.ts` and increment the WatermelonDB schema version.
+  The SQL-to-Watermelon generator cannot infer a new local table from an
+  already-deployed server table without a new `CREATE TABLE` statement.
+- WatermelonDB has no `dropColumn` migration primitive. A removed synced column
+  can remain in local SQLite while Watermelon ignores it; do not treat physical
+  remnants as live schema authority or silently discard a device-only field.
 
 ### VIII. Authenticated User Scope & Sync Correctness
 
@@ -412,4 +481,4 @@ migration.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-05
+**Version**: 1.8.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-16

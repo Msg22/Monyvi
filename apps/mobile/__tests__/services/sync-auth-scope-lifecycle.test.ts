@@ -11,8 +11,19 @@ let mockUnresolvedCount = 0;
 jest.mock("@monyvi/db", () => ({ schema: { tables: {} } }));
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (input: unknown): Promise<void> =>
-    mockSynchronize(input) as Promise<void>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (input: unknown): Promise<void> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(input).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(input) as Promise<void>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({
@@ -169,11 +180,12 @@ describe("sync auth scope lifecycle", () => {
     "does not advance an empty-pull watermark when auth %s before pull",
     async (_label, pullUserId) => {
       let persistedWatermark = INITIAL_WATERMARK;
-      mockGetCurrentUserId
-        .mockResolvedValueOnce(EXPECTED_USER_ID)
-        .mockResolvedValueOnce(pullUserId);
+      mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
       mockSynchronize.mockImplementation(
         async (callbacks: SynchronizeCallbacks): Promise<void> => {
+          // Keep the authentic protected-SDK preflight, then change actor
+          // immediately before the transport pull begins.
+          mockGetCurrentUserId.mockResolvedValue(pullUserId);
           const result = await callbacks.pullChanges({
             lastPulledAt: persistedWatermark,
           });
@@ -190,10 +202,22 @@ describe("sync auth scope lifecycle", () => {
 
   it("does not advance an empty-pull watermark when auth vanishes before pull returns", async () => {
     let persistedWatermark = INITIAL_WATERMARK;
-    mockGetCurrentUserId
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(null);
+    mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
+    // Switch on the genuine frozen-pull seal RPC, after the pull has begun,
+    // rather than depending on unrelated preflight auth-read counts.
+    mockRpc.mockImplementation((name: string) => {
+      const upperWatermark = "2026-05-18T08:05:00.000Z";
+      if (name === "seal_sync_pull_v1") {
+        mockGetCurrentUserId.mockResolvedValue(null);
+      }
+      const data =
+        name === "seal_sync_pull_v1"
+          ? upperWatermark
+          : name === "pull_snapshot_deletions_page_v1"
+            ? { rows: [], count: 0, upperWatermark }
+            : { nextCursor: null, snapshots: [], upperWatermark };
+      return Promise.resolve({ data, error: null });
+    });
     mockSynchronize.mockImplementation(
       async (callbacks: SynchronizeCallbacks): Promise<void> => {
         const result = await callbacks.pullChanges({
@@ -210,14 +234,13 @@ describe("sync auth scope lifecycle", () => {
   });
 
   it("rejects an empty push when the authenticated user differs from the pull owner", async () => {
-    mockGetCurrentUserId
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce("different-user");
+    mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
     mockSynchronize.mockImplementation(
       async (callbacks: SynchronizeCallbacks): Promise<void> => {
         const pullResult = await callbacks.pullChanges({ lastPulledAt: null });
+        // The actual push boundary, not the protected pull preflight,
+        // must refuse this owner switch.
+        mockGetCurrentUserId.mockResolvedValue("different-user");
         await callbacks.pushChanges({
           changes: {},
           lastPulledAt: pullResult.timestamp,

@@ -1,4 +1,7 @@
 const { METALS_E2E_FIXTURES } = require("./metals-e2e-fixtures");
+const {
+  createAccountReviewE2eFixture,
+} = require("./account-review-e2e-fixture");
 
 const E2E_USER_FULL_NAME = "Monyvi E2E";
 
@@ -25,6 +28,9 @@ const E2E_SEED_FIXTURE = {
     atm: "Seeded cash withdrawal",
   },
 };
+
+const ACCOUNT_REVIEW_E2E_FIXTURE =
+  createAccountReviewE2eFixture(E2E_SEED_FIXTURE);
 
 function createBudgetFixture(profile, buildExtraRows) {
   return {
@@ -573,6 +579,7 @@ const E2E_BUDGET_FIXTURES = {
 
 function getE2eFixture(profile) {
   if (!profile) return E2E_SEED_FIXTURE;
+  if (profile === "account-review") return ACCOUNT_REVIEW_E2E_FIXTURE;
 
   const fixture = METALS_E2E_FIXTURES[profile] ?? E2E_BUDGET_FIXTURES[profile];
   if (!fixture) {

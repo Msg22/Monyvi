@@ -7,6 +7,19 @@ import {
   type CanonicalJsonValue,
   type RegisteredActionPayload,
 } from "./action-registry";
+import { assertReviewBatchSaveEnvelope } from "./review-batch-save-envelope";
+import { validateAccountCreateDefaultPayload } from "./account-create-default";
+import {
+  FINANCIAL_ACTION_INVALID_REVISION_CODE,
+  parseCanonicalUnsignedIntegerString,
+  type CanonicalUnsignedIntegerString,
+} from "./canonical-unsigned-revision";
+
+export {
+  MAX_CANONICAL_UNSIGNED_INTEGER_STRING,
+  parseCanonicalUnsignedIntegerString,
+} from "./canonical-unsigned-revision";
+export type { CanonicalUnsignedIntegerString } from "./canonical-unsigned-revision";
 
 export const FINANCIAL_ACTION_ERROR_CODES = {
   INVALID_JSON: "financial_action_invalid_json",
@@ -20,7 +33,7 @@ export const FINANCIAL_ACTION_ERROR_CODES = {
   INVALID_STATE_EVIDENCE: "financial_action_invalid_state_evidence",
   IMMUTABLE_OUTCOME_EVIDENCE: "financial_action_immutable_outcome_evidence",
   PAYLOAD_TOO_LARGE: "financial_action_payload_too_large",
-  INVALID_REVISION: "financial_action_invalid_revision",
+  INVALID_REVISION: FINANCIAL_ACTION_INVALID_REVISION_CODE,
 } as const;
 
 export const FINANCIAL_ACTION_STATES = [
@@ -43,11 +56,6 @@ export const SERVER_OUTCOMES = [
 
 export type FinancialActionState = (typeof FINANCIAL_ACTION_STATES)[number];
 export type FinancialActionServerOutcome = (typeof SERVER_OUTCOMES)[number];
-declare const canonicalUnsignedIntegerStringBrand: unique symbol;
-export type CanonicalUnsignedIntegerString = string & {
-  readonly [canonicalUnsignedIntegerStringBrand]: true;
-};
-export const MAX_CANONICAL_UNSIGNED_INTEGER_STRING = "9223372036854775807";
 export interface FinancialActionAccountGuard {
   readonly accountId: string;
   readonly expectedRevision: CanonicalUnsignedIntegerString;
@@ -123,7 +131,6 @@ const UUID_PATTERN =
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const STABLE_ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const CANONICAL_UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
 const APPROVED_DOMAINS: readonly FinancialActionDomain[] = [
   "accounts",
@@ -154,21 +161,6 @@ const ALLOWED_TRANSITIONS: Readonly<
 
 function fail(code: string): never {
   throw new Error(code);
-}
-
-export function parseCanonicalUnsignedIntegerString(
-  value: unknown
-): CanonicalUnsignedIntegerString {
-  if (
-    typeof value !== "string" ||
-    !CANONICAL_UNSIGNED_INTEGER_PATTERN.test(value) ||
-    value.length > MAX_CANONICAL_UNSIGNED_INTEGER_STRING.length ||
-    (value.length === MAX_CANONICAL_UNSIGNED_INTEGER_STRING.length &&
-      value > MAX_CANONICAL_UNSIGNED_INTEGER_STRING)
-  ) {
-    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_REVISION);
-  }
-  return value as CanonicalUnsignedIntegerString;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -301,6 +293,63 @@ function validateAccountGuards(
   return Object.freeze(guards);
 }
 
+/**
+ * #395 T068: only the explicitly registered accounts/create_with_default/v1
+ * tuple may carry the newly-created account's revision-0 financial guard.
+ * The closed Add payload has already been validated by its scoped registry.
+ * Recheck the envelope linkage here; no legacy/Review guard relaxation.
+ */
+function assertAccountCreateDefaultEnvelope(
+  rawPayload: RegisteredActionPayload,
+  guards: readonly FinancialActionAccountGuard[],
+  domainReferenceId: string
+): void {
+  const payload = validateAccountCreateDefaultPayload(rawPayload);
+  const created = payload.domainMutation.records.filter(
+    (record) => record.entity === "account"
+  );
+  const account = created[0];
+  const absentAccountGuards = payload.createGuards.filter(
+    (guard) => guard.entity === "account"
+  );
+  if (
+    created.length !== 1 ||
+    !account ||
+    account.entity !== "account" ||
+    account.after.id !== domainReferenceId ||
+    !payload.domainRecordRefs.includes(domainReferenceId) ||
+    absentAccountGuards.length !== 1 ||
+    absentAccountGuards[0]?.id !== domainReferenceId ||
+    absentAccountGuards[0]?.expectedAbsent !== true
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
+
+  const opening = account.after.openingBalanceMinorUnits;
+  if (opening === "0") {
+    if (guards.length !== 0 || payload.accountEffects.length !== 0) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+    return;
+  }
+
+  const guard = guards[0];
+  const effect = payload.accountEffects[0];
+  if (
+    guards.length !== 1 ||
+    payload.accountEffects.length !== 1 ||
+    !guard ||
+    guard.accountId !== domainReferenceId ||
+    guard.expectedRevision !== "0" ||
+    !effect ||
+    effect.accountId !== domainReferenceId ||
+    effect.currency !== account.after.currency ||
+    effect.amountMinorUnits !== opening
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
+}
+
 export function canonicalizeFinancialActionEnvelope(
   value: unknown,
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
@@ -362,6 +411,26 @@ export function canonicalizeFinancialActionEnvelope(
     ) {
       fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
     }
+  } else if (
+    value.domain === "transactions" &&
+    value.kind === "review_batch_save" &&
+    value.payloadVersion === "review.batch-save/v1"
+  ) {
+    assertReviewBatchSaveEnvelope(
+      payload,
+      accountGuards,
+      value.domainReferenceId
+    );
+  } else if (
+    value.domain === "accounts" &&
+    value.kind === "create_with_default" &&
+    value.payloadVersion === "account.create-default/v1"
+  ) {
+    assertAccountCreateDefaultEnvelope(
+      payload,
+      accountGuards,
+      value.domainReferenceId
+    );
   } else if (accountGuards.length !== 0) {
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
   }
@@ -606,7 +675,9 @@ function isCanonicalOutcomeJson(rawText: string): boolean {
     assertNoDuplicateJsonKeys(rawText);
     inspectRuntimeValue(parsed);
     if (containsNumber(parsed)) return false;
-  return serializeCanonicalJsonValue(parsed as CanonicalJsonValue) === rawText;
+    return (
+      serializeCanonicalJsonValue(parsed as CanonicalJsonValue) === rawText
+    );
   } catch {
     return false;
   }

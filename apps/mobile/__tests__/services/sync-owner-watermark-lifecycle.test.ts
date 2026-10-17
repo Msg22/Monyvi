@@ -7,8 +7,19 @@ const mockPullChanges = jest.fn();
 const mockPushChanges = jest.fn();
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (input: unknown): Promise<void> =>
-    mockSynchronize(input) as Promise<void>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (input: unknown): Promise<void> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(input).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(input) as Promise<void>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({

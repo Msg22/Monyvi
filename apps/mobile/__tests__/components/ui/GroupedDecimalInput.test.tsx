@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import type { ReactTestInstance } from "react-test-renderer";
 import { I18nManager, Text, TextInput } from "react-native";
 import {
   getTestInstanceProps,
@@ -345,7 +346,7 @@ describe("GroupedMoneyInput focus forwarding", () => {
       />
     );
 
-    const input: unknown = screen.getByTestId("manual-money-input");
+    const input: ReactTestInstance = screen.getByTestId("manual-money-input");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
 
     fireEvent(input, "focus", {});

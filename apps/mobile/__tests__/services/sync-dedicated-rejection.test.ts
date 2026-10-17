@@ -3,8 +3,19 @@ const mockGetCurrentUserId = jest.fn();
 const mockPushChanges = jest.fn();
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (args: unknown): Promise<unknown> =>
-    mockSynchronize(args) as Promise<unknown>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (args: unknown): Promise<unknown> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(args).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(args) as Promise<unknown>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({
@@ -97,7 +108,9 @@ describe("syncDatabase dedicated rejection passthrough", () => {
         },
         lastPulledAt: 123,
       },
-      "current-user"
+      "current-user",
+      undefined,
+      expect.any(Object)
     );
   });
 });

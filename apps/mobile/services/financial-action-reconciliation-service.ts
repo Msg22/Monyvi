@@ -4,11 +4,17 @@ import {
   fromMinorUnits,
   parseCanonicalDecimal,
   parseFinancialActionEnvelopeJson,
-  serializeCanonicalJsonValue,
+  serializeFinancialActionEnvelope,
+  ACTION_REGISTRY_ERROR_CODES,
   serializeDecimal,
   type CanonicalJsonValue,
   type Sha256Provider,
 } from "@monyvi/logic";
+import { ACCOUNT_CREATE_DEFAULT_TUPLE } from "../../../packages/logic/src/financial-actions/account-create-default";
+import { createAccountDefaultAndReviewRegistry } from "../../../packages/logic/src/financial-actions/account-create-default-registration";
+import { createReviewFinancialActionDefinitions } from "../../../packages/logic/src/financial-actions/review-batch-save";
+
+import { verifyCanonicalFinancialAccountEvidence } from "./financial-action-canonical-account-evidence";
 
 export const FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES = {
   INCOMPLETE: "financial_action_reconciliation_incomplete",
@@ -133,6 +139,92 @@ export interface FinancialActionReconciliationService {
 
 function fail(code: string): never {
   throw new Error(code);
+}
+
+/**
+ * The plain legacy factory has only account/effect inverse callbacks. It
+ * cannot recover a review-created Bank/child/SMS group or Add's zero-effect
+ * account/default metadata. Review uses the authenticated production
+ * dispatcher; Add stays incomplete pending its separately approved recovery.
+ * Neither tuple may fall through this generic factory.
+ *
+ * Take tuple discriminants from the approved pure registry definitions; then
+ * parse and canonically reserialize the WHOLE registered envelope before
+ * refusing direct recovery. An attacker-controlled payload kind alone is
+ * never authority to select a reconciliation path.
+ */
+const dedicatedRecoveryRegistry = createAccountDefaultAndReviewRegistry();
+const reviewRecoveryTuple = createReviewFinancialActionDefinitions(
+  ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD
+)[0];
+if (!reviewRecoveryTuple)
+  throw new Error(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+const dedicatedRecoveryTuples = Object.freeze([
+  reviewRecoveryTuple,
+  ACCOUNT_CREATE_DEFAULT_TUPLE,
+]);
+
+function isUntrustedRecord(
+  value: unknown
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Reject unsupported new tuples BEFORE canonical installation, replay, or
+ * generic inverse-account/effect compensation can report completion. */
+function assertLegacyRecoveryOnly(
+  bundle: FinancialActionReconciliationBundle
+): void {
+  let untrusted: unknown;
+  try {
+    untrusted = JSON.parse(bundle.payloadJson) as unknown;
+  } catch {
+    // Preserve the legacy factory's prior malformed-envelope behavior,
+    // except when bytes clearly claim a new protected tuple.
+    if (
+      dedicatedRecoveryTuples.some(
+        (tuple) =>
+          bundle.payloadJson.includes(tuple.payloadVersion) ||
+          bundle.payloadJson.includes(tuple.kind)
+      )
+    )
+      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+    return;
+  }
+  if (!isUntrustedRecord(untrusted)) return;
+  const claimsNewTuple = dedicatedRecoveryTuples.some(
+    (tuple) =>
+      untrusted.payloadVersion === tuple.payloadVersion ||
+      untrusted.kind === tuple.kind
+  );
+  if (!claimsNewTuple) return;
+
+  let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(
+      bundle.payloadJson,
+      dedicatedRecoveryRegistry
+    );
+    if (
+      serializeFinancialActionEnvelope(envelope, dedicatedRecoveryRegistry) !==
+        bundle.payloadJson ||
+      envelope.actionId !== bundle.actionId ||
+      envelope.userId !== bundle.userId ||
+      envelope.domain !== bundle.domain ||
+      !dedicatedRecoveryTuples.some(
+        (tuple) =>
+          tuple.domain === envelope.domain &&
+          tuple.kind === envelope.kind &&
+          tuple.payloadVersion === envelope.payloadVersion
+      )
+    )
+      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  } catch {
+    fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  }
+  // Stable recovery-required result; the caller must use the dedicated,
+  // owned/private-proof path. Never mark this action reconciled here.
+  fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
 }
 
 function isObject(
@@ -357,126 +449,34 @@ async function buildCompensation(
   };
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const SHA256_PATTERN = /^[0-9a-f]{64}$/;
-const MAX_SIGNED_BIGINT = 9223372036854775807n;
-
-function isCanonicalSignedBigint(value: string): boolean {
-  if (!/^-?(0|[1-9]\d*)$/.test(value)) return false;
-  const parsed = BigInt(value);
-  return parsed >= -MAX_SIGNED_BIGINT && parsed <= MAX_SIGNED_BIGINT;
-}
-
-function isCanonicalRevision(value: string): boolean {
-  if (!/^(0|[1-9]\d*)$/.test(value)) return false;
-  return BigInt(value) <= MAX_SIGNED_BIGINT;
-}
-
-function assertCanonicalAccounts(
-  bundle: FinancialActionReconciliationBundle
-): readonly CanonicalAccountSnapshot[] | null {
-  const canonicalAccounts = bundle.canonicalAccounts;
-  if (canonicalAccounts === undefined) return null;
-  const localAccounts = new Map(
-    bundle.accounts.map((account) => [account.accountId, account])
-  );
-  if (
-    canonicalAccounts.length === 0 ||
-    canonicalAccounts.length !== localAccounts.size ||
-    canonicalAccounts.some((canonical) => {
-      const local = localAccounts.get(canonical.accountId);
-      const effectIds = new Set(canonical.effectChain.map((effect) => effect.effectId));
-      const hasCanonicalHead = canonical.effectChain.some(
-        (effect) =>
-          effect.actionId === canonical.canonicalActionId &&
-          effect.acceptedRevision === canonical.canonicalRevision
-      );
-      return (
-        !local ||
-        local.currency !== canonical.currency ||
-        !UUID_PATTERN.test(canonical.accountId) ||
-        !isCanonicalRevision(canonical.canonicalRevision) ||
-        !isCanonicalSignedBigint(canonical.balanceMinorUnits) ||
-        !SHA256_PATTERN.test(canonical.canonicalEvidenceHash) ||
-        effectIds.size !== canonical.effectChain.length ||
-        canonical.effectChain.some(
-          (effect, index) => {
-            const previous = canonical.effectChain[index - 1];
-            const isOrdered =
-              !previous ||
-              BigInt(previous.acceptedRevision) < BigInt(effect.acceptedRevision) ||
-              (previous.acceptedRevision === effect.acceptedRevision &&
-                previous.actionId.localeCompare(effect.actionId) <= 0);
-            return (
-              !isCanonicalRevision(effect.acceptedRevision) ||
-              !UUID_PATTERN.test(effect.actionId) ||
-              !isCanonicalSignedBigint(effect.amountMinorUnits) ||
-              !SHA256_PATTERN.test(effect.effectEvidenceHash) ||
-              !UUID_PATTERN.test(effect.effectId) ||
-              effect.kind.length === 0 ||
-              !isOrdered
-            );
-          }
-        ) ||
-        (canonical.effectChain.length === 0
-          ? canonical.canonicalActionId !== null
-          : !canonical.canonicalActionId ||
-            !UUID_PATTERN.test(canonical.canonicalActionId) ||
-            !hasCanonicalHead)
-      );
-    })
-  ) {
-    fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
-  }
-  return canonicalAccounts;
-}
-
-async function verifyCanonicalAccounts(
+/**
+ * Preserve the legacy installation gate: canonical rows must correspond to
+ * ACTUAL loaded local account IDs/currencies. Full canonical signed money,
+ * bounded revision, chain/head and owner/effect/account SHA proofs are shared
+ * with Add-only SQL091 evidence validation, never synthesized from local rows.
+ */
+export async function verifyCanonicalAccounts(
   bundle: FinancialActionReconciliationBundle,
   hashProvider: Sha256Provider
 ): Promise<readonly CanonicalAccountSnapshot[] | null> {
-  const canonicalAccounts = assertCanonicalAccounts(bundle);
-  if (!canonicalAccounts) return null;
-  for (const canonical of canonicalAccounts) {
-    for (const effect of canonical.effectChain) {
-      const effectBody: Readonly<Record<string, CanonicalJsonValue>> = {
-        acceptedRevision: effect.acceptedRevision,
-        actionId: effect.actionId,
-        amountMinorUnits: effect.amountMinorUnits,
-        effectId: effect.effectId,
-        kind: effect.kind,
-      };
-      const effectHash = await hashProvider.digestUtf8(
-        serializeCanonicalJsonValue(effectBody)
-      );
-      if (effectHash !== effect.effectEvidenceHash) {
-        fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
-      }
-    }
-    const accountBody: Readonly<Record<string, CanonicalJsonValue>> = {
-      accountId: canonical.accountId,
-      balanceMinorUnits: canonical.balanceMinorUnits,
-      canonicalActionId: canonical.canonicalActionId,
-      canonicalRevision: canonical.canonicalRevision,
-      currency: canonical.currency,
-      effectChain: canonical.effectChain.map((effect) => ({
-        acceptedRevision: effect.acceptedRevision,
-        actionId: effect.actionId,
-        amountMinorUnits: effect.amountMinorUnits,
-        effectEvidenceHash: effect.effectEvidenceHash,
-        effectId: effect.effectId,
-        kind: effect.kind,
-      })),
-      userId: bundle.userId,
-    };
-    const accountHash = await hashProvider.digestUtf8(
-      serializeCanonicalJsonValue(accountBody)
-    );
-    if (accountHash !== canonical.canonicalEvidenceHash) {
-      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
-    }
-  }
+  const canonicalAccounts = bundle.canonicalAccounts;
+  if (canonicalAccounts === undefined) return null;
+  const actual = new Map(
+    bundle.accounts.map((account) => [account.accountId, account.currency])
+  );
+  if (
+    canonicalAccounts.length === 0 ||
+    actual.size !== bundle.accounts.length ||
+    canonicalAccounts.length !== actual.size
+  )
+    fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  await verifyCanonicalFinancialAccountEvidence({
+    canonicalAccounts,
+    expectedAccountIds: bundle.accounts.map((account) => account.accountId),
+    expectedCurrencies: actual,
+    ownerId: bundle.userId,
+    hashProvider,
+  });
   return canonicalAccounts;
 }
 
@@ -491,6 +491,7 @@ export function createFinancialActionReconciliationService(
       if (bundle.actionId !== actionId) {
         fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
       }
+      assertLegacyRecoveryOnly(bundle);
       const canonicalAccounts = await verifyCanonicalAccounts(
         bundle,
         dependencies.hashProvider

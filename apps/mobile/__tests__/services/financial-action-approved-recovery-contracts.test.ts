@@ -1,8 +1,18 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { database, type FinancialActionGroup } from "@monyvi/db";
+import {
+  createFinancialActionGroup,
+  getFinancialActionGroup,
+} from "../../services/financial-action-foundation-repository";
+import { legacyEditBalanceEnvelope } from "../../../../packages/logic/src/financial-actions/__tests__/review-batch-save-fixtures";
 import { resolve } from "node:path";
 
 import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
-import { canonicalizeFinancialActionEnvelope } from "@monyvi/logic";
+import {
+  canonicalizeFinancialActionEnvelope,
+  serializeFinancialActionEnvelope,
+} from "@monyvi/logic";
 
 import {
   createFinancialActionReconciliationService,
@@ -18,6 +28,68 @@ import {
   readRejectedIdsForTable,
 } from "../../services/sync/account-protected-fields";
 import { validateTransactionForm } from "../../validation/transaction-validation";
+
+// Only replace the app/native database construction boundary. The imported
+// financial factories, validators, collectors and injected protocol tests stay
+// real; no financial result or recovery rule is mocked to bypass admission.
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", () => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const models = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models");
+  const adapter = new Adapter({ schema });
+  return {
+    ...models,
+    database: new wm.Database({
+      adapter,
+      modelClasses: models.LEDGER_MODEL_CLASSES,
+    }),
+    __adapter: adapter,
+  };
+});
+// Genuine Foundation/Watermelon root. Only native crypto and actor I/O
+// are substituted; there is no financial writer or acceptance-proof mock.
+jest.mock("expo-crypto", () => {
+  const crypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, bytes: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        throw new Error("invalid_test_digest_algorithm");
+      return Promise.resolve(
+        crypto.createHash("sha256").update(bytes, "utf8").digest("hex")
+      );
+    },
+    randomUUID: (): string => crypto.randomUUID(),
+  };
+});
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("018f0c7a-1234-7abc-8def-000000000101"),
+}));
+beforeAll(async () => {
+  const { __adapter } = jest.requireMock<{
+    readonly __adapter: import("@nozbe/watermelondb/adapters/sqlite").default;
+  }>("@monyvi/db");
+  await __adapter.initializingPromise;
+});
+beforeEach(async (): Promise<void> => {
+  await database.write(() => database.unsafeResetDatabase());
+});
 
 const ROOT = resolve(__dirname, "../../../..");
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000101";
@@ -239,12 +311,87 @@ function coordinatorHarness(input?: {
         .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       reconcileFinancialActionGroup: reconcile,
+      getFinancialActionGroup,
+      database,
       recordFinancialActionGroupServerOutcome: recordOutcome,
     },
     invokeRpc,
     markPending,
     reconcile,
     recordOutcome,
+  };
+}
+
+/** Registered LEGACY account edit; immutable bytes, hash and actual owned root. */
+function legacyIdentity(): {
+  readonly envelope: ReturnType<typeof canonicalizeFinancialActionEnvelope>;
+  readonly payloadHash: string;
+  readonly payloadJson: string;
+} {
+  const original = legacyEditBalanceEnvelope.payload.domainMutation.records[0];
+  if (!original) throw new Error("missing_registered_legacy_account_mutation");
+  const envelope = canonicalizeFinancialActionEnvelope({
+    ...legacyEditBalanceEnvelope,
+    actionId: ACTION_ID,
+    userId: USER_ID,
+    domainReferenceId: ACCOUNT_ID,
+    accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+    payload: {
+      ...legacyEditBalanceEnvelope.payload,
+      accountEffects: [
+        {
+          accountId: ACCOUNT_ID,
+          amountMinorUnits: "2500",
+          currency: "EGP",
+          effectId: EFFECT_ID,
+        },
+      ],
+      domainMutation: {
+        records: [
+          { ...original, after: { ...original.after, id: ACCOUNT_ID } },
+        ],
+      },
+      domainRecordRefs: [ACCOUNT_ID],
+    },
+  });
+  const payloadJson = serializeFinancialActionEnvelope(envelope);
+  const payloadHash = createHash("sha256")
+    .update(payloadJson, "utf8")
+    .digest("hex");
+  return { envelope, payloadJson, payloadHash };
+}
+
+async function ownedLegacyRoot(): Promise<FinancialActionGroup> {
+  const identity = legacyIdentity();
+  const created = await createFinancialActionGroup({
+    envelope: identity.envelope,
+    hashProvider: {
+      digestUtf8: (bytes: string): Promise<string> =>
+        Promise.resolve(
+          createHash("sha256").update(bytes, "utf8").digest("hex")
+        ),
+    },
+  });
+  expect(created.kind).toBe("created");
+  const owned = await getFinancialActionGroup(ACTION_ID);
+  if (!owned) throw new Error("missing_genuine_owned_legacy_action");
+  expect(owned).toBe(created.record);
+  expect(owned.userId).toBe(USER_ID);
+  expect(owned.actionId).toBe(ACTION_ID);
+  expect(owned.payloadHash).toBe(identity.payloadHash);
+  expect(owned.payloadJson).toBe(identity.payloadJson);
+  return owned;
+}
+
+function legacyCandidate(
+  owned: FinancialActionGroup,
+  state: FinancialActionPushCandidate["state"]
+): FinancialActionPushCandidate {
+  return {
+    actionId: owned.actionId,
+    payloadHash: owned.payloadHash,
+    payloadJson: owned.payloadJson,
+    state,
   };
 }
 
@@ -279,7 +426,7 @@ function canonicalReconciliationBundle(): CanonicalReconciliationBundle {
         ],
       },
     ],
-    domain: "transactions",
+    domain: "accounts",
     effects: [
       {
         acceptedAccountRevision: "9",
@@ -293,7 +440,7 @@ function canonicalReconciliationBundle(): CanonicalReconciliationBundle {
       },
     ],
     localSmsReviewDraftSnapshot: null,
-    payloadJson: "{}",
+    payloadJson: legacyIdentity().payloadJson,
     state: "rejected_compensating",
     userId: USER_ID,
   };
@@ -329,6 +476,28 @@ describe("PR #278 approved financial-action recovery contracts", () => {
       ).toThrow("account_financial_action_malformed_root");
     });
 
+    it("refuses a payload with no registered version before RPC or recovery", async () => {
+      // The historic '{}' test placeholder is deliberately NEGATIVE evidence.
+      // Do not relax assertProtectedFinancialActionEnvelopeHash to admit it.
+      const harness = coordinatorHarness();
+      await expect(
+        createFinancialActionPushCoordinator(
+          harness.dependencies
+        ).coordinatePush([
+          {
+            actionId: ACTION_ID,
+            payloadHash: HASH,
+            payloadJson: "{}",
+            state: "sync_pending",
+          },
+        ])
+      ).rejects.toThrow("account_review_default_predecessor_blocked");
+      expect(harness.markPending).not.toHaveBeenCalled();
+      expect(harness.invokeRpc).not.toHaveBeenCalled();
+      expect(harness.reconcile).not.toHaveBeenCalled();
+      expect(harness.recordOutcome).not.toHaveBeenCalled();
+    });
+
     it("keeps an unguarded account balance mutation dirty", () => {
       const protectedIds = collectProtectedFinancialActionRowIds(
         changes({
@@ -350,13 +519,9 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     });
 
     it("routes reconciliation_incomplete to recovery without resubmission", async () => {
+      const owned = await ownedLegacyRoot();
       const harness = coordinatorHarness();
-      const candidate: FinancialActionPushCandidate = {
-        actionId: ACTION_ID,
-        payloadHash: HASH,
-        payloadJson: "{}",
-        state: "reconciliation_incomplete",
-      };
+      const candidate = legacyCandidate(owned, "reconciliation_incomplete");
 
       const result = await createFinancialActionPushCoordinator(
         harness.dependencies
@@ -375,6 +540,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     });
 
     it("reconciles a stale result before acknowledging its local bundle", async () => {
+      const owned = await ownedLegacyRoot();
       const harness = coordinatorHarness({
         outcome: {
           actionId: ACTION_ID,
@@ -384,12 +550,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
           status: "stale",
         },
       });
-      const candidate: FinancialActionPushCandidate = {
-        actionId: ACTION_ID,
-        payloadHash: HASH,
-        payloadJson: "{}",
-        state: "sync_pending",
-      };
+      const candidate = legacyCandidate(owned, "sync_pending");
 
       const result = await createFinancialActionPushCoordinator(
         harness.dependencies
@@ -401,6 +562,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     });
 
     it("keeps a rejected result in explicit incomplete recovery", async () => {
+      const owned = await ownedLegacyRoot();
       const harness = coordinatorHarness({
         outcome: {
           actionId: ACTION_ID,
@@ -409,12 +571,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
         },
         reconciliationResult: "incomplete",
       });
-      const candidate: FinancialActionPushCandidate = {
-        actionId: ACTION_ID,
-        payloadHash: HASH,
-        payloadJson: "{}",
-        state: "sync_pending",
-      };
+      const candidate = legacyCandidate(owned, "sync_pending");
 
       const result = await createFinancialActionPushCoordinator(
         harness.dependencies
@@ -653,8 +810,21 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     it("wires the production recovery service into account-action push", () => {
       const push = source("apps/mobile/services/sync/push-service.ts");
 
-      expect(push).toContain("productionFinancialActionReconciliationService");
-      expect(push).toContain("reconcileFinancialActionGroup");
+      // Extraction moved the production reconciler to the account transport
+      // coordinator factory. Verify the actual push -> factory -> reconciler
+      // chain, not the old helper's source-file location.
+      const transport = source(
+        "apps/mobile/services/sync/account-metadata-transport.ts"
+      );
+      expect(push).toContain("resolveAccountActionAcknowledgements");
+      expect(transport).toMatch(
+        /coordinator\s*\?\?\s*getProductionFinancialActionPushCoordinator\(database\)/
+      );
+      expect(transport).toContain("getFinancialActionGroup");
+      expect(transport).toMatch(
+        /reconcileFinancialActionGroup:\s*\(actionId\)\s*=>\s*productionFinancialActionReconciliationService\.reconcileRejectedAction\(\s*actionId/
+      );
+      expect(transport).toContain("recordFinancialActionGroupServerOutcome");
     });
 
     it("uses AST writer discovery instead of receiver-name regexes", () => {

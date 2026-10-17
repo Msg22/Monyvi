@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import type { ReactTestInstance } from "react-test-renderer";
 import {
   processColor,
   ScrollView,
@@ -601,7 +602,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
 
   it("keeps mic pressed feedback as static inline opacity instead of a style callback", () => {
     renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
-    const mic = (): unknown => screen.getByTestId("voice-mic-target");
+    const mic = (): ReactTestInstance => screen.getByTestId("voice-mic-target");
 
     expect(typeof getTestInstanceProps(mic()).style).not.toBe("function");
     expect(resolvedVoiceStyle(mic())).toEqual(

@@ -1,5 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  AccountReviewSession,
+  ReviewableTransaction,
+} from "@monyvi/logic";
+import type { UseAccountReviewInput } from "@/hooks/useAccountReview";
 import React, { useCallback, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -30,8 +34,17 @@ import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguar
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
 import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
+import { CanonicalAccountReview } from "./CanonicalTransactionReview";
+
+export interface AccountReviewRuntimeBoundary {
+  readonly input: UseAccountReviewInput;
+  readonly onSaveSelected: (session: AccountReviewSession) => Promise<void>;
+  readonly onSessionChange?: (session: AccountReviewSession | null) => void;
+}
 
 export interface TransactionReviewProps {
+  /** Canonical v2 only; absence preserves the original V1 review component. */
+  readonly accountReview?: AccountReviewRuntimeBoundary;
   readonly transactions: readonly ReviewableTransaction[];
   readonly onSave: (
     selected: readonly ReviewableTransaction[],
@@ -87,7 +100,24 @@ export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
   windowSize: 3,
 } as const;
 
-export function TransactionReview({
+export type TransactionReviewListConfig =
+  typeof TRANSACTION_REVIEW_LIST_RENDER_CONFIG;
+
+export function TransactionReview(
+  props: TransactionReviewProps
+): React.JSX.Element {
+  return props.accountReview ? (
+    <CanonicalAccountReview
+      {...props}
+      boundary={props.accountReview}
+      renderConfig={TRANSACTION_REVIEW_LIST_RENDER_CONFIG}
+    />
+  ) : (
+    <LegacyTransactionReview {...props} />
+  );
+}
+
+function LegacyTransactionReview({
   transactions,
   onSave,
   onDiscard,

@@ -10,8 +10,13 @@ import { logger } from "../utils/logger";
 import { AccountFormData } from "../validation/account-validation";
 import { useCurrentUser } from "./useCurrentUser";
 
+type AddAccountDefaultIntentInput = AccountFormData & {
+  /** New Add route always supplies this; old hook consumers remain compatible. */
+  readonly defaultIntent?: boolean;
+};
+
 interface UseCreateAccountResult {
-  createAccount: (data: AccountFormData) => Promise<void>;
+  createAccount: (data: AddAccountDefaultIntentInput) => Promise<void>;
   isSubmitting: boolean;
   error: Error | null;
 }
@@ -33,7 +38,7 @@ export function useCreateAccount(): UseCreateAccountResult {
    * Performs the database write operation to create an account and optional bank details.
    */
   const createAccount = useCallback(
-    async (data: AccountFormData): Promise<void> => {
+    async (data: AddAccountDefaultIntentInput): Promise<void> => {
       if (isSubmittingRef.current) return;
       isSubmittingRef.current = true;
       setIsSubmitting(true);

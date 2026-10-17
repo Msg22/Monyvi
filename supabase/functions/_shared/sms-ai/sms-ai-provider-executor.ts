@@ -1,9 +1,14 @@
-import { parseSmsProviderTransactions } from "../sms-provider-transaction-validator.ts";
+import {
+  parseSmsProviderTransactions,
+  smsProviderAccessibleCategories,
+} from "../sms-provider-transaction-validator.ts";
 import { throwIfSmsAiProviderCallerAborted } from "./sms-ai-provider.ts";
 import type {
   ExecuteSmsProviderInput,
   SmsAiProvider,
+  SmsAiProviderRequest,
   SmsProviderExecutionResult,
+  SmsAiProviderRawResult,
 } from "./sms-ai-provider.ts";
 import {
   BUILT_IN_SMS_CATEGORY_TREE,
@@ -12,6 +17,7 @@ import {
   buildSmsAiResponseSchema,
 } from "./sms-ai-prompt.ts";
 import { groundSmsAiProviderResponse } from "./sms-ai-response-grounding.ts";
+import { recoverSmsReviewV2Financial } from "./sms-ai-review-v2.ts";
 
 export interface SmsAiProviderRequestInputMessage {
   readonly sender: string;
@@ -39,76 +45,132 @@ function createRequestInputSnapshot(
   );
 }
 
+function providerRequestFor(
+  input: ExecuteSmsProviderInput
+): SmsAiProviderRequest {
+  if (input.reviewProviderRequest !== undefined) {
+    // Identical immutable schema/prompt/context was measured before quota.
+    return input.reviewProviderRequest;
+  }
+  return {
+    messages: buildSmsAiProviderMessages(input),
+    responseSchema: buildSmsAiResponseSchema(input.supportedCurrencies),
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
+  };
+}
+
+function incompleteResult(
+  input: ExecuteSmsProviderInput,
+  completionStatus: SmsAiProviderRawResult["completionStatus"],
+  valid: boolean
+): SmsProviderExecutionResult {
+  const common = {
+    completionStatus,
+    isResponseSchemaValid: valid,
+    transactions: [],
+  };
+  return input.reviewProviderRequest === undefined
+    ? common
+    : {
+        ...common,
+        reviewContractVersion: "account-review/v2",
+        rawReviewResponse: null,
+      };
+}
+
+function parsedJson(
+  raw: string
+):
+  | { readonly valid: true; readonly value: unknown }
+  | { readonly valid: false } {
+  try {
+    const value: unknown = JSON.parse(raw);
+    return { valid: true, value };
+  } catch {
+    return { valid: false };
+  }
+}
+
+function validateOriginalSms(
+  source: unknown,
+  input: ExecuteSmsProviderInput,
+  categories: string,
+  currencies: readonly string[]
+): SmsProviderExecutionResult {
+  const validated = parseSmsProviderTransactions(source, {
+    supportedCurrencies: currencies,
+    categoryTree: categories,
+    submittedMessageIds: input.messages.map((message) => message.id),
+  });
+  return {
+    completionStatus: "complete",
+    isResponseSchemaValid: validated.isValid,
+    transactions: validated.transactions,
+    invalidMessageIds: validated.invalidMessageIds,
+    hasUncorrelatedInvalidEntries: validated.hasUncorrelatedInvalidEntries,
+  };
+}
+
+function validateReviewSms(
+  source: unknown,
+  input: ExecuteSmsProviderInput,
+  categories: string,
+  currencies: readonly string[]
+): SmsProviderExecutionResult {
+  const validated = recoverSmsReviewV2Financial(
+    source,
+    input.messages,
+    currencies,
+    smsProviderAccessibleCategories(categories)
+  );
+  return {
+    reviewContractVersion: "account-review/v2",
+    completionStatus: "complete",
+    isResponseSchemaValid: validated.isResponseSchemaValid,
+    transactions: validated.transactions,
+    invalidMessageIds: validated.invalidMessageIds,
+    hasUncorrelatedInvalidEntries: validated.hasUncorrelatedInvalidEntries,
+    rawReviewResponse: validated.rawReviewResponse,
+  };
+}
+
+/** Original configured provider call: one request, one completion, no replay. */
 export async function executeSmsAiProvider(
   provider: SmsAiProvider,
   input: ExecuteSmsProviderInput,
   diagnostics: SmsAiProviderDiagnostics = {}
 ): Promise<SmsProviderExecutionResult> {
   throwIfSmsAiProviderCallerAborted(input.signal);
-  const providerRequest = {
-    messages: buildSmsAiProviderMessages(input),
-    responseSchema: buildSmsAiResponseSchema(input.supportedCurrencies),
-    ...(input.signal === undefined ? {} : { signal: input.signal }),
-  };
-
+  const providerRequest = providerRequestFor(input);
   if (diagnostics.onRequestInput !== undefined) {
-    const smsMessages = createRequestInputSnapshot(input.messages);
     try {
-      diagnostics.onRequestInput(smsMessages);
+      diagnostics.onRequestInput(createRequestInputSnapshot(input.messages));
     } catch {
       // Development-only diagnostics must never alter provider behavior.
     }
   }
-
   throwIfSmsAiProviderCallerAborted(input.signal);
   const raw = await provider.execute(providerRequest);
   throwIfSmsAiProviderCallerAborted(input.signal);
-
   if (raw.completionStatus !== "complete") {
-    return {
-      completionStatus: raw.completionStatus,
-      isResponseSchemaValid: true,
-      transactions: [],
-    };
+    return incompleteResult(input, raw.completionStatus, true);
   }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw.content);
-  } catch {
-    return {
-      completionStatus: "complete",
-      isResponseSchemaValid: false,
-      transactions: [],
-    };
-  }
-
-  const supportedCurrencies =
+  const parsed = parsedJson(raw.content);
+  if (!parsed.valid) return incompleteResult(input, "complete", false);
+  const currencies =
     input.supportedCurrencies.length > 0
       ? input.supportedCurrencies
       : DEFAULT_SMS_CURRENCIES;
-  const categoryTree =
+  const categories =
     input.categories.trim().length > 0
       ? input.categories
       : BUILT_IN_SMS_CATEGORY_TREE;
-
-  const groundedResponse = groundSmsAiProviderResponse(
-    parsed,
+  const grounded = groundSmsAiProviderResponse(
+    parsed.value,
     input.messages,
-    categoryTree
+    categories
   );
-  const validated = parseSmsProviderTransactions(groundedResponse, {
-    supportedCurrencies,
-    categoryTree,
-    submittedMessageIds: input.messages.map((message) => message.id),
-  });
-
-  return {
-    completionStatus: "complete",
-    isResponseSchemaValid: validated.isValid,
-    transactions: validated.transactions,
-    invalidMessageIds: validated.invalidMessageIds,
-    hasUncorrelatedInvalidEntries:
-      validated.hasUncorrelatedInvalidEntries,
-  };
+  return input.reviewProviderRequest !== undefined
+    ? validateReviewSms(grounded, input, categories, currencies)
+    : validateOriginalSms(grounded, input, categories, currencies);
 }

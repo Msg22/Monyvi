@@ -1,0 +1,748 @@
+import {
+  accountReviewRequestContextSchema,
+  accountReviewEvidenceSpanSchema,
+  accountReviewAccountEvidenceSchema,
+  accountReviewCurrencyEvidenceSchema,
+  accountReviewVoiceResponseV2Schema,
+  accountReviewSmsResponseV2Schema,
+} from "../schemas";
+import {
+  makeAccountEvidence,
+  makeCurrencyEvidence,
+  makeEvidenceSpan,
+  makeGroundedVoiceCashV2Response,
+  makeRequestAccountContext,
+  makeReviewRequestContext,
+  makeSmsV1Response,
+  makeSmsV2Response,
+  makeSuggestedAccount,
+  makeVoiceV1Response,
+  makeVoiceV2Response,
+  REVIEW_SMS_BODY,
+  REVIEW_VOICE_TRANSCRIPT,
+  REVIEW_WIRE_IDS,
+} from "./fixtures";
+
+describe("#395 T005 — canonical account-review parser contract", () => {
+  describe("request context: generated domain values and privacy", () => {
+    it("accepts owned opaque account context, distinct CASH and BANK, and the card suffix with leading zeroes", () => {
+      const parsed = accountReviewRequestContextSchema.safeParse(
+        makeReviewRequestContext()
+      );
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      expect(parsed.data.accounts).toHaveLength(2);
+      expect(parsed.data.accounts[0].cardLast4).toBe("0007");
+      expect(parsed.data.accounts[1].type).toBe("CASH");
+      expect(parsed.data.reviewContractVersion).toBe("account-review/v2");
+    });
+
+    it.each([
+      ["account balance", { ...makeRequestAccountContext(), balance: 900 }],
+      [
+        "full account number",
+        { ...makeRequestAccountContext(), accountNumber: "123456789" },
+      ],
+      [
+        "raw SMS text",
+        { ...makeRequestAccountContext(), smsBody: "sensitive" },
+      ],
+      [
+        "full card number",
+        { ...makeRequestAccountContext(), cardNumber: "4111111111111111" },
+      ],
+    ])("rejects a %s in provider account context", (_label, unsafeAccount) => {
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...makeReviewRequestContext(),
+          accounts: [unsafeAccount],
+        }).success
+      ).toBe(false);
+    });
+
+    it.each(["7", "007", "00007", "A007", "000٧"])(
+      "rejects malformed card suffix %s without silently normalizing it",
+      (cardLast4) => {
+        expect(
+          accountReviewRequestContextSchema.safeParse({
+            ...makeReviewRequestContext(),
+            accounts: [{ ...makeRequestAccountContext(), cardLast4 }],
+          }).success
+        ).toBe(false);
+      }
+    );
+
+    it("refuses duplicate account IDs, a foreign-shaped ID, invalid currency and unknown request keys", () => {
+      const good = makeReviewRequestContext();
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...good,
+          accounts: [good.accounts[0], good.accounts[0]],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...good,
+          accounts: [{ ...makeRequestAccountContext(), id: "not-a-uuid" }],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...good,
+          preferredCurrency: "XYZ",
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...good,
+          debuggingRawTranscript: REVIEW_VOICE_TRANSCRIPT,
+        }).success
+      ).toBe(false);
+    });
+
+    it("requires nullable identity fields rather than missing, blank or arbitrary provider names", () => {
+      const { institutionId: _institutionId, ...missing } =
+        makeRequestAccountContext();
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...makeReviewRequestContext(),
+          accounts: [missing],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...makeReviewRequestContext(),
+          accounts: [{ ...makeRequestAccountContext(), name: " " }],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewRequestContextSchema.safeParse({
+          ...makeReviewRequestContext(),
+          accounts: [
+            { ...makeRequestAccountContext(), senderNames: ["QNB", "QNB"] },
+          ],
+        }).success
+      ).toBe(false);
+    });
+  });
+
+  describe("evidence grammar and UTF-16 source fidelity", () => {
+    it("accepts a span after a surrogate-pair emoji at its exact JavaScript UTF-16 indices", () => {
+      const span = makeEvidenceSpan(
+        REVIEW_WIRE_IDS.voiceRequestKey,
+        "transcript",
+        REVIEW_VOICE_TRANSCRIPT,
+        "QNB"
+      );
+      expect(span.start).toBe(REVIEW_VOICE_TRANSCRIPT.indexOf("QNB"));
+      expect(span.start).toBeGreaterThan(2);
+      expect(REVIEW_VOICE_TRANSCRIPT.slice(span.start, span.end)).toBe(
+        span.text
+      );
+      expect(accountReviewEvidenceSpanSchema.safeParse(span).success).toBe(
+        true
+      );
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse(makeVoiceV2Response())
+          .success
+      ).toBe(true);
+    });
+
+    it.each([
+      { start: -1, end: 3, text: "QNB" },
+      { start: 3, end: 3, text: "" },
+      { start: 3.5, end: 6, text: "QNB" },
+      { start: 3, end: 2, text: "QNB" },
+      { start: 3, end: 6, text: "" },
+    ])("rejects invalid evidence span geometry %#", (patch) => {
+      const good = makeEvidenceSpan(
+        REVIEW_WIRE_IDS.voiceRequestKey,
+        "transcript",
+        REVIEW_VOICE_TRANSCRIPT,
+        "QNB"
+      );
+      expect(
+        accountReviewEvidenceSpanSchema.safeParse({ ...good, ...patch }).success
+      ).toBe(false);
+    });
+
+    it("rejects a forged original-transcript substring and a one-code-unit offset", () => {
+      const valid = makeVoiceV2Response();
+      const evidence = makeAccountEvidence();
+      const span = evidence.evidenceSpans[0];
+      for (const badSpan of [
+        { ...span, text: "CIB" },
+        { ...span, start: span.start - 1, end: span.end - 1 },
+      ]) {
+        expect(
+          accountReviewVoiceResponseV2Schema.safeParse({
+            ...valid,
+            transactions: [
+              {
+                ...valid.transactions[0],
+                accountEvidence: { ...evidence, evidenceSpans: [badSpan] },
+              },
+            ],
+          }).success
+        ).toBe(false);
+      }
+    });
+
+    it("does not permit fabricated source fields, missing source refs or private raw payloads", () => {
+      const span = makeEvidenceSpan(
+        REVIEW_WIRE_IDS.smsMessageId,
+        "body",
+        REVIEW_SMS_BODY,
+        "QNB"
+      );
+      expect(accountReviewEvidenceSpanSchema.safeParse(span).success).toBe(
+        true
+      );
+      expect(
+        accountReviewEvidenceSpanSchema.safeParse({ ...span, sourceRef: "" })
+          .success
+      ).toBe(false);
+      expect(
+        accountReviewEvidenceSpanSchema.safeParse({ ...span, field: "audio" })
+          .success
+      ).toBe(false);
+      expect(
+        accountReviewEvidenceSpanSchema.safeParse({
+          ...span,
+          rawBody: REVIEW_SMS_BODY,
+        }).success
+      ).toBe(false);
+    });
+  });
+
+  describe("account identity evidence remains advisory", () => {
+    it("accepts explicit evidence with nullable typed identity, including canonical BANK/CASH", () => {
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse(makeAccountEvidence())
+          .success
+      ).toBe(true);
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse(
+          makeGroundedVoiceCashV2Response().transactions[0].accountEvidence
+        ).success
+      ).toBe(true);
+    });
+
+    it("requires absent evidence to have no identity, candidate or source span", () => {
+      const absent = {
+        state: "absent",
+        name: null,
+        type: null,
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        evidenceSpans: [],
+        candidateAccountIds: [],
+      };
+      expect(accountReviewAccountEvidenceSchema.safeParse(absent).success).toBe(
+        true
+      );
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({ ...absent, name: "QNB" })
+          .success
+      ).toBe(false);
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({
+          ...absent,
+          candidateAccountIds: [REVIEW_WIRE_IDS.bankAccountId],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({
+          ...absent,
+          evidenceSpans: makeAccountEvidence().evidenceSpans,
+        }).success
+      ).toBe(false);
+    });
+
+    it("does not accept an ungrounded explicit/contextual identity or duplicate candidate IDs", () => {
+      const evidence = makeAccountEvidence();
+      for (const state of ["explicit", "contextual"]) {
+        expect(
+          accountReviewAccountEvidenceSchema.safeParse({
+            ...evidence,
+            state,
+            evidenceSpans: [],
+          }).success
+        ).toBe(false);
+      }
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({
+          ...evidence,
+          candidateAccountIds: [
+            REVIEW_WIRE_IDS.bankAccountId,
+            REVIEW_WIRE_IDS.bankAccountId,
+          ],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({
+          ...evidence,
+          cardLast4: "00O7",
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewAccountEvidenceSchema.safeParse({
+          ...evidence,
+          guessedAccountId: REVIEW_WIRE_IDS.bankAccountId,
+        }).success
+      ).toBe(false);
+    });
+  });
+
+  describe("currency evidence: omission is provably different from uncertainty", () => {
+    it("accepts only true v2 omission with null code, empty candidates and spans", () => {
+      const omitted = {
+        state: "omitted",
+        statedCode: null,
+        candidateCodes: [],
+        evidenceSpans: [],
+      };
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse(omitted).success
+      ).toBe(true);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...omitted,
+          statedCode: "EGP",
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...omitted,
+          candidateCodes: ["EGP"],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...omitted,
+          evidenceSpans: makeCurrencyEvidence().evidenceSpans,
+        }).success
+      ).toBe(false);
+    });
+
+    it("validates explicit supported code, sole matching candidate and grounded evidence", () => {
+      const explicit = makeCurrencyEvidence();
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse(explicit).success
+      ).toBe(true);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...explicit,
+          statedCode: "USD",
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...explicit,
+          candidateCodes: ["EGP", "USD"],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...explicit,
+          evidenceSpans: [],
+        }).success
+      ).toBe(false);
+    });
+
+    it("preserves ambiguous/conflicting/unsupported/unknown states instead of converting them to omitted", () => {
+      for (const evidence of [
+        {
+          state: "ambiguous",
+          statedCode: null,
+          candidateCodes: ["EGP", "USD"],
+          evidenceSpans: [],
+        },
+        {
+          state: "conflicting",
+          statedCode: null,
+          candidateCodes: ["EGP", "USD"],
+          evidenceSpans: [],
+        },
+        {
+          state: "unsupported",
+          statedCode: "XYZ",
+          candidateCodes: [],
+          evidenceSpans: [],
+        },
+        {
+          state: "unknown",
+          statedCode: null,
+          candidateCodes: [],
+          evidenceSpans: [],
+        },
+      ]) {
+        const result = accountReviewCurrencyEvidenceSchema.safeParse(evidence);
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.data.state).toBe(evidence.state);
+      }
+    });
+
+    it("rejects duplicate candidate currencies, unknown supported candidates and invented keys", () => {
+      const unknown = {
+        state: "unknown",
+        statedCode: null,
+        candidateCodes: [],
+        evidenceSpans: [],
+      };
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...unknown,
+          candidateCodes: ["EGP", "EGP"],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...unknown,
+          candidateCodes: ["XYZ"],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewCurrencyEvidenceSchema.safeParse({
+          ...unknown,
+          assumedPreferred: "EGP",
+        }).success
+      ).toBe(false);
+    });
+  });
+
+  describe("v2 response references, source boundaries and compatibility", () => {
+    it("preserves the legacy SMS optional/default fields while requiring category evidence", () => {
+      const sms = makeSmsV2Response();
+      const { isAtmWithdrawal: _omitted, ...withoutAtm } = sms.transactions[0];
+      // Existing SMS provider: isAtmWithdrawal defaults false; cardLast4 is optional.
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          transactions: [withoutAtm],
+        }).success
+      ).toBe(true);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          transactions: [{ ...withoutAtm, cardLast4: "0007" }],
+        }).success
+      ).toBe(true);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          transactions: [{ ...withoutAtm, cardLast4: "7" }],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          transactions: [{ ...withoutAtm, categorySystemName: undefined }],
+        }).success
+      ).toBe(false);
+    });
+
+    it("accepts a reciprocal single-row/suggestion Voice and SMS review response", () => {
+      const voice = accountReviewVoiceResponseV2Schema.safeParse(
+        makeVoiceV2Response()
+      );
+      const sms =
+        accountReviewSmsResponseV2Schema.safeParse(makeSmsV2Response());
+      expect(voice.success).toBe(true);
+      expect(sms.success).toBe(true);
+      if (voice.success) {
+        expect(voice.data.transactions[0].transactionRef).toBe(
+          REVIEW_WIRE_IDS.voiceRowRef
+        );
+        expect(voice.data.suggestedAccounts[0].transactionRefs).toEqual([
+          REVIEW_WIRE_IDS.voiceRowRef,
+        ]);
+      }
+      if (sms.success) {
+        expect(sms.data.transactions[0].messageId).toBe(
+          REVIEW_WIRE_IDS.smsMessageId
+        );
+        expect(sms.data.completionStatus).toBe("complete");
+      }
+    });
+
+    it("does not misinterpret a v1/old-server response as v2 evidence", () => {
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse(makeVoiceV1Response())
+          .success
+      ).toBe(false);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse(makeSmsV1Response()).success
+      ).toBe(false);
+    });
+
+    it("rejects duplicate transaction and suggestion refs", () => {
+      const voice = makeVoiceV2Response();
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse({
+          ...voice,
+          transactions: [voice.transactions[0], voice.transactions[0]],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse({
+          ...voice,
+          suggestedAccounts: [
+            voice.suggestedAccounts[0],
+            voice.suggestedAccounts[0],
+          ],
+        }).success
+      ).toBe(false);
+    });
+
+    it("rejects a dangling row suggestion, missing reciprocal membership and a double-link", () => {
+      const voice = makeVoiceV2Response();
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse({
+          ...voice,
+          transactions: [
+            {
+              ...voice.transactions[0],
+              suggestionRef: "nonexistent-suggestion",
+            },
+          ],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse({
+          ...voice,
+          suggestedAccounts: [
+            { ...makeSuggestedAccount(), transactionRefs: [] },
+          ],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse({
+          ...voice,
+          suggestedAccounts: [
+            makeSuggestedAccount(),
+            { ...makeSuggestedAccount(), suggestionRef: "second-suggestion" },
+          ],
+        }).success
+      ).toBe(false);
+    });
+
+    it("H1 rejects conflicting non-null institutionId in Voice and SMS shared suggestions", () => {
+      const voice = makeVoiceV2Response();
+      const sms = makeSmsV2Response();
+      for (const [schema, original] of [
+        [accountReviewVoiceResponseV2Schema, voice],
+        [accountReviewSmsResponseV2Schema, sms],
+      ] as const) {
+        const row = original.transactions[0];
+        const suggestion = original.suggestedAccounts[0];
+        const withInstitution = {
+          ...original,
+          transactions: [
+            {
+              ...row,
+              accountEvidence: {
+                ...row.accountEvidence,
+                institutionId: "qnb",
+              },
+            },
+          ],
+          suggestedAccounts: [
+            {
+              ...suggestion,
+              institutionId: "cib",
+            },
+          ],
+        };
+        expect(schema.safeParse(withInstitution).success).toBe(false);
+        expect(
+          schema.safeParse({
+            ...withInstitution,
+            suggestedAccounts: [{ ...suggestion, institutionId: "qnb" }],
+          }).success
+        ).toBe(true);
+        // Null identity provenance is genuinely unknown, not a made-up conflict.
+        expect(
+          schema.safeParse({
+            ...original,
+            suggestedAccounts: [{ ...suggestion, institutionId: "qnb" }],
+          }).success
+        ).toBe(true);
+      }
+    });
+
+    it("H2 keeps raw nullable suggestions with proven v2 currency omission as advisory", () => {
+      const voice = makeVoiceV2Response();
+      const stillAdvisory = {
+        ...voice,
+        transactions: [
+          {
+            ...voice.transactions[0],
+            currency: null,
+            currencyEvidence: {
+              state: "omitted",
+              statedCode: null,
+              candidateCodes: [],
+              evidenceSpans: [],
+            },
+          },
+        ],
+        suggestedAccounts: [
+          {
+            ...voice.suggestedAccounts[0],
+            currency: null,
+          },
+        ],
+      };
+      // This is a provider proposal, not an authorized local shared group.
+      // Only T014 can resolve a validated omission using owned preferred currency.
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse(stillAdvisory).success
+      ).toBe(true);
+    });
+
+    it("rejects conflicting linked currency and card evidence", () => {
+      const sms = makeSmsV2Response();
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          suggestedAccounts: [{ ...sms.suggestedAccounts[0], currency: "USD" }],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          suggestedAccounts: [
+            { ...sms.suggestedAccounts[0], cardLast4: "1111" },
+          ],
+        }).success
+      ).toBe(false);
+    });
+
+    it("keeps ordinary SMS endpoint evidence null and allows explicit Voice CASH", () => {
+      const sms = makeSmsV2Response();
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          transactions: [
+            {
+              ...sms.transactions[0],
+              toAccountEvidence: makeAccountEvidence("SMS"),
+            },
+          ],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...sms,
+          suggestedAccounts: [
+            {
+              ...sms.suggestedAccounts[0],
+              type: "CASH",
+              senderNames: [],
+            },
+          ],
+        }).success
+      ).toBe(false);
+      expect(
+        accountReviewVoiceResponseV2Schema.safeParse(
+          makeGroundedVoiceCashV2Response()
+        ).success
+      ).toBe(true);
+    });
+
+    it("requires a valid financial row, rejects missing/null category, non-finite amount and new raw transcript leakage", () => {
+      const voice = makeVoiceV2Response();
+      for (const broken of [
+        { ...voice.transactions[0], amount: Number.POSITIVE_INFINITY },
+        { ...voice.transactions[0], amount: 0 },
+        { ...voice.transactions[0], categorySystemName: null },
+        { ...voice.transactions[0], date: "2026-02-30" },
+      ]) {
+        expect(
+          accountReviewVoiceResponseV2Schema.safeParse({
+            ...voice,
+            transactions: [broken],
+          }).success
+        ).toBe(false);
+      }
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse({
+          ...makeSmsV2Response(),
+          rawMessages: [REVIEW_SMS_BODY],
+        }).success
+      ).toBe(false);
+    });
+
+    it("retains valid financial v2 omissions with genuinely unknown account/currency", () => {
+      const voice = makeVoiceV2Response();
+      const absent = {
+        state: "absent",
+        name: null,
+        type: null,
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        evidenceSpans: [],
+        candidateAccountIds: [],
+      };
+      const noMention = {
+        ...voice,
+        transactions: [
+          {
+            ...voice.transactions[0],
+            suggestionRef: null,
+            accountEvidence: absent,
+            currency: null,
+            currencyEvidence: {
+              state: "omitted",
+              statedCode: null,
+              candidateCodes: [],
+              evidenceSpans: [],
+            },
+          },
+        ],
+        suggestedAccounts: [],
+      };
+      const omission = accountReviewVoiceResponseV2Schema.safeParse(noMention);
+      expect(omission.success).toBe(true);
+      const unknown = accountReviewVoiceResponseV2Schema.safeParse({
+        ...noMention,
+        transactions: [
+          {
+            ...noMention.transactions[0],
+            currencyEvidence: {
+              state: "unknown",
+              statedCode: null,
+              candidateCodes: [],
+              evidenceSpans: [],
+            },
+          },
+        ],
+      });
+      expect(unknown.success).toBe(true);
+      if (unknown.success)
+        expect(unknown.data.transactions[0].currencyEvidence.state).toBe(
+          "unknown"
+        );
+    });
+
+    it("rejects unknown versions instead of silently interpreting provenance as omission", () => {
+      for (const contract of ["account-review/v3", "", null]) {
+        expect(
+          accountReviewVoiceResponseV2Schema.safeParse({
+            ...makeVoiceV2Response(),
+            reviewContractVersion: contract,
+          }).success
+        ).toBe(false);
+        expect(
+          accountReviewSmsResponseV2Schema.safeParse({
+            ...makeSmsV2Response(),
+            reviewContractVersion: contract,
+          }).success
+        ).toBe(false);
+      }
+    });
+  });
+});

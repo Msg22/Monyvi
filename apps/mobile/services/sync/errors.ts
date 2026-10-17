@@ -1,3 +1,9 @@
+export const GENERIC_SYNC_ERROR_CODES = {
+  AUTH_SCOPE_LOST: "sync_push_auth_scope_lost",
+  INVALID_ACTION_PUSH_OUTCOME: "sync_invalid_action_push_outcome",
+  INVALID_CHANGE_ID: "sync_invalid_change_id",
+} as const;
+
 export function getSyncErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
