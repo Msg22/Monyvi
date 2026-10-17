@@ -2,6 +2,16 @@ import { render, screen, userEvent } from "@testing-library/react-native";
 import React from "react";
 
 const mockRouterReplace = jest.fn();
+// Navigation-only: no route Save path may dispatch a database-backed writer.
+const mockUnexpectedLegacySave = jest.fn((): never => {
+  throw new Error("navigation_test_unexpected_legacy_save");
+});
+const mockUnexpectedCanonicalCapture = jest.fn((): never => {
+  throw new Error("navigation_test_unexpected_canonical_capture");
+});
+const mockUnexpectedCanonicalSave = jest.fn((): never => {
+  throw new Error("navigation_test_unexpected_canonical_save");
+});
 
 interface MockRouteParams {
   readonly transactions: string;
@@ -50,8 +60,30 @@ jest.mock("@/components/ui/Toast", () => ({
   }),
 }));
 
+// Navigation-only scenarios carry no T015 fixture scene. Isolate the UI hook
+// rather than importing the authenticated fixture service/native database.
+jest.mock("@/hooks/useAccountReviewFixtureScene", () => ({
+  useAccountReviewFixtureScene: () => ({ status: "idle", session: null }),
+}));
+
+jest.mock("@/hooks/useCurrentUser", () => ({
+  useCurrentUser: (): {
+    readonly userId: string;
+    readonly isResolvingUser: boolean;
+  } => ({
+    userId: "00000000-0000-4000-8000-000000000001",
+    isResolvingUser: false,
+  }),
+}));
+
+jest.mock("@/services/account-review-runtime-save", () => ({
+  captureAccountReviewRuntimeSave: (): never =>
+    mockUnexpectedCanonicalCapture(),
+  saveCapturedAccountReview: (): never => mockUnexpectedCanonicalSave(),
+}));
+
 jest.mock("@/services/batch-create-transactions", () => ({
-  batchCreateTransactions: jest.fn(),
+  batchCreateTransactions: (): never => mockUnexpectedLegacySave(),
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => ({
@@ -151,6 +183,9 @@ describe("Voice review navigation", () => {
     await user.press(screen.getByTestId("voice-review-discard"));
     await user.press(await screen.findByTestId("confirm-discard"));
 
+    expect(mockUnexpectedLegacySave).not.toHaveBeenCalled();
+    expect(mockUnexpectedCanonicalCapture).not.toHaveBeenCalled();
+    expect(mockUnexpectedCanonicalSave).not.toHaveBeenCalled();
     expect(mockRouterReplace).toHaveBeenCalledTimes(1);
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)/metals");
   });
@@ -161,6 +196,9 @@ describe("Voice review navigation", () => {
 
     await user.press(screen.getByTestId("voice-review-retry"));
 
+    expect(mockUnexpectedLegacySave).not.toHaveBeenCalled();
+    expect(mockUnexpectedCanonicalCapture).not.toHaveBeenCalled();
+    expect(mockUnexpectedCanonicalSave).not.toHaveBeenCalled();
     expect(mockRouterReplace).toHaveBeenCalledTimes(1);
     expect(mockRouterReplace).toHaveBeenCalledWith({
       pathname: "/add-transaction",

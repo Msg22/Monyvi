@@ -5,7 +5,6 @@
  */
 import { useEffect, useState } from "react";
 import type { Category } from "@monyvi/db";
-import { loadCurrentAccountReviewEditorCategories } from "@/services/account-review-transaction-edit-category-service";
 
 export interface UseAccountReviewEditorCategoriesInput {
   readonly visible: boolean;
@@ -26,6 +25,25 @@ interface ScopedCategoryState extends AccountReviewEditorCategoryView {
 }
 
 const EMPTY_CATEGORIES: readonly Category[] = Object.freeze([]);
+
+type AccountReviewCategoryRuntime = Pick<
+  typeof import("@/services/account-review-transaction-edit-category-service"),
+  "loadCurrentAccountReviewEditorCategories"
+>;
+
+function loadCategoryRuntime(): AccountReviewCategoryRuntime {
+  // The real owner-scoped reader is needed only when this editor is visible.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const loaded: unknown = require("@/services/account-review-transaction-edit-category-service");
+  if (
+    typeof loaded !== "object" ||
+    loaded === null ||
+    !("loadCurrentAccountReviewEditorCategories" in loaded) ||
+    typeof loaded.loadCurrentAccountReviewEditorCategories !== "function"
+  )
+    throw new Error("account_review_category_reader_unavailable");
+  return loaded as AccountReviewCategoryRuntime;
+}
 
 export function useAccountReviewEditorCategories({
   visible,
@@ -52,9 +70,17 @@ export function useAccountReviewEditorCategories({
     if (signal?.aborted) {
       onExternalAbort();
     } else {
-      void loadCurrentAccountReviewEditorCategories(ownerId, controller.signal)
-        .then(({ snapshot, records }) => {
-          if (controller.signal.aborted || signal?.aborted) return;
+      void Promise.resolve()
+        .then(() => {
+          if (controller.signal.aborted || signal?.aborted) return null;
+          return loadCategoryRuntime().loadCurrentAccountReviewEditorCategories(
+            ownerId,
+            controller.signal
+          );
+        })
+        .then((result) => {
+          if (!result || controller.signal.aborted || signal?.aborted) return;
+          const { snapshot, records } = result;
           if (snapshot.ownerId !== ownerId) {
             setCurrent({
               scopeKey,

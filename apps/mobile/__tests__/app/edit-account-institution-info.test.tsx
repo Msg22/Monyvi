@@ -140,6 +140,20 @@ jest.mock("@/hooks/useUpdateAccount", () => ({
   }),
 }));
 
+// Institution-info rendering receives an owner-aligned default snapshot;
+// the actual reactive SQLite ownership/CAS path is covered separately.
+jest.mock("@/hooks/useOwnedAccountDefaultState", () => ({
+  useOwnedAccountDefaultState: () => ({
+    state: {
+      status: "ready",
+      ownerId: "owner-1",
+      snapshot: { activeAccountIds: ["account-1"], defaultAccount: null },
+      defaultAccountName: null,
+    },
+    retry: jest.fn(),
+  }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: (): null => null,
 }));

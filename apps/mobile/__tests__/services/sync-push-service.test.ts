@@ -6,12 +6,14 @@ const mockMarkSyncFailed = jest.fn();
 const mockMarkSyncPending = jest.fn();
 const mockRecordOutcome = jest.fn();
 const mockCommitMetalOutcome = jest.fn();
+const mockGetFinancialActionGroup = jest.fn();
 
 jest.mock("@monyvi/db", () => ({
   schema: {
     tables: {
       account_financial_effects: {},
       accounts: {},
+      bank_details: {},
       asset_metals: {},
       assets: {},
       categories: {},
@@ -22,6 +24,20 @@ jest.mock("@monyvi/db", () => ({
     },
   },
 }));
+
+jest.mock("expo-crypto", () => {
+  const { createHash } =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, text: string): Promise<string> => {
+      if (algorithm !== "SHA-256") throw new Error("unknown_crypto_algorithm");
+      return Promise.resolve(
+        createHash("sha256").update(text, "utf8").digest("hex")
+      );
+    },
+  };
+});
 
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string | null> =>
@@ -34,6 +50,8 @@ jest.mock("@/services/supabase", () => ({
 }));
 
 jest.mock("../../services/financial-action-foundation-repository", () => ({
+  getFinancialActionGroup: (...args: readonly unknown[]): unknown =>
+    mockGetFinancialActionGroup(...args),
   markFinancialActionGroupSyncFailed: (...args: readonly unknown[]): unknown =>
     mockMarkSyncFailed(...args),
   markFinancialActionGroupSyncPending: (...args: readonly unknown[]): unknown =>
@@ -59,9 +77,15 @@ import {
   GENERIC_SYNC_ERROR_CODES,
   pushChanges,
 } from "../../services/sync/push-service";
+import type { FinancialActionPushCoordinator } from "../../services/financial-action-sync-service";
+import {
+  CANONICAL_ACCOUNT_PUSH_OWNER,
+  canonicalLegacyAccountEdit,
+  legacyPushDatabase,
+} from "./sync-push-legacy-test-fixtures";
 
-type PushChangesDatabase = Parameters<typeof pushChanges>[0];
 type PushChangesArgs = Parameters<typeof pushChanges>[1];
+type CoordinatePush = FinancialActionPushCoordinator["coordinatePush"];
 
 describe("pushChanges", () => {
   beforeEach(() => {
@@ -75,6 +99,7 @@ describe("pushChanges", () => {
     mockMarkSyncPending.mockResolvedValue(undefined);
     mockRecordOutcome.mockResolvedValue(undefined);
     mockCommitMetalOutcome.mockResolvedValue("accepted");
+    mockGetFinancialActionGroup.mockResolvedValue(null);
   });
 
   it.each(["add", "created"] as const)(
@@ -83,13 +108,17 @@ describe("pushChanges", () => {
       const actionId = "10000000-0000-4000-8000-000000000011";
       const holdingId = "20000000-0000-4000-8000-000000000012";
       const userId = "current-user";
-      const database = {
-        get: jest.fn(() => ({
-          query: jest.fn(() => ({
-            fetch: jest.fn().mockResolvedValue([{ id: holdingId }]),
-          })),
-        })),
-      } as unknown as PushChangesDatabase;
+      const database = legacyPushDatabase({
+        assets: [
+          {
+            id: holdingId,
+            userId,
+            type: "METAL",
+            deleted: false,
+          },
+        ],
+        financial_action_groups: [],
+      }).database;
       const changes: PushChangesArgs["changes"] = {
         financial_action_groups: {
           created: [
@@ -191,7 +220,7 @@ describe("pushChanges", () => {
       },
     };
     await expect(
-      pushChanges(Object.create(null) as PushChangesDatabase, {
+      pushChanges(legacyPushDatabase().database, {
         changes,
         lastPulledAt: 0,
       })
@@ -269,7 +298,7 @@ describe("pushChanges", () => {
     const coordinator = { coordinatePush: jest.fn() };
     await expect(
       pushChanges(
-        Object.create(null) as PushChangesDatabase,
+        legacyPushDatabase().database,
         pushArgs,
         "current-user",
         coordinator
@@ -296,7 +325,7 @@ describe("pushChanges", () => {
     "rejects invalid generic owner %s instead of assigning current user",
     async (owner) => {
       await expect(
-        pushChanges(Object.create(null) as PushChangesDatabase, {
+        pushChanges(legacyPushDatabase().database, {
           changes: {
             assets: {
               created: [{ id: "asset-without-owner", user_id: owner }],
@@ -313,7 +342,7 @@ describe("pushChanges", () => {
 
   it("ignores dirty pull-only shared observations without requiring user ownership", async () => {
     await expect(
-      pushChanges(Object.create(null) as PushChangesDatabase, {
+      pushChanges(legacyPushDatabase().database, {
         changes: {
           market_rate_observations: {
             created: [{ id: "observation-1" }],
@@ -328,12 +357,40 @@ describe("pushChanges", () => {
   });
 
   it("aborts before any write if auth changes during local ownership resolution", async () => {
-    mockGetCurrentUserId
-      .mockResolvedValueOnce("current-user")
-      .mockResolvedValueOnce("different-user");
+    // Change the actor at the actual owned-parent fetch boundary, not at an
+    // arbitrary nth getCurrentUserId call introduced by catalog rechecks.
+    let resolvedParents = 0;
+    const scoped = legacyPushDatabase(
+      {
+        accounts: [
+          {
+            id: "account-current",
+            userId: "current-user",
+            deleted: false,
+          },
+        ],
+      },
+      (table): void => {
+        if (table === "accounts") {
+          resolvedParents += 1;
+          mockGetCurrentUserId.mockResolvedValue("different-user");
+        }
+      }
+    );
     await expect(
-      pushChanges(Object.create(null) as PushChangesDatabase, {
+      pushChanges(scoped.database, {
         changes: {
+          bank_details: {
+            created: [
+              {
+                id: "bank-1",
+                account_id: "account-current",
+                deleted: false,
+              },
+            ],
+            updated: [],
+            deleted: [],
+          },
           profiles: {
             created: [{ id: "profile-1", user_id: "current-user" }],
             updated: [],
@@ -343,6 +400,7 @@ describe("pushChanges", () => {
         lastPulledAt: 0,
       })
     ).rejects.toThrow(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+    expect(resolvedParents).toBe(1);
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockUpsert).not.toHaveBeenCalled();
   });
@@ -354,7 +412,7 @@ describe("pushChanges", () => {
   ] as const)(
     "returns dirty dedicated-table %s ids as rejected while pushing unrelated rows",
     async (_changeKind, dedicatedChanges) => {
-      const database = Object.create(null) as PushChangesDatabase;
+      const database = legacyPushDatabase().database;
       const changes: PushChangesArgs["changes"] = {
         financial_action_groups: {
           created: [...dedicatedChanges.created],
@@ -384,7 +442,12 @@ describe("pushChanges", () => {
         },
       });
 
-      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(3);
+      expect(mockGetCurrentUserId.mock.calls.length).toBeGreaterThanOrEqual(3);
+      expect(
+        mockGetCurrentUserId.mock.results.every(
+          (item) => item.type === "return"
+        )
+      ).toBe(true);
       expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
       expect(mockFrom).toHaveBeenCalledWith("profiles");
       expect(mockUpsert).toHaveBeenCalledTimes(1);
@@ -392,7 +455,7 @@ describe("pushChanges", () => {
   );
 
   it("keeps foreign prior-user dedicated roots dirty without blocking current-user generic sync", async () => {
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const pushArgs: PushChangesArgs = {
       changes: {
         financial_action_groups: {
@@ -433,7 +496,7 @@ describe("pushChanges", () => {
 
   it("fails when auth disappears before push so no captured row is acknowledged", async () => {
     mockGetCurrentUserId.mockResolvedValue(null);
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const pushArgs: PushChangesArgs = {
       changes: {
         financial_action_groups: {
@@ -471,26 +534,21 @@ describe("pushChanges", () => {
     "fails when auth %s after an awaited remote upsert",
     async (_case, finalUserId) => {
       const executionOrder: string[] = [];
-      mockGetCurrentUserId
-        .mockImplementationOnce((): Promise<string> => {
-          executionOrder.push("initial-auth");
-          return Promise.resolve("current-user");
-        })
-        .mockImplementationOnce((): Promise<string> => {
-          executionOrder.push("scoped-auth");
-          return Promise.resolve("current-user");
-        })
-        .mockImplementationOnce((): Promise<string | null> => {
-          executionOrder.push("final-auth");
-          return Promise.resolve(finalUserId);
-        });
+      let upsertCompleted = false;
+      mockGetCurrentUserId.mockImplementation((): Promise<string | null> => {
+        const actor = upsertCompleted ? finalUserId : "current-user";
+        executionOrder.push(
+          upsertCompleted ? "post-upsert-auth" : "owned-auth"
+        );
+        return Promise.resolve(actor);
+      });
       mockUpsert.mockImplementationOnce(async (): Promise<{ error: null }> => {
         executionOrder.push("upsert-start");
         await Promise.resolve();
+        upsertCompleted = true;
         executionOrder.push("upsert-complete");
         return { error: null };
       });
-      const database = Object.create(null) as PushChangesDatabase;
       const pushArgs: PushChangesArgs = {
         changes: {
           profiles: {
@@ -509,22 +567,22 @@ describe("pushChanges", () => {
       };
 
       await expect(
-        pushChanges(database, pushArgs, "current-user")
+        pushChanges(legacyPushDatabase().database, pushArgs, "current-user")
       ).rejects.toThrow(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
-
-      expect(executionOrder).toEqual([
-        "initial-auth",
-        "scoped-auth",
-        "upsert-start",
-        "upsert-complete",
-        "final-auth",
-      ]);
+      expect(executionOrder.indexOf("owned-auth")).toBeGreaterThanOrEqual(0);
+      expect(executionOrder.indexOf("upsert-start")).toBeGreaterThan(0);
+      expect(executionOrder.indexOf("upsert-complete")).toBeGreaterThan(
+        executionOrder.indexOf("upsert-start")
+      );
+      expect(executionOrder.indexOf("post-upsert-auth")).toBeGreaterThan(
+        executionOrder.indexOf("upsert-complete")
+      );
       expect(mockUpsert).toHaveBeenCalledTimes(1);
     }
   );
 
   it("allows an empty dedicated-table change set without generating a generic remote write", async () => {
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const profile = {
       id: "profile-1",
       user_id: "current-user",
@@ -548,91 +606,77 @@ describe("pushChanges", () => {
   it.each([false, true])(
     "acknowledges an owned account action with foreign pending rows present: %s",
     async (hasForeignRows) => {
-      const actionId = "10000000-0000-4000-8000-000000000001";
-      const accountId = "20000000-0000-4000-8000-000000000002";
-      const transactionId = "30000000-0000-4000-8000-000000000003";
-      const effectId = "40000000-0000-4000-8000-000000000004";
-      const payloadJson = JSON.stringify({
-        accountGuards: [{ accountId, expectedRevision: "0" }],
-        payloadVersion: "account.balance-effects/v1",
-        payload: {
-          domainMutation: {
-            records: [
-              { entity: "account", after: { id: accountId } },
-              { entity: "transaction", after: { id: transactionId } },
-            ],
-          },
-        },
+      const action = canonicalLegacyAccountEdit({
+        actionId: "10000000-0000-4000-8000-000000000001",
+        accountId: "20000000-0000-4000-8000-000000000002",
+        effectId: "40000000-0000-4000-8000-000000000004",
+        transactionId: "30000000-0000-4000-8000-000000000003",
       });
+      if (!action.transactionRaw)
+        throw new Error("missing_canonical_transaction");
+      const actionId = action.rootRaw.action_id;
+      if (
+        typeof actionId !== "string" ||
+        actionId !== action.localRoot.actionId ||
+        actionId !== "10000000-0000-4000-8000-000000000001"
+      ) {
+        throw new Error("invalid_canonical_action_fixture");
+      }
+      mockGetCurrentUserId.mockResolvedValue(CANONICAL_ACCOUNT_PUSH_OWNER);
       const coordinator = {
-        coordinatePush: jest.fn().mockResolvedValue({
-          decisions: [{ actionId, disposition: "acknowledge", outcome: null }],
-        }),
+        coordinatePush: jest
+          .fn<ReturnType<CoordinatePush>, Parameters<CoordinatePush>>()
+          .mockResolvedValue({
+            decisions: [
+              {
+                actionId,
+                disposition: "acknowledge",
+                outcome: null,
+              },
+            ],
+          }),
       };
-      const pushArgs: PushChangesArgs = {
-        changes: {
-          financial_action_groups: {
-            created: [
-              {
-                id: actionId,
-                user_id: "current-user",
-                action_id: actionId,
-                payload_hash: "a".repeat(64),
-                payload_json: payloadJson,
-                state: "accepted",
-              },
-              ...(hasForeignRows
-                ? [
-                    {
-                      id: "foreign-action",
-                      user_id: "prior-user",
-                      payload_json: "{invalid-json",
-                    },
-                  ]
-                : []),
-            ],
-            updated: [],
-            deleted: [],
-          },
-          account_financial_effects: {
-            created: [
-              { id: effectId, user_id: "current-user", action_id: actionId },
-            ],
-            updated: [],
-            deleted: [],
-          },
-          accounts: {
-            created: [],
-            updated: [
-              {
-                id: accountId,
-                user_id: "current-user",
-                balance: 100,
-                financial_revision: "1",
-                deleted: false,
-              },
-            ],
-            deleted: [],
-          },
-          transactions: {
-            created: [
-              {
-                id: transactionId,
-                user_id: "current-user",
-                deleted: false,
-              },
-            ],
-            updated: [],
-            deleted: [],
-          },
+      const changes: PushChangesArgs["changes"] = {
+        financial_action_groups: {
+          created: [
+            { ...action.rootRaw },
+            ...(hasForeignRows
+              ? [
+                  {
+                    id: "foreign-action",
+                    user_id: "prior-user",
+                    domain: "accounts",
+                    payload_json: "{invalid-json",
+                  },
+                ]
+              : []),
+          ],
+          updated: [],
+          deleted: [],
         },
-        lastPulledAt: 0,
+        account_financial_effects: {
+          created: [{ ...action.effectRaw }],
+          updated: [],
+          deleted: [],
+        },
+        accounts: {
+          created: [],
+          updated: [{ ...action.accountRaw }],
+          deleted: [],
+        },
+        transactions: {
+          created: [{ ...action.transactionRaw }],
+          updated: [],
+          deleted: [],
+        },
       };
-
+      const database = legacyPushDatabase({
+        financial_action_groups: [action.localRoot],
+      }).database;
       const result = await pushChanges(
-        Object.create(null) as PushChangesDatabase,
-        pushArgs,
-        undefined,
+        database,
+        { changes, lastPulledAt: 0 },
+        CANONICAL_ACCOUNT_PUSH_OWNER,
         coordinator
       );
       expect(result).toEqual(
@@ -644,146 +688,128 @@ describe("pushChanges", () => {
             }
           : undefined
       );
-
       expect(coordinator.coordinatePush).toHaveBeenCalledTimes(1);
+      const coordinated: unknown =
+        coordinator.coordinatePush.mock.calls[0]?.[0];
+      expect(coordinated).toEqual([
+        expect.objectContaining({
+          actionId: action.rootRaw.action_id,
+          payloadHash: action.payloadHash,
+          payloadJson: action.payloadJson,
+        }),
+      ]);
       expect(mockFrom).not.toHaveBeenCalledWith("accounts");
       expect(mockFrom).not.toHaveBeenCalledWith("transactions");
     }
   );
 
-  it("uses the production owner-scoped RPC before acknowledging an account action", async () => {
-    const actionId = "10000000-0000-4000-8000-000000000011";
-    const accountId = "20000000-0000-4000-8000-000000000012";
-    const effectId = "40000000-0000-4000-8000-000000000014";
-    const payloadJson = JSON.stringify({
-      accountGuards: [{ accountId, expectedRevision: "0" }],
-      payloadVersion: "account.balance-effects/v1",
-      payload: {
-        domainMutation: {
-          records: [{ entity: "account", after: { id: accountId } }],
-        },
-      },
+  it("uses the production owner-scoped RPC before acknowledging a canonical account action", async () => {
+    const action = canonicalLegacyAccountEdit({
+      actionId: "10000000-0000-4000-8000-000000000011",
+      accountId: "20000000-0000-4000-8000-000000000012",
+      effectId: "40000000-0000-4000-8000-000000000014",
     });
+    mockGetCurrentUserId.mockResolvedValue(CANONICAL_ACCOUNT_PUSH_OWNER);
+    mockGetFinancialActionGroup.mockResolvedValue(action.localRoot);
     mockRpc.mockResolvedValue({
-      data: { actionId, status: "accepted" },
+      data: { actionId: action.rootRaw.action_id, status: "accepted" },
       error: null,
     });
     const pushArgs: PushChangesArgs = {
       changes: {
         financial_action_groups: {
-          created: [
-            {
-              id: actionId,
-              user_id: "current-user",
-              action_id: actionId,
-              payload_hash: "c".repeat(64),
-              payload_json: payloadJson,
-              state: "local_complete",
-            },
-          ],
+          created: [{ ...action.rootRaw }],
           updated: [],
           deleted: [],
         },
         account_financial_effects: {
-          created: [
-            { id: effectId, user_id: "current-user", action_id: actionId },
-          ],
+          created: [{ ...action.effectRaw }],
           updated: [],
           deleted: [],
         },
         accounts: {
           created: [],
-          updated: [{ id: accountId, user_id: "current-user" }],
+          updated: [{ ...action.accountRaw }],
           deleted: [],
         },
       },
       lastPulledAt: 0,
     };
+    const database = legacyPushDatabase({
+      financial_action_groups: [action.localRoot],
+    }).database;
 
-    await expect(
-      pushChanges(Object.create(null) as PushChangesDatabase, pushArgs)
-    ).resolves.toBeUndefined();
-
-    expect(mockMarkSyncPending).toHaveBeenCalledWith(actionId);
+    await expect(pushChanges(database, pushArgs)).resolves.toBeUndefined();
+    expect(mockMarkSyncPending).toHaveBeenCalledWith(action.rootRaw.action_id);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
     expect(mockRpc).toHaveBeenCalledWith("apply_account_financial_action_v1", {
-      p_payload_hash: "c".repeat(64),
-      p_payload_json: payloadJson,
+      p_payload_hash: action.payloadHash,
+      p_payload_json: action.payloadJson,
     });
     expect(mockRecordOutcome).toHaveBeenCalledWith(
-      actionId,
+      action.rootRaw.action_id,
       "accepted",
       expect.any(String),
       null
     );
   });
 
-  it("keeps a stale account action and every linked row dirty", async () => {
-    const actionId = "10000000-0000-4000-8000-000000000001";
-    const accountId = "20000000-0000-4000-8000-000000000002";
-    const effectId = "40000000-0000-4000-8000-000000000004";
+  it("keeps a stale canonical account action and every linked row dirty", async () => {
+    const action = canonicalLegacyAccountEdit({
+      actionId: "10000000-0000-4000-8000-000000000001",
+      accountId: "20000000-0000-4000-8000-000000000002",
+      effectId: "40000000-0000-4000-8000-000000000004",
+      state: "rejected_compensating",
+    });
+    mockGetCurrentUserId.mockResolvedValue(CANONICAL_ACCOUNT_PUSH_OWNER);
     const coordinator = {
       coordinatePush: jest.fn().mockResolvedValue({
-        decisions: [{ actionId, disposition: "reject", outcome: null }],
+        decisions: [
+          {
+            actionId: action.rootRaw.action_id,
+            disposition: "reject",
+            outcome: null,
+          },
+        ],
       }),
     };
-    const pushArgs: PushChangesArgs = {
-      changes: {
-        financial_action_groups: {
-          created: [
-            {
-              id: actionId,
-              user_id: "current-user",
-              action_id: actionId,
-              payload_hash: "a".repeat(64),
-              payload_json: JSON.stringify({
-                accountGuards: [{ accountId, expectedRevision: "0" }],
-                payloadVersion: "account.balance-effects/v1",
-                payload: {
-                  domainMutation: {
-                    records: [{ entity: "account", after: { id: accountId } }],
-                  },
-                },
-              }),
-              state: "rejected_compensating",
-            },
-          ],
-          updated: [],
-          deleted: [],
-        },
-        account_financial_effects: {
-          created: [
-            { id: effectId, user_id: "current-user", action_id: actionId },
-          ],
-          updated: [],
-          deleted: [],
-        },
-        accounts: {
-          created: [],
-          updated: [{ id: accountId, user_id: "current-user" }],
-          deleted: [],
-        },
+    const changes: PushChangesArgs["changes"] = {
+      financial_action_groups: {
+        created: [{ ...action.rootRaw }],
+        updated: [],
+        deleted: [],
       },
-      lastPulledAt: 0,
+      account_financial_effects: {
+        created: [{ ...action.effectRaw }],
+        updated: [],
+        deleted: [],
+      },
+      accounts: {
+        created: [],
+        updated: [{ ...action.accountRaw }],
+        deleted: [],
+      },
     };
-
-    await expect(
-      pushChanges(
-        Object.create(null) as PushChangesDatabase,
-        pushArgs,
-        undefined,
-        coordinator
-      )
-    ).resolves.toEqual({
+    const result = await pushChanges(
+      legacyPushDatabase({
+        financial_action_groups: [action.localRoot],
+      }).database,
+      { changes, lastPulledAt: 0 },
+      CANONICAL_ACCOUNT_PUSH_OWNER,
+      coordinator
+    );
+    expect(coordinator.coordinatePush).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
       experimentalRejectedIds: {
-        account_financial_effects: [effectId],
-        accounts: [accountId],
-        financial_action_groups: [actionId],
+        account_financial_effects: [action.effectRaw.id],
+        accounts: [action.accountRaw.id],
+        financial_action_groups: [action.rootRaw.id],
       },
     });
   });
 
   it("skips dirty shared system categories instead of pushing them through user RLS", async () => {
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const pushArgs: PushChangesArgs = {
       changes: {
         categories: {
@@ -810,7 +836,7 @@ describe("pushChanges", () => {
   });
 
   it("upserts profiles by their unique user identity", async () => {
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const profile = {
       id: "local-profile-id",
       user_id: "current-user",
@@ -840,7 +866,7 @@ describe("pushChanges", () => {
   });
 
   it("keeps Metal projections out of generic asset pushes", async () => {
-    const database = Object.create(null) as PushChangesDatabase;
+    const database = legacyPushDatabase().database;
     const pushArgs: PushChangesArgs = {
       changes: {
         assets: {

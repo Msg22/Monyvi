@@ -209,7 +209,18 @@ describe("068 Metals domain migration and persisted models", () => {
   it("keeps exact Metals decimals and bigint revisions as canonical text before Watermelon writes", () => {
     const sql = source(migrationPath);
     const pulls = source("apps/mobile/services/sync/pull-strategies.ts");
+    const normalizer = source(
+      "apps/mobile/services/sync/financial-pull-shaping.ts"
+    );
     const transform = source("scripts/transform-schema.js");
+
+    // Text projection stays in pull-strategies; scalar validation moved to
+    // the shared exact-text financial pull normalizer, before local writes.
+    expect(pulls).toMatch(
+      /import\s*\{[\s\S]*?normalizeDedicatedPullRecord,[\s\S]*?normalizePulledExactText,[\s\S]*?\}\s*from "\.\/financial-pull-shaping"/
+    );
+    expect(pulls).toContain("normalizePulledExactText(table, record)");
+    expect(pulls).toContain("normalizeDedicatedPullRecord(table, record)");
 
     // The observation RPC establishes its exact-text boundary server-side.
     expect(sql).toMatch(/'valueDecimal',\s*page_row\.value_decimal::text/);
@@ -238,30 +249,32 @@ describe("068 Metals domain migration and persisted models", () => {
 
     // Exact aliases are validated as canonical strings and copied to their
     // Watermelon column names without numeric coercion.
-    expect(pulls).toContain('if (value !== null && typeof value !== "string")');
-    expect(pulls).toContain("validate(value);");
-    expect(pulls).toContain(
+    expect(normalizer).toContain(
+      'if (value !== null && typeof value !== "string")'
+    );
+    expect(normalizer).toContain("validate(value);");
+    expect(normalizer).toContain(
       "const normalized = { ...record, [target]: value };"
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"purchase_price_decimal_text",\s*"purchase_price_decimal",\s*validateCanonicalDecimal/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"weight_grams_decimal_text",\s*"weight_grams_decimal",\s*validateCanonicalDecimal/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"purity_factor_decimal_text",\s*"purity_factor_decimal",\s*validateCanonicalDecimal/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"canonical_holding_revision_text",\s*"canonical_holding_revision",\s*assertCanonicalMetalRevision/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"expected_holding_revision_text",\s*"expected_holding_revision",\s*assertCanonicalMetalRevision/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"financial_revision_text",\s*"financial_revision",\s*assertCanonicalMetalRevision/
     );
-    expect(pulls).toMatch(
+    expect(normalizer).toMatch(
       /"value_decimal_text",\s*"value_decimal",\s*validateCanonicalDecimal/
     );
 

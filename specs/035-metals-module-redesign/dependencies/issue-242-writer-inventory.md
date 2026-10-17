@@ -1,10 +1,15 @@
 # Issue #242 Account-Balance Writer Inventory
 
-**Status**: T025 Red inventory and guard complete. Active financial writers remain
-intentionally unguarded until T032 routes or blocks them.
-**Validated against current main**: `bf2e3a071c2814772e9a9669479afeeb85d48767` on
-2026-09-01. This branch must rebase before any implementation integration.
-**Authority**: Constitution 1.6, live issue #242, `tasks.md` T025-T033,
+**Status**: T025 baseline inventory retained; the T032 registry currently marks
+each inventoried entry `guarded` or `blocked`. This does NOT certify that all
+legacy writers were migrated or that issues #242/#340/#341 are complete.
+**Historical inventory baseline**: `bf2e3a071c2814772e9a9669479afeeb85d48767`
+(2026-09-01); its 16/10/6 legacy counts remain unchanged. **#395 source re-audit
+pin**: `ba3b0f16363d9106f0390797bc890d04852152be` (2026-10-18). The four newly
+scanned internal helper assignments below are covered by explicit
+command-ownership/atomicity proofs, not registry exemptions. No current CI/test
+execution is asserted by this inventory update. **Authority**: Constitution 1.6,
+live issue #242, `tasks.md` T025-T033,
 `contracts/{action,command,rpc,reconciliation,metadata-lww,test-harness}-contract.md`,
 and `docs/business/business-decisions.md`.
 
@@ -81,6 +86,31 @@ behavior differ.
 | `fixture.accounts.restore`             | `seed-fixtures/seed-engine.js#restoreSeededAccountBalances`                                                 | Direct post-ledger balance restoration                                                | Replace with deterministic cutover/action fixture; no production path                                  |
 | `repair.accounts.recalculate-all`      | Active `public.recalculate_all_account_balances()` from migration 044 directly updates `accounts.balance`   | Security-definer repair can erase initial/manual/transfer effects and bypass revision | Revoke application access and replace/block under explicit test/developer cutover contract             |
 
+## #395 Guarded Internal Balance-Assignment Helpers (not new legacy entry paths)
+
+The recursive AST scanner now sees four further direct `account.balance`
+assignments in private prepared financial-action helpers. They are **not**
+standalone account-writing APIs; their proved owning command/writer paths are
+listed explicitly in the architecture guard, which fails when the symbol or the
+cited lineage disappears. Do not mark the older blocked registry entries guarded
+based on these helper implementations.
+
+| Exact discovered scanner symbol                                                   | Current owned command boundary                                                                          | Atomicity and authority proof                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/mobile/services/account-default-intent-plan.ts#prepareAccount`              | `account-default-intent-service.ts#commitPrepared` -> `createAccountDefaultFinancialCommandService`     | Explicit Add default-intent CAS, owner-bound sync exclusion and `prepareAccountDefaultLinkedPlan` feed the foundation's single writer. `prepareAccount` stages the new account and revision 0/1 with its opening effect rather than committing independently.        |
+| `apps/mobile/services/account-review-recovery-commit.ts#prepareCanonicalExisting` | `reconcileRejectedAccountReviewInSqlite`                                                                | Authenticated, physical-root/payload-bound rejected Review, `verifyRejectedReviewRecovery`, canonical account/effect evidence, precommit cached snapshots and single `commitPreparedBatch` under `db.write`. It stages compensation; no public direct balance write. |
+| `apps/mobile/services/account-review-save-accounts.ts#accountModel`               | `createAccountReviewSaveService` -> `createCoreReviewBatchSaveAdapter` -> Review-only financial command | Frozen selected Review and account guards, calculated effect-backed balances and prepared create models enter the foundation as one linked plan with root, child and private proof. The account is never independently committed.                                    |
+| `apps/mobile/services/account-review-save-financial.ts#updateOwnedAccount`        | Same Review-only financial command and `createLinkedReviewPlan`                                         | Existing owned account revision CAS (`ownerId`, `deleted`, `expectedRevision`), exact selected deltas/effect IDs and `assertCachedOwnership`/`assertPreparedOwnership` are validated before the root/effects/accounts commit together in the foundation writer.      |
+
+The shared foundation's `commitFinancialActionGroupLocally` holds one
+`database.write`, checks immutable cached preimages/prepared postimages,
+validates current owner/root authority and commits
+`[root.operation, ...linkedOperations]` once. Rejected Review recovery instead
+uses its own authenticated, post-evidence atomic compensation writer. These
+bounded #395 sites do **not** expand the legacy registry's 16 active local
+primitives, 10 indirect paths or 6 remote/fixture/sync bypasses, and do not
+imply that remaining blocked legacy paths are production-ready.
+
 ## Historical Non-Writers
 
 - Migration 020 created transaction balance triggers, but migration 024 drops
@@ -98,9 +128,9 @@ behavior differ.
 ## Completeness Search Evidence
 
 T025 validated current-main production TypeScript/JavaScript and SQL for model
-assignments, compound assignments, Supabase account upserts/updates, `SET balance`,
-WatermelonDB writers/batches, and callers of every mutation primitive. The
-validated snapshot contains:
+assignments, compound assignments, Supabase account upserts/updates,
+`SET balance`, WatermelonDB writers/batches, and callers of every mutation
+primitive. The validated snapshot contains:
 
 - 16 active local mutation primitives in the first table;
 - 10 distinct indirect domain/runtime paths, including explicit no-active-debt

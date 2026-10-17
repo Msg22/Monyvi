@@ -37,6 +37,14 @@ jest.mock("@/utils/transaction-review-provider", () => ({
   resolveTransactionReviewProvider: (): null => null,
 }));
 
+// The legacy transaction-review layout must not mount the canonical V2
+// owner/namespace facade. Fail if this presentation test enters that workflow.
+jest.mock("@/hooks/useAccountReview", () => ({
+  useAccountReview: (): never => {
+    throw new Error("unexpected_canonical_review_in_legacy_layout_test");
+  },
+}));
+
 jest.mock("@/hooks/useTransactionReviewState", () => ({
   useTransactionReviewState: jest.fn(),
 }));

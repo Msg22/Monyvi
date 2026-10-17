@@ -530,6 +530,33 @@ function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
   return table === "profiles" ? "user_id" : "id";
 }
 
+/** Account-specific bundle verification must never parse independent Metal
+ * roots; the ORIGINAL scoped changes remain intact for Metal RPC, ownership,
+ * generic table iteration, rejection merging and final SDK ACK.
+ */
+function accountActionChangesOnly(
+  changes: SyncPushArgs["changes"]
+): SyncPushArgs["changes"] {
+  return Object.fromEntries(
+    Object.entries(changes).map(([table, slice]) => {
+      if (table !== "financial_action_groups") return [table, slice];
+      const tableChanges = slice as SyncTableChangeSet;
+      const withoutMetals = (
+        records: SyncTableChangeSet["created"]
+      ): SyncTableChangeSet["created"] =>
+        records.filter((row) => row.domain !== "metals");
+      return [
+        table,
+        {
+          ...tableChanges,
+          created: withoutMetals(tableChanges.created),
+          updated: withoutMetals(tableChanges.updated),
+        },
+      ];
+    })
+  );
+}
+
 export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs,
@@ -606,8 +633,9 @@ export async function pushChanges(
           ),
         }
       : metalRejectedIds;
+  const accountActionChanges = accountActionChangesOnly(changes);
   const originalFinancialRejections = collectProtectedFinancialActionRowIds(
-    changes,
+    accountActionChanges,
     history
   );
   // This pre-push set still forbids generic financial writes. Only its
@@ -621,7 +649,7 @@ export async function pushChanges(
       database,
       userId,
       capability,
-      changes,
+      accountActionChanges,
       history,
       financialActionPushCoordinator
     );

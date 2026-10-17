@@ -53,7 +53,7 @@ publication.
 
 ## Validation
 
-Final affected batch completed 2026-10-17T21:00:42Z: 32 mobile suites / 358
+Initial affected batch completed 2026-10-17T21:00:42Z: 32 mobile suites / 358
 tests passed; whole mobile TypeScript passed; architecture lint checked 349
 files with zero errors and 122 warnings; formatting and diff checks passed; no
 source drift. The reviewed SDK installer applied both locked files, and all 14
@@ -73,8 +73,8 @@ tests, real local database generation, schema-generator checks, SDK patcher unit
 tests, generated Edge parity, i18n/privacy checks, all 23 binding receipts and
 static Maestro YAML validation. Corrected Node Edge and Deno SMS/Voice tests
 passed in their actual runtimes. The earlier mobile/lint failures are retained
-as historical failures, followed by the final affected rerun results above; they
-are not erased or reported as previous passes.
+as historical failures, followed by the affected rerun results above; they are
+not erased or reported as previous passes.
 
 An operational runner initially loaded the SDK patch module without calling its
 exported installer. This was corrected by invoking patchWatermelonSyncHooks();
@@ -105,3 +105,43 @@ This report records pre-publication source and local validation evidence. The
 final PR description records the published commit and current CI state
 separately. Commit and pre-push hooks remain mandatory; passing local checks do
 not imply CI, manual acceptance or hosted rollout.
+
+## Full-CI follow-up after publication
+
+Published implementation ba3b0f16363d9106f0390797bc890d04852152be failed the
+full mobile CI cohort in run 39071074233: 29 suites and 43 tests failed; 628
+suites and 6,112 tests passed, with one suite and four tests skipped. Financial
+Action pgTAP and Android Build Verification passed; Android E2E was skipped. The
+earlier 32-suite affected result above remains historical evidence, not current
+full-CI readiness.
+
+Normal ChatGPT authored the import-boundary, Metal/account isolation, canonical
+fixture, SMS route and architecture-inventory repairs. Root independently
+reviewed exact parent/blob/preimages and mechanically integrated them; these
+were unreferenced handoff commits/blobs, not worker-branch pushes. Metal
+isolation received independent source-only peer review; runtime evidence is
+below.
+
+A broad Windows repair attempt was deliberately stopped after genuine RED
+results and slow unrelated coverage: 44 suites had passed and two failed at that
+point; it is not a completed full-suite result. The following completed 70-suite
+batch passed 65 suites/821 tests and exposed five remaining suite failures and
+one TypeScript fixture error; lint passed with zero errors. A second completed
+run passed 68 suites/all 828 executed tests, with two suites still unable to
+import the native-backed retention dependency; mobile TypeScript, lint, format
+and diff checks passed. These failures remain historical evidence.
+
+Final affected rerun completed 2026-10-17T23:46:02.097Z: **70 suites / 842 tests
+passed**, with zero failed suites/tests. Whole mobile TypeScript, architecture
+lint, formatting and diff checks passed; source drift was zero. Lint summary:
+{"files":366,"errors":0,"warnings":85}. The final changes defer the real atomic
+helper until actual commit, preserve genuine Voice navigation behind fail-loud
+unused-Save test boundaries, trigger auth-switch coverage at a schema-present
+owned-parent read, and narrow canonical fixture action identity. The SMS unit
+harness uses actual schema metadata and only six exact physical SQL statements;
+production pruning/retention guards remain active.
+
+Unchanged logic TypeScript passed again during the Windows attempt. Prior
+SQL/Edge/SDK and 23-binding evidence applies to unchanged sources. Full
+fresh-head Linux CI is required and recorded separately in PR #396; this
+affected cohort does not replace it or owner device acceptance.

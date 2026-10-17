@@ -91,6 +91,20 @@ jest.mock("@/hooks", () => ({
   useKeyboardVisibility: (): boolean => false,
 }));
 
+// This suite verifies institution presentation, not the real owner-scoped
+// default subscription. Canonical default/CAS behavior has separate SQLite tests.
+jest.mock("@/hooks/useOwnedAccountDefaultState", () => ({
+  useOwnedAccountDefaultState: () => ({
+    state: {
+      status: "ready",
+      ownerId: "owner-1",
+      snapshot: { activeAccountIds: ["account-1"], defaultAccount: null },
+      defaultAccountName: null,
+    },
+    retry: jest.fn(),
+  }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: (): null => null,
 }));

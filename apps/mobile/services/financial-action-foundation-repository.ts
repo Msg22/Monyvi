@@ -1,7 +1,4 @@
-import {
-  database as productionDatabase,
-  type FinancialActionGroup,
-} from "@monyvi/db";
+import type { FinancialActionGroup } from "@monyvi/db";
 import {
   FINANCIAL_ACTION_STATES,
   assertFinancialActionStateEvidence,
@@ -32,7 +29,6 @@ import {
   cloneWatermelonRaw,
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
-import { commitPreparedBatch } from "./watermelon-atomic-batch";
 import { getBoundFinancialActionTransition } from "./sync/account-sync-ack-scope";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 import {
@@ -609,6 +605,11 @@ export function createFinancialActionFoundationRepository(
           FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
         );
       }
+      // Load the real atomic helper only at the prepared commit boundary.
+      // The injected repository and pure imports never load native SQLite.
+      const { commitPreparedBatch } =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("./watermelon-atomic-batch") as typeof import("./watermelon-atomic-batch");
       await commitPreparedBatch(
         [root.operation, ...linkedOperations],
         dependencies.database
@@ -846,24 +847,47 @@ export function createFinancialActionFoundationRepository(
   });
 }
 
-const productionRepository = createFinancialActionFoundationRepository({
-  database: productionDatabase,
-  getCurrentUserDataScope: getProductionCurrentUserDataScope,
-  assertExpectedCurrentUser: assertProductionCurrentUser,
-  registry: APPROVED_FINANCIAL_ACTION_REGISTRY,
-});
+// The injected repository factory is import-safe for pure unit tests. Build
+// the production singleton only when one of its exported methods is invoked.
+let cachedProductionRepository: FinancialActionFoundationRepository | null =
+  null;
+function getProductionRepository(): FinancialActionFoundationRepository {
+  if (cachedProductionRepository === null) {
+    const { database: productionDatabase } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("@monyvi/db") as typeof import("@monyvi/db");
+    cachedProductionRepository = createFinancialActionFoundationRepository({
+      database: productionDatabase,
+      getCurrentUserDataScope: getProductionCurrentUserDataScope,
+      assertExpectedCurrentUser: assertProductionCurrentUser,
+      registry: APPROVED_FINANCIAL_ACTION_REGISTRY,
+    });
+  }
+  return cachedProductionRepository;
+}
 
-export const createFinancialActionGroup =
-  productionRepository.createFinancialActionGroup;
-export const commitFinancialActionGroupLocally =
-  productionRepository.commitFinancialActionGroupLocally;
-export const getFinancialActionGroup =
-  productionRepository.getFinancialActionGroup;
-export const markFinancialActionGroupSyncFailed =
-  productionRepository.markFinancialActionGroupSyncFailed;
-export const markFinancialActionGroupSyncPending =
-  productionRepository.markFinancialActionGroupSyncPending;
-export const recordFinancialActionGroupServerOutcome =
-  productionRepository.recordFinancialActionGroupServerOutcome;
-export const retryFinancialActionGroup =
-  productionRepository.retryFinancialActionGroup;
+export const createFinancialActionGroup: FinancialActionFoundationRepository["createFinancialActionGroup"] =
+  (input) => getProductionRepository().createFinancialActionGroup(input);
+export const commitFinancialActionGroupLocally: FinancialActionFoundationRepository["commitFinancialActionGroupLocally"] =
+  (input) => getProductionRepository().commitFinancialActionGroupLocally(input);
+export const getFinancialActionGroup: FinancialActionFoundationRepository["getFinancialActionGroup"] =
+  (actionId) => getProductionRepository().getFinancialActionGroup(actionId);
+export const markFinancialActionGroupSyncFailed: FinancialActionFoundationRepository["markFinancialActionGroupSyncFailed"] =
+  (actionId, rejectionCode) =>
+    getProductionRepository().markFinancialActionGroupSyncFailed(
+      actionId,
+      rejectionCode
+    );
+export const markFinancialActionGroupSyncPending: FinancialActionFoundationRepository["markFinancialActionGroupSyncPending"] =
+  (actionId) =>
+    getProductionRepository().markFinancialActionGroupSyncPending(actionId);
+export const recordFinancialActionGroupServerOutcome: FinancialActionFoundationRepository["recordFinancialActionGroupServerOutcome"] =
+  (actionId, serverOutcome, outcomeJson, rejectionCode) =>
+    getProductionRepository().recordFinancialActionGroupServerOutcome(
+      actionId,
+      serverOutcome,
+      outcomeJson,
+      rejectionCode
+    );
+export const retryFinancialActionGroup: FinancialActionFoundationRepository["retryFinancialActionGroup"] =
+  (actionId) => getProductionRepository().retryFinancialActionGroup(actionId);

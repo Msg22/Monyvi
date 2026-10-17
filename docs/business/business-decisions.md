@@ -293,9 +293,26 @@ Business rules:
 
 #### Approved Voice/SMS account review target — issue #395
 
-Approved specification and B1 mockups on 2026-10-14; **implementation pending**.
-These are the agreed target rules for `specs/395-shared-account-review/spec.md`,
-not a claim that the current parser/review implements them.
+**Status (2026-10-18):** The specification and all 23 B1 mockup bindings are
+approved. Implementation is published in
+[PR #396](https://github.com/Msg22/Monyvi/pull/396) on
+`codex/395-shared-account-review`, targeting Main after #383 merged. Release
+acceptance, including owner device/visual testing, remains open; implementation
+is not yet merged, deployed or release-accepted. Historical planning labels in
+the approved spec do not describe the current delivery state.
+
+These product rules remain authoritative. Use the
+[approved spec](../../specs/395-shared-account-review/spec.md) and
+[visual handoff](../../specs/395-shared-account-review/pre-plan-review.md) for
+behavior and mockups. The
+[first-release scope](../../specs/395-shared-account-review/validation/first-release-scope.md)
+controls delivery priorities: approved design/functionality with basic owner,
+atomic-save, retry/deduplication and safe-sync protection. Advanced automatic
+compensation and historical restoration remain deferred, not release blockers;
+unknown outcomes must still remain unresolved/dirty with their required
+evidence. See
+[delivery evidence](../../specs/395-shared-account-review/validation/first-release-delivery.md)
+and PR #396 for validation status; this decision record does not certify it.
 
 - Use an eligible active owned default when no account is identified and the
   known currency matches, regardless of account count. Explain this choice in
@@ -349,6 +366,11 @@ not a claim that the current parser/review implements them.
   default only after successful creation; unsaved toggle/cancel/failure changes
   no persisted default. Helper is source/type-aware. Existing unrelated form
   rules stay.
+- Use one compact conditional review section for shared suggestions and
+  actionable missing details, with a quiet default-account note. View all must
+  expose every suggestion with independent status/actions. Omit empty sections;
+  filters/counts reflect actual checked rows, and bulk selection includes only
+  eligible rows in the current filter.
 - Reuse the existing currency modal with transaction context and honest
   unconfirmed selection. Opening/cancelling applies nothing; do not build a new
   picker.
@@ -375,9 +397,10 @@ which also preserves the unshipped experimental carrier suite's published SHA.
 
 #### #395 technical storage decision — private local recovery (2026-10-16)
 
-**Status:** Approved implementation direction under the existing #395 Voice/SMS
-review and atomic selected-Save rules above; **not yet implemented or
-deployed**. This is a **technical storage/retention and privacy
+**Status (2026-10-18):** Historical approved technical direction. Basic private
+local storage is implemented in PR #396; advanced recovery is deferred by the
+first-release decision above. Owner device acceptance and hosted deployment
+remain pending. This is a **technical storage/retention and privacy
 reconciliation**, not a new product behavior or customer-visible choice. The
 feature's accepted spec/approved B1/review Save semantics remain unchanged. The
 separately reviewed Constitution VII 1.8.0 exception
@@ -387,7 +410,7 @@ Watermelon migration routing, not a hosted migration.
 | Storage scope               | Approved target / boundary                                                                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Device-owned root extension | Existing `financial_action_groups` receives nullable **Watermelon-only** `local_recovery_snapshot_json`, accessed via non-generated `localRecoverySnapshotJson`. Old roots remain null; unresolved newly committed review roots require private recovery data. No Supabase column, public generated type, server action field or dummy SQL.                                                                     |
-| Versioned local upgrade     | Reserve Watermelon migration **31** after current 30; generator-consumed local-only declaration, regenerated schema/non-generated model and repeatable local migration/parity tests must be committed together. This has **not** been applied.                                                                                                                                                                  |
+| Versioned local upgrade     | Watermelon migration **31** follows 30. Its generator-consumed local-only declaration, regenerated schema/non-generated model and local migration/parity coverage are implemented on the feature branch; existing-device rollout is not verified.                                                                                                                                                               |
 | Private evidence            | Local strict `account-review-local-save/v1` has nine keys: version, action/owner/session, SMS drafts, created entity refs, default preimages, actual sorted predecessor IDs and `queuePreimage`. It binds captured owned preimages to actual prepared postimages in the same atomic writer; it is not the public financial tuple.                                                                               |
 | SMS restoration boundary    | Preserve recoverable unexpired draft choices. A proven automatic `pruned_empty` queue may be restored by exact original owned header only when no current owned queue exists. Explicit discard/reset, expired entries and a newer queue cannot be resurrected. At each draft's **inclusive 30-day parsedAt cutoff**, purge only that expired entry's raw recovery data; leave valid unexpired siblings.         |
 | Voice and sync privacy      | No durable Voice transcript/audio/review session. Private SMS evidence is excluded from Supabase payload/RPC/outbox, `payloadJson`, `outcomeJson`, logs and generic push; dedicated owned root pull must preserve validated local evidence without accepting server-supplied private fields. The opaque `frozenIntentDigest` and financial envelope `payloadHash` stay distinct from the local recovery record. |
@@ -398,9 +421,13 @@ in `specs/395-shared-account-review/contracts/local-recovery.md`,
 `contracts/wire-shapes.md` and the existing
 **T043/T044/T048/T049/T050/T051/T053/T074** tasks. No new table in Supabase,
 action format, business approval, default rule or runtime fallback is inferred.
-Local storage and pull implementation still require fresh tests-first Red,
-Speckit analysis, scope-specific source authorization and independent
-database/security review.
+These historical contracts do not override the narrowed first-release scope.
+Automatic rejected-Review restoration and partial private-evidence expiry after
+a fully pruned queue remain deferred/HELD; preserve their sole private proof and
+unresolved financial state. Normal active-queue retention/discard, ordinary
+rollback and safe namespace acquisition remain required. Further changes still
+require the applicable tests-first, Speckit, authorization and database/security
+gates.
 
 ### Bank Details And SMS Senders
 

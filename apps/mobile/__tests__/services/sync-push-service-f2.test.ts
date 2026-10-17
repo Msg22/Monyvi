@@ -55,6 +55,8 @@ jest.mock("../../services/metal-reconciliation-service", () => ({
 }));
 
 import { pushChanges } from "../../services/sync/push-service";
+import { legacyPushDatabase } from "./sync-push-legacy-test-fixtures";
+import { createHash } from "node:crypto";
 
 type PushChangesDatabase = Parameters<typeof pushChanges>[0];
 type PushChangesArgs = Parameters<typeof pushChanges>[1];
@@ -79,6 +81,9 @@ function buildExactA2Changes(ids: A2GroupIds): PushChangesArgs["changes"] {
     payload: { holdingId: ids.holdingId, rateSnapshots: [] },
     userId: USER_ID,
   });
+  // The dedicated Metal RPC consumes this immutable legacy payload/hash
+  // directly; it is NOT an Add/Review or account-effect registry envelope.
+  const payloadHash = createHash("sha256").update(payloadJson).digest("hex");
   return {
     financial_action_groups: {
       created: [
@@ -89,7 +94,7 @@ function buildExactA2Changes(ids: A2GroupIds): PushChangesArgs["changes"] {
           domain_reference_id: ids.holdingId,
           kind: "correct",
           user_id: USER_ID,
-          payload_hash: "d".repeat(64),
+          payload_hash: payloadHash,
           payload_json: payloadJson,
           state: "sync_pending",
           server_outcome: null,
@@ -183,6 +188,10 @@ function buildExactA2Changes(ids: A2GroupIds): PushChangesArgs["changes"] {
 interface LocalActionRoot {
   readonly id: string;
   readonly actionId: string;
+  readonly payloadHash: string;
+  readonly payloadJson: string;
+  readonly accountGuardsJson: string;
+  readonly localRecoverySnapshotJson: null;
   readonly domain: string;
   readonly domainReferenceId: string;
   readonly kind: string;
@@ -198,9 +207,20 @@ function localRoot(
   ids: A2GroupIds,
   overrides: Partial<LocalActionRoot>
 ): LocalActionRoot {
+  const payloadJson = JSON.stringify({
+    actionId: ids.actionIdA1,
+    domainReferenceId: ids.holdingId,
+    kind: "add",
+    payload: { holdingId: ids.holdingId, rateSnapshots: [] },
+    userId: USER_ID,
+  });
   return {
     id: ids.actionIdA1,
     actionId: ids.actionIdA1,
+    payloadJson,
+    payloadHash: createHash("sha256").update(payloadJson).digest("hex"),
+    accountGuardsJson: "[]",
+    localRecoverySnapshotJson: null,
     domain: "metals",
     domainReferenceId: ids.holdingId,
     kind: "add",
@@ -223,26 +243,21 @@ interface ScopedDatabase {
 function makeScopedDatabase(
   fetchedRoots: readonly LocalActionRoot[]
 ): ScopedDatabase {
-  // Owned holdings are proven through the `assets` parent lookup, so that table
-  // must answer with holding ids derived from the action roots' domain
-  // reference. Returning the roots for every table would resolve the parent
-  // lookup to action ids and reject the owned `asset_metals` rows.
-  const ownedAssets = fetchedRoots.map((root) => ({
-    id: root.domainReferenceId,
-  }));
-  const queryArgs: unknown[][] = [];
-  const getMock = jest.fn((table: string) => ({
-    query: jest.fn((...args: readonly unknown[]) => {
-      queryArgs.push([...args]);
-      return {
-        fetch: jest
-          .fn()
-          .mockResolvedValue(table === "assets" ? ownedAssets : fetchedRoots),
-      };
-    }),
-  }));
-  const database = { get: getMock } as unknown as PushChangesDatabase;
-  return { database, getMock, queryArgs };
+  // Real Q.where owner/holding/terminal predicates are honored. Foreign and
+  // nonterminal predecessors cannot become positive local A1 authority.
+  const scoped = legacyPushDatabase({
+    financial_action_groups: fetchedRoots.map((root) => ({ ...root })),
+    assets: fetchedRoots.map((root) => ({
+      id: root.domainReferenceId,
+      userId: root.userId,
+      deleted: false,
+    })),
+  });
+  return {
+    database: scoped.database,
+    getMock: scoped.getMock,
+    queryArgs: scoped.queryArgs,
+  };
 }
 
 function readRejectedIds(result: unknown): Record<string, readonly string[]> {

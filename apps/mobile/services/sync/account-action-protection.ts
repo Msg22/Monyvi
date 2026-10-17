@@ -363,6 +363,12 @@ export async function loadAccountActionProtection(input: {
   const seenPhysicalRoots = new Set<string>();
 
   for (const root of owned) {
+    // The Metal RPC owns validation, dependency order, rejection and ACK for
+    // these independent actions. An unrelated malformed Metal payload must
+    // not veto a valid sibling's push before the Metal per-group guard runs.
+    // This catalog still fully authenticates every Add/Review/legacy account
+    // root (including owner, hash, local private and exact-effect evidence).
+    if (root.domain === "metals") continue;
     requireOwnerRoot(root, expectedOwnerId);
     if (seenActions.has(root.actionId) || seenPhysicalRoots.has(root.id))
       fail();

@@ -1,11 +1,9 @@
 import type { FinancialActionFoundationRepository } from "./financial-action-foundation-repository";
-import { database } from "@monyvi/db";
-import { productionFinancialActionHashProvider } from "./account-balance-command-production";
+import * as Crypto from "expo-crypto";
 import {
   assertProtectedFinancialActionEnvelopeHash,
   assertReviewDefaultPredecessorsAccepted,
 } from "./account-review-default-predecessors";
-import { clearAcceptedAccountReviewPrivateEvidence } from "./account-review-retention-terminal";
 import { getCurrentUserId } from "./supabase";
 import { parseFinancialActionEnvelopeJson } from "@monyvi/logic";
 import { createAccountReviewFinancialRegistry } from "./account-review-financial-command-service";
@@ -16,6 +14,40 @@ import {
   registerBoundFinancialActionTransition,
 } from "./sync/account-sync-ack-scope";
 import type { Database } from "@nozbe/watermelondb";
+
+// Keep the existing production SHA-256 contract storage-free for injected
+// coordinators. The account-balance production module constructs native SQLite
+// at import, although this digest needs no database.
+const productionFinancialActionHashProvider = {
+  digestUtf8: (canonicalText: string): Promise<string> =>
+    Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      canonicalText
+    ),
+};
+
+type RetentionRuntime = typeof import("./account-review-retention-terminal");
+type AcceptedReviewCleanup =
+  RetentionRuntime["clearAcceptedAccountReviewPrivateEvidence"];
+
+// Keep terminal retention behind the actual accepted Review cleanup boundary.
+// Its existing atomic batch module imports native SQLite at module evaluation.
+function clearAcceptedAccountReviewPrivateEvidence(
+  input: Parameters<AcceptedReviewCleanup>[0]
+): ReturnType<AcceptedReviewCleanup> {
+  const terminal =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("./account-review-retention-terminal") as RetentionRuntime;
+  return terminal.clearAcceptedAccountReviewPrivateEvidence(input);
+}
+
+function getProductionDatabase(): Database {
+  // This fallback is needed only by a real production action path, never
+  // merely to import or construct an injected legacy coordinator.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { database } = require("@monyvi/db") as typeof import("@monyvi/db");
+  return database;
+}
 
 export const FINANCIAL_ACTION_SYNC_ERROR_CODES = {
   INVALID_OUTCOME: "financial_action_sync_invalid_outcome",
@@ -221,6 +253,7 @@ export function createFinancialActionSyncService(
 ): FinancialActionSyncService {
   return {
     syncAction: async (actionId: string): Promise<void> => {
+      const database = getProductionDatabase();
       const record = assertSyncable(
         await dependencies.foundationRepository.getFinancialActionGroup(
           actionId
@@ -377,11 +410,12 @@ export function createFinancialActionPushCoordinator(
     ): Promise<{
       readonly decisions: readonly FinancialActionPushDecision[];
     }> => {
-      if (!capability && candidates.some(isAddTuple)) {
+      const includesAdd = candidates.some(isAddTuple);
+      if (!capability && includesAdd) {
         const owner = await getCurrentUserId();
         if (!owner) fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
         return runWithAccountSyncAckExclusion(
-          dependencies.database ?? database,
+          dependencies.database ?? getProductionDatabase(),
           owner,
           (owned) =>
             createFinancialActionPushCoordinator(dependencies).coordinatePush(
@@ -390,7 +424,8 @@ export function createFinancialActionPushCoordinator(
             )
         );
       }
-      const scopedDatabase = dependencies.database ?? database;
+      const scopedDatabase =
+        dependencies.database ?? (includesAdd ? getProductionDatabase() : null);
       const reconcileSafely = async (
         actionId: string
       ): Promise<string | null | undefined> => {
@@ -422,12 +457,12 @@ export function createFinancialActionPushCoordinator(
             candidate,
             dependencies.getFinancialActionGroup,
             capability,
-            scopedDatabase
+            scopedDatabase ?? getProductionDatabase()
           );
           if (capability) {
             registerBoundFinancialActionTransition(
               capability,
-              scopedDatabase,
+              scopedDatabase ?? getProductionDatabase(),
               originalBinding.ownerId,
               {
                 physicalRootId: originalBinding.id,
@@ -488,7 +523,7 @@ export function createFinancialActionPushCoordinator(
             fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
           await assertReviewDefaultPredecessorsAccepted({
             root: owned,
-            database,
+            database: dependencies.database ?? getProductionDatabase(),
             hashProvider: productionFinancialActionHashProvider,
             loadOwnedRoot: dependencies.getFinancialActionGroup,
           });
@@ -500,7 +535,7 @@ export function createFinancialActionPushCoordinator(
               candidate,
               dependencies.getFinancialActionGroup,
               capability,
-              scopedDatabase
+              scopedDatabase ?? getProductionDatabase()
             );
           }
           await dependencies.markFinancialActionGroupSyncPending(
@@ -519,7 +554,7 @@ export function createFinancialActionPushCoordinator(
             fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
           await assertReviewDefaultPredecessorsAccepted({
             root: current,
-            database,
+            database: dependencies.database ?? getProductionDatabase(),
             hashProvider: productionFinancialActionHashProvider,
             loadOwnedRoot: dependencies.getFinancialActionGroup,
           });
@@ -530,7 +565,7 @@ export function createFinancialActionPushCoordinator(
             candidate,
             dependencies.getFinancialActionGroup,
             capability,
-            scopedDatabase
+            scopedDatabase ?? getProductionDatabase()
           );
         }
         let rawOutcome: unknown;
@@ -553,7 +588,7 @@ export function createFinancialActionPushCoordinator(
             candidate,
             dependencies.getFinancialActionGroup,
             capability,
-            scopedDatabase
+            scopedDatabase ?? getProductionDatabase()
           );
         }
         await dependencies.recordFinancialActionGroupServerOutcome(
@@ -568,7 +603,7 @@ export function createFinancialActionPushCoordinator(
           (outcome.status === "accepted" || outcome.status === "idempotent")
         )
           await clearAcceptedAccountReviewPrivateEvidence({
-            database,
+            database: dependencies.database ?? getProductionDatabase(),
             actionId: candidate.actionId,
           });
         const needsReconciliation =

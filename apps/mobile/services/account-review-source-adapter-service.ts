@@ -13,8 +13,27 @@ import {
   type VoiceReviewNormalizationInput,
 } from "@monyvi/logic";
 import type { CompleteSmsAccountReviewSessionInput } from "./sms-review-namespace-source-adapter";
-import { loadAccountReviewAccountSnapshots } from "./account-review-read-model-service";
 import { assertExpectedCurrentUser } from "./user-data-access";
+
+type AccountReviewReadModelRuntime = Pick<
+  typeof import("./account-review-read-model-service"),
+  "loadAccountReviewAccountSnapshots"
+>;
+
+function loadAccountReviewReadModel(): AccountReviewReadModelRuntime {
+  // An ordinary Voice/SMS parser import must never construct native SQLite.
+  // Only an actual opted-in Review session needs the authenticated read model.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const loaded: unknown = require("./account-review-read-model-service");
+  if (
+    typeof loaded !== "object" ||
+    loaded === null ||
+    !("loadAccountReviewAccountSnapshots" in loaded) ||
+    typeof loaded.loadAccountReviewAccountSnapshots !== "function"
+  )
+    throw new Error("account_review_read_model_unavailable");
+  return loaded as AccountReviewReadModelRuntime;
+}
 
 /**
  * Recheck the authenticated current owner without resampling captured provider
@@ -28,7 +47,8 @@ async function createAccountReviewSession(
     throw new Error("account_review_source_owner_mismatch");
   }
 
-  const current = await loadAccountReviewAccountSnapshots();
+  const current =
+    await loadAccountReviewReadModel().loadAccountReviewAccountSnapshots();
   await assertExpectedCurrentUser(input.ownerId);
   // Fresh metadata or unrelated account changes never invalidate original
   // finance. Resolver/Save must separately recheck current account eligibility.

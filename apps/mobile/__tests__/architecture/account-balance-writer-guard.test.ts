@@ -95,8 +95,102 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "transaction.batch-import",
 };
 
+/**
+ * Internal balance assignment helpers used ONLY by the named, authenticated
+ * #395 command/compensation paths below. Each exception must prove its
+ * immediate preparer, owning command entry, and atomic writer boundary.
+ * These are not independent legacy writer IDs or a registry status upgrade.
+ */
+const GUARDED_COMMAND_ASSIGNMENTS: ReadonlyArray<{
+  readonly symbol: string;
+  readonly lineage: ReadonlyArray<{
+    readonly file: string;
+    readonly proof: RegExp;
+  }>;
+}> = [
+  {
+    symbol:
+      "apps/mobile/services/account-default-intent-plan.ts#prepareAccount",
+    lineage: [
+      {
+        file: "apps/mobile/services/account-default-intent-plan.ts",
+        proof:
+          /const preparedCreates: Model\[\] = \[prepareAccount\(dep\.database, input\)\]/,
+      },
+      {
+        file: "apps/mobile/services/account-default-intent-service.ts",
+        proof:
+          /runWithAccountSyncAckExclusion\([\s\S]*?prepareDomainOperationPlan: \(\) =>[\s\S]*?prepareAccountDefaultLinkedPlan\(original, dep\)/,
+      },
+      {
+        file: "apps/mobile/services/account-review-financial-command-service.ts",
+        proof:
+          /createAccountDefaultFinancialCommandService\([\s\S]*?return foundation\.commitFinancialActionGroupLocally\(/,
+      },
+    ],
+  },
+  {
+    symbol:
+      "apps/mobile/services/account-review-recovery-commit.ts#prepareCanonicalExisting",
+    lineage: [
+      {
+        file: "apps/mobile/services/account-review-recovery-commit.ts",
+        proof:
+          /return db\.write\(async[\s\S]*?assertBoundReviewRoot\(root, expected\)[\s\S]*?verifyRejectedReviewRecovery\([\s\S]*?prepareCanonicalExisting\(evidence, now\)[\s\S]*?commitPreparedBatch\(operations, db\)/,
+      },
+      {
+        file: "apps/mobile/services/account-review-recovery-commit.ts",
+        proof:
+          /function prepareCanonicalExisting\([\s\S]*?account\.prepareUpdate\([\s\S]*?row\.balance = balancedMinorUnits\([\s\S]*?row\.financialRevision = canonical\.canonicalRevision;/,
+      },
+    ],
+  },
+  {
+    symbol: "apps/mobile/services/account-review-save-accounts.ts#accountModel",
+    lineage: [
+      {
+        file: "apps/mobile/services/account-review-save-accounts.ts",
+        proof:
+          /function accountModel\([\s\S]*?prepareCreate\([\s\S]*?account\.balance = balance;[\s\S]*?account\.financialRevision = revision;/,
+      },
+      {
+        file: "apps/mobile/services/account-review-save-plan.ts",
+        proof:
+          /const accounts = await buildCreatedReviewAccounts\([\s\S]*?return linkedSaveConstruction\(/,
+      },
+      {
+        file: "apps/mobile/services/account-review-save-service.ts",
+        proof:
+          /createCoreReviewBatchSaveAdapter\([\s\S]*?prepareDomainOperationPlan: \(\) =>[\s\S]*?revalidateReviewPlanInsideWriter\(/,
+      },
+    ],
+  },
+  {
+    symbol:
+      "apps/mobile/services/account-review-save-financial.ts#updateOwnedAccount",
+    lineage: [
+      {
+        file: "apps/mobile/services/account-review-save-financial.ts",
+        proof:
+          /function updateOwnedAccount\([\s\S]*?account\.userId !== ownerId[\s\S]*?account\.financialRevision !== expectedRevision[\s\S]*?account\.balance = nextBalance;[\s\S]*?account\.financialRevision = nextRevision;/,
+      },
+      {
+        file: "apps/mobile/services/account-review-save-plan.ts",
+        proof:
+          /const posting = await buildFinancialPosting\([\s\S]*?\.\.\.parts\.posting\.existingAccountOperations[\s\S]*?createLinkedReviewPlan\(/,
+      },
+      {
+        file: "apps/mobile/services/account-review-financial-command-service.ts",
+        proof:
+          /createAccountReviewFinancialCommandService\([\s\S]*?return foundation\.commitFinancialActionGroupLocally\(/,
+      },
+    ],
+  },
+];
+
 const APPROVED_COMMAND_BOUNDARY_SYMBOLS = new Set([
   "apps/mobile/services/core-account-financial-action-service.ts#buildPlan",
+  ...GUARDED_COMMAND_ASSIGNMENTS.map(({ symbol }) => symbol),
 ]);
 
 function readText(relativePath: string): string {
@@ -205,6 +299,30 @@ describe("issue #242 account-balance writer completeness guard", () => {
         "sync.accounts.pull-full-row",
       ])
     );
+  });
+
+  it("proves each new #395 balance helper is nested in an owned atomic command", () => {
+    const discovered = new Set(findLocalBalanceMutationSymbols());
+    const foundation = readText(
+      "apps/mobile/services/financial-action-foundation-repository.ts"
+    );
+    expect(foundation).toMatch(
+      /return dependencies\.database\.write\([\s\S]*?input\.prepareLinkedOperationPlan\(\)[\s\S]*?return commitLinkedPlan\(/
+    );
+    expect(foundation).toMatch(
+      /await assertCachedOwnership\([\s\S]*?await assertPreparedOwnership\([\s\S]*?await commitPreparedBatch\(/
+    );
+
+    for (const { symbol, lineage } of GUARDED_COMMAND_ASSIGNMENTS) {
+      expect(discovered.has(symbol)).toBe(true);
+      for (const { file, proof } of lineage) {
+        expect({ symbol, file, proved: proof.test(readText(file)) }).toEqual({
+          symbol,
+          file,
+          proved: true,
+        });
+      }
+    }
   });
 
   it("requires the T032 guard-or-block registry before any current writer may ship", () => {

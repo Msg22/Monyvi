@@ -57,6 +57,10 @@ export function inspectNewFinancialActionPushRoot(
   readonly payload: Readonly<Record<string, unknown>>;
   readonly references: ReadonlyArray<Readonly<{ table: string; id: string }>>;
 }> | null {
+  // The account action inspector cannot authorize or reject a Metal action:
+  // that domain's existing per-group transport/RPC checks remain mandatory.
+  // In particular, never parse an unrelated malformed Metal payload here.
+  if (root.domain === "metals") return null;
   if (typeof root.payload_json !== "string") return null;
   let raw: unknown;
   try {

@@ -11,12 +11,14 @@ import {
 } from "../../services/transfer-financial-action-evidence";
 import { collectProtectedFinancialActionRowIds } from "../../services/sync/account-protected-fields";
 import { createFinancialActionPushCoordinator } from "../../services/financial-action-sync-service";
+import { canonicalLegacyAccountEdit } from "./sync-push-legacy-test-fixtures";
 
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const TRANSACTION_ID = "40000000-0000-4000-8000-000000000004";
 const TRANSFER_ID = "50000000-0000-4000-8000-000000000005";
 const CATEGORY_ID = "60000000-0000-4000-8000-000000000006";
+const EFFECT_ID = "80000000-0000-4000-8000-000000000008";
 
 function localAfternoon(year: number, month: number, day: number): Date {
   return new Date(year, month, day, 14, 30, 45);
@@ -183,52 +185,96 @@ describe("PR278 CodeRabbit review regressions", () => {
   });
 
   it("recovers instead of aborting when reconciliation throws", async () => {
+    const canonical = canonicalLegacyAccountEdit({
+      actionId: ACTION_ID,
+      accountId: ACCOUNT_ID,
+      effectId: EFFECT_ID,
+    });
+    const invokeRpc = jest.fn();
+    const markPending = jest.fn();
+    const reconcile = jest.fn(() =>
+      Promise.reject(new Error("reconciliation_incomplete"))
+    );
     const coordinator = createFinancialActionPushCoordinator({
-      invokeAccountFinancialActionRpc: jest.fn(),
+      invokeAccountFinancialActionRpc: invokeRpc,
       markFinancialActionGroupSyncFailed: jest.fn(),
-      markFinancialActionGroupSyncPending: jest.fn(),
+      markFinancialActionGroupSyncPending: markPending,
       recordFinancialActionGroupServerOutcome: jest.fn(),
-      reconcileFinancialActionGroup: jest.fn(() =>
-        Promise.reject(new Error("reconciliation_incomplete"))
-      ),
+      reconcileFinancialActionGroup: reconcile,
     });
     const result = await coordinator.coordinatePush([
       {
         actionId: ACTION_ID,
-        payloadHash: "a".repeat(64),
-        payloadJson: '{"pending":true}',
+        payloadHash: canonical.payloadHash,
+        payloadJson: canonical.payloadJson,
         state: "reconciliation_incomplete",
       },
     ]);
     expect(result.decisions).toEqual([
       { actionId: ACTION_ID, disposition: "recover", outcome: null },
     ]);
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(reconcile).toHaveBeenCalledWith(ACTION_ID);
+    expect(invokeRpc).not.toHaveBeenCalled();
+    expect(markPending).not.toHaveBeenCalled();
   });
 
   it("recovers a stale outcome when post-decision reconciliation throws", async () => {
+    const canonical = canonicalLegacyAccountEdit({
+      actionId: ACTION_ID,
+      accountId: ACCOUNT_ID,
+      effectId: EFFECT_ID,
+    });
+    const invokeRpc = jest.fn(() =>
+      Promise.resolve({
+        actionId: ACTION_ID,
+        code: "ACCOUNT_REVISION_STALE",
+        status: "stale",
+      })
+    );
+    const markPending = jest.fn();
+    const recordOutcome = jest.fn();
+    const reconcile = jest.fn(() =>
+      Promise.reject(new Error("reconciliation_incomplete"))
+    );
     const coordinator = createFinancialActionPushCoordinator({
-      invokeAccountFinancialActionRpc: jest.fn(() =>
-        Promise.resolve({
-          actionId: ACTION_ID,
-          code: "ACCOUNT_REVISION_STALE",
-          status: "stale",
-        })
-      ),
+      invokeAccountFinancialActionRpc: invokeRpc,
       markFinancialActionGroupSyncFailed: jest.fn(),
-      markFinancialActionGroupSyncPending: jest.fn(),
-      recordFinancialActionGroupServerOutcome: jest.fn(),
-      reconcileFinancialActionGroup: jest.fn(() =>
-        Promise.reject(new Error("reconciliation_incomplete"))
-      ),
+      markFinancialActionGroupSyncPending: markPending,
+      recordFinancialActionGroupServerOutcome: recordOutcome,
+      reconcileFinancialActionGroup: reconcile,
     });
     const result = await coordinator.coordinatePush([
       {
         actionId: ACTION_ID,
-        payloadHash: "a".repeat(64),
-        payloadJson: '{"pending":true}',
+        payloadHash: canonical.payloadHash,
+        payloadJson: canonical.payloadJson,
         state: "sync_pending",
       },
     ]);
-    expect(result.decisions[0]?.disposition).toBe("recover");
+    const expectedStaleRecovery: (typeof result.decisions)[number] = {
+      actionId: ACTION_ID,
+      disposition: "recover",
+      outcome: {
+        actionId: ACTION_ID,
+        code: "ACCOUNT_REVISION_STALE",
+        outcomeJson: JSON.stringify({
+          actionId: ACTION_ID,
+          code: "ACCOUNT_REVISION_STALE",
+          status: "stale",
+        }),
+        status: "stale",
+      },
+    };
+    expect(result.decisions).toEqual([expectedStaleRecovery]);
+    expect(invokeRpc).toHaveBeenCalledTimes(1);
+    expect(invokeRpc).toHaveBeenCalledWith({
+      payloadHash: canonical.payloadHash,
+      payloadJson: canonical.payloadJson,
+    });
+    expect(markPending).not.toHaveBeenCalled();
+    expect(recordOutcome).toHaveBeenCalledTimes(1);
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(reconcile).toHaveBeenCalledWith(ACTION_ID);
   });
 });
