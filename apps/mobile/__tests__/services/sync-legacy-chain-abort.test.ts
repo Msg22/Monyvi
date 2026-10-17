@@ -52,7 +52,17 @@ import { syncDatabase } from "../../services/sync";
 function makeDatabase(): Database {
   return {
     adapter: {
-      getLocal: jest.fn().mockResolvedValue("current-user"),
+      getLocal: jest.fn(
+        (key: string): Promise<string | undefined> =>
+          Promise.resolve(
+            key === "__monyvi_sync_owner_user_id"
+              ? "current-user"
+              : key ===
+                  "__monyvi_sync_historical_recovery:issue255-v1:current-user"
+                ? "complete"
+                : undefined
+          )
+      ),
       setLocal: jest.fn().mockResolvedValue(undefined),
     },
   } as unknown as Database;

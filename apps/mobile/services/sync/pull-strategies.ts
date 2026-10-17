@@ -15,7 +15,12 @@ import { parseCanonicalDecimal } from "@monyvi/logic";
 
 import { assertCanonicalMetalRevision } from "../metal-financial-action-adapter";
 import { getCurrentUserId, supabase } from "../supabase";
-import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
+import { SYNCABLE_TABLES } from "./config";
+import {
+  normalizeFinancialEffectTimestamp,
+  shapeFinancialPullRecords,
+} from "./financial-pull-shaping";
+import { createSnapshotRetentionCutoffIso } from "./historical-recovery";
 import { createSyncTableError } from "./errors";
 import {
   PULL_PAGE_SIZE,
@@ -335,11 +340,15 @@ function normalizeDedicatedPullRecord(
       "accepted_account_revision",
       validateCanonicalAccountRevision
     );
-    return normalizeExactTextColumn(
+    const amount = normalizeExactTextColumn(
       revision,
       "amount_minor_units_text",
       "amount_minor_units",
       validateSignedMinorUnits
+    );
+    return normalizeFinancialEffectTimestamp(
+      amount,
+      SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW
     );
   }
   if (table === "financial_action_groups") {
@@ -564,19 +573,17 @@ export async function pullSnapshotTable(
   table: SnapshotTableName,
   userId: string,
   lastSyncDate: string | null,
-  upperWatermark: string
+  upperWatermark: string,
+  retentionCutoffIso = createSnapshotRetentionCutoffIso()
 ): Promise<SyncTableChangeSet> {
   try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - SNAPSHOT_RETENTION_DAYS);
-
     const data = await pullAllKeysetPages(
       async (cursor) => {
         let query = supabase
           .from(table)
           .select("*", { count: "exact" })
           .eq("user_id", userId)
-          .gt("created_at", cutoffDate.toISOString())
+          .gt("created_at", retentionCutoffIso)
           .lte("created_at", upperWatermark)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
@@ -768,11 +775,18 @@ export async function pullMetalDedicatedTable(
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
-  // Tombstones require only their authenticated row identity; do not
-  // require exact-text columns that PostgREST may omit on deleted rows.
-  // Live records must still validate every exact text and never coerce a
-  // financial revision from a JavaScript number.
-  const normalizedRecords = records.map((record) =>
+  // PR385 retains unresolved local financial roots/effects until their
+  // existing reconciliation completes and admits missing canonical evidence.
+  // Compare immutable identity against the exact raw PostgREST text first.
+  const protectedRecords = await shapeFinancialPullRecords(
+    table,
+    records,
+    userId,
+    database
+  );
+  // Current-main exact-text normalization remains strict for active rows.
+  // Tombstones may omit exact-text columns; keep their remote ID/owner facts.
+  const normalizedRecords = protectedRecords.map((record) =>
     record.deleted === true
       ? record
       : (normalizeDedicatedPullRecord(table, record) as PulledRow)
