@@ -4,12 +4,26 @@ const mockSynchronize = jest.fn();
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
 const mockRpc = jest.fn();
+const mockSetLocal = jest.fn().mockResolvedValue(undefined);
+let mockHistoricalRecoveryRequired = false;
+let mockUnresolvedCount = 0;
 
 jest.mock("@monyvi/db", () => ({ schema: { tables: {} } }));
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (input: unknown): Promise<void> =>
-    mockSynchronize(input) as Promise<void>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (input: unknown): Promise<void> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(input).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(input) as Promise<void>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({
@@ -31,6 +45,7 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 import { syncDatabase } from "../../services/sync";
+import { logger } from "@/utils/logger";
 
 interface SynchronizeCallbacks {
   readonly pullChanges: (input: {
@@ -46,9 +61,26 @@ const EXPECTED_USER_ID = "current-user";
 const INITIAL_WATERMARK = 1_700_000_000_000;
 const database = {
   adapter: {
-    getLocal: jest.fn().mockResolvedValue(undefined),
-    setLocal: jest.fn().mockResolvedValue(undefined),
+    // Existing lifecycle cases start after this fixed repair completed.
+    getLocal: jest.fn(
+      (key: string): Promise<string | undefined> =>
+        Promise.resolve(
+          key ===
+            "__monyvi_sync_historical_recovery:issue255-v1:current-user" &&
+            !mockHistoricalRecoveryRequired
+            ? "complete"
+            : undefined
+        )
+    ),
+    setLocal: mockSetLocal,
   },
+  get: (): {
+    query: () => { fetchCount: () => Promise<number> };
+  } => ({
+    query: (): { fetchCount: () => Promise<number> } => ({
+      fetchCount: (): Promise<number> => Promise.resolve(mockUnresolvedCount),
+    }),
+  }),
 } as unknown as Database;
 
 interface EmptySelectChain {
@@ -71,6 +103,8 @@ interface EmptySelectChain {
 describe("sync auth scope lifecycle", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHistoricalRecoveryRequired = false;
+    mockUnresolvedCount = 0;
     mockGetCurrentUserId.mockReset();
     const upperWatermark = "2026-05-18T08:05:00.000Z";
     mockRpc.mockImplementation((name: string) => {
@@ -108,17 +142,50 @@ describe("sync auth scope lifecycle", () => {
   });
 
   it.each([
+    { repairDue: true, unresolved: 1, shouldWarn: true },
+    { repairDue: true, unresolved: 0, shouldWarn: false },
+    { repairDue: false, unresolved: 1, shouldWarn: false },
+  ])(
+    "warns only for the captured withholding gate: $repairDue/$unresolved",
+    async ({ repairDue, unresolved, shouldWarn }): Promise<void> => {
+      mockHistoricalRecoveryRequired = repairDue;
+      mockUnresolvedCount = unresolved;
+      mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
+      mockSynchronize.mockImplementation((): Promise<void> => {
+        // Resolution during synchronization must not change the captured gate.
+        mockUnresolvedCount = 0;
+        return Promise.resolve();
+      });
+
+      await syncDatabase(database);
+
+      // Exact arguments ensure the event contains no identifiers or payload.
+      expect(jest.mocked(logger.warn).mock.calls).toEqual(
+        shouldWarn ? [["sync.historicalRecoveryReceiptWithheld"]] : []
+      );
+      const receipt =
+        "__monyvi_sync_historical_recovery:issue255-v1:current-user";
+      if (repairDue && !shouldWarn) {
+        expect(mockSetLocal).toHaveBeenCalledWith(receipt, "complete");
+      } else {
+        expect(mockSetLocal).not.toHaveBeenCalledWith(receipt, "complete");
+      }
+    }
+  );
+
+  it.each([
     ["vanishes", null],
     ["changes", "different-user"],
   ])(
     "does not advance an empty-pull watermark when auth %s before pull",
     async (_label, pullUserId) => {
       let persistedWatermark = INITIAL_WATERMARK;
-      mockGetCurrentUserId
-        .mockResolvedValueOnce(EXPECTED_USER_ID)
-        .mockResolvedValueOnce(pullUserId);
+      mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
       mockSynchronize.mockImplementation(
         async (callbacks: SynchronizeCallbacks): Promise<void> => {
+          // Keep the authentic protected-SDK preflight, then change actor
+          // immediately before the transport pull begins.
+          mockGetCurrentUserId.mockResolvedValue(pullUserId);
           const result = await callbacks.pullChanges({
             lastPulledAt: persistedWatermark,
           });
@@ -135,10 +202,22 @@ describe("sync auth scope lifecycle", () => {
 
   it("does not advance an empty-pull watermark when auth vanishes before pull returns", async () => {
     let persistedWatermark = INITIAL_WATERMARK;
-    mockGetCurrentUserId
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(null);
+    mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
+    // Switch on the genuine frozen-pull seal RPC, after the pull has begun,
+    // rather than depending on unrelated preflight auth-read counts.
+    mockRpc.mockImplementation((name: string) => {
+      const upperWatermark = "2026-05-18T08:05:00.000Z";
+      if (name === "seal_sync_pull_v1") {
+        mockGetCurrentUserId.mockResolvedValue(null);
+      }
+      const data =
+        name === "seal_sync_pull_v1"
+          ? upperWatermark
+          : name === "pull_snapshot_deletions_page_v1"
+            ? { rows: [], count: 0, upperWatermark }
+            : { nextCursor: null, snapshots: [], upperWatermark };
+      return Promise.resolve({ data, error: null });
+    });
     mockSynchronize.mockImplementation(
       async (callbacks: SynchronizeCallbacks): Promise<void> => {
         const result = await callbacks.pullChanges({
@@ -155,14 +234,13 @@ describe("sync auth scope lifecycle", () => {
   });
 
   it("rejects an empty push when the authenticated user differs from the pull owner", async () => {
-    mockGetCurrentUserId
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce(EXPECTED_USER_ID)
-      .mockResolvedValueOnce("different-user");
+    mockGetCurrentUserId.mockResolvedValue(EXPECTED_USER_ID);
     mockSynchronize.mockImplementation(
       async (callbacks: SynchronizeCallbacks): Promise<void> => {
         const pullResult = await callbacks.pullChanges({ lastPulledAt: null });
+        // The actual push boundary, not the protected pull preflight,
+        // must refuse this owner switch.
+        mockGetCurrentUserId.mockResolvedValue("different-user");
         await callbacks.pushChanges({
           changes: {},
           lastPulledAt: pullResult.timestamp,

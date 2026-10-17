@@ -566,6 +566,38 @@ const rowCommand = {
   expectedRowRevision: recordRevision,
 };
 
+/** User-corrected amount must be a positive, exact canonical decimal.
+ * Effective currency precision is checked against the CURRENT row in the
+ * pure transition; there is deliberately no currency in this edit payload. */
+const editableAmountDecimal = canonicalDecimal.refine((value) => {
+  try {
+    const amount = new Decimal(value);
+    return (
+      amount.isFinite() &&
+      amount.greaterThan(0) &&
+      amount.lessThanOrEqualTo(MAX_TRANSACTION_AMOUNT)
+    );
+  } catch {
+    return false;
+  }
+}, "Edited review amount must be positive and in range");
+
+const transactionEditPatchSchema = z
+  .object({
+    amountDecimal: editableAmountDecimal.optional(),
+    categoryId: canonicalUuid.optional(),
+    counterparty: z.string().max(512).optional(),
+    // Only the established Voice EXPENSE/INCOME toggle may send a new type.
+    type: transactionType.optional(),
+    // Voice note is editor-owned; source transcript remains immutable.
+    note: z.string().max(4000).optional(),
+  })
+  .strict()
+  .refine(
+    (patch) => Object.keys(patch).length > 0,
+    "Transaction edit patch must change at least one field"
+  );
+
 export const accountReviewCommandSchema = z
   .discriminatedUnion("kind", [
     z.object({ ...groupCommand, kind: z.literal("confirm_group") }).strict(),
@@ -625,6 +657,15 @@ export const accountReviewCommandSchema = z
         currency: currencyCode,
       })
       .strict(),
+    // FR-019: typed, row-CAS-only financial field edit; NO account/currency,
+    // source, evidence, date, merchant identity or selection authority.
+    z
+      .object({
+        ...rowCommand,
+        kind: z.literal("edit_row_transaction"),
+        patch: transactionEditPatchSchema,
+      })
+      .strict(),
     z
       .object({
         ...commandBase,
@@ -636,6 +677,14 @@ export const accountReviewCommandSchema = z
       .object({
         ...commandBase,
         kind: z.literal("clear_selection"),
+        filter: z.enum(["all", "needs_review", "selected"]),
+      })
+      .strict(),
+    // Navigation-only canonical filter CAS, not a second UI state authority.
+    z
+      .object({
+        ...commandBase,
+        kind: z.literal("set_filter"),
         filter: z.enum(["all", "needs_review", "selected"]),
       })
       .strict(),

@@ -49,6 +49,11 @@ import {
   type TransactionBadgeData,
 } from "./get-transaction-badges";
 import { OriginalContentBlock } from "./get-expanded-content";
+import {
+  AccountReviewRowPresentation,
+  areAccountReviewRowPropsEqual,
+  type AccountReviewRowPresentationProps,
+} from "./account-review-row-presentation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,6 +84,8 @@ interface TransactionItemProps {
   readonly isSmsWorkspace?: boolean;
   readonly institutionLogo?: InstitutionLogo | null;
   readonly onDiscard?: (index: number, wasSelected: boolean) => void;
+  /** Optional parent-shaped #395 row actions; legacy consumers are unchanged. */
+  readonly accountReview?: AccountReviewRowPresentationProps;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +210,7 @@ function TransactionItemInner({
   institutionLogo = null,
   isSmsWorkspace = false,
   onDiscard,
+  accountReview,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -226,6 +234,7 @@ function TransactionItemInner({
       : `${isExpense ? "-" : "+"}${formattedAmount}`;
   const isVoice = transaction.source === "VOICE";
   const hasExpandableContent = !isVoice && !!expandedContentBody;
+  const reviewIsBusy = accountReview?.isBusy === true;
   const accessibleName =
     transaction.counterparty?.trim() || transaction.originLabel;
 
@@ -244,8 +253,8 @@ function TransactionItemInner({
   }, [onPress, index]);
 
   const handleToggle = useCallback(() => {
-    onToggleSelect(index);
-  }, [onToggleSelect, index]);
+    if (!reviewIsBusy) onToggleSelect(index);
+  }, [onToggleSelect, index, reviewIsBusy]);
 
   const handleDiscard = useCallback(
     (event: GestureResponderEvent): void => {
@@ -283,6 +292,7 @@ function TransactionItemInner({
         {/* Checkbox */}
         <TouchableOpacity
           onPress={handleToggle}
+          {...(reviewIsBusy ? { disabled: true } : {})}
           className="-ms-2 me-0 h-11 w-11 items-center justify-center"
           activeOpacity={0.7}
           accessibilityRole="checkbox"
@@ -292,7 +302,11 @@ function TransactionItemInner({
               : "sms_review_select_accessibility",
             { name: accessibleName }
           )}
-          accessibilityState={{ checked: isSelected }}
+          accessibilityState={
+            reviewIsBusy
+              ? { checked: isSelected, disabled: true }
+              : { checked: isSelected }
+          }
         >
           <View
             className={`h-6 w-6 items-center justify-center rounded-md border-2 ${
@@ -463,6 +477,10 @@ function TransactionItemInner({
         )}
       </View>
 
+      {accountReview ? (
+        <AccountReviewRowPresentation source={accountReview} />
+      ) : null}
+
       {/* Expanded: source-specific content */}
       {isExpanded && hasExpandableContent && (
         <Animated.View
@@ -503,7 +521,8 @@ function areTransactionItemPropsEqual(
     previousReasons.every((reason, index) => reason === nextReasons[index]) &&
     previous.isSmsWorkspace === next.isSmsWorkspace &&
     previous.institutionLogo === next.institutionLogo &&
-    previous.onDiscard === next.onDiscard
+    previous.onDiscard === next.onDiscard &&
+    areAccountReviewRowPropsEqual(previous.accountReview, next.accountReview)
   );
 }
 

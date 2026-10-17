@@ -1,0 +1,154 @@
+/**
+ * #395 T027 canonical pure reducer boundary. No data access, creation, clock,
+ * provider request, group ID regeneration, UI command dispatch or Save.
+ */
+import {
+  accountReviewCommandSchema,
+  accountReviewSessionSchema,
+  type AccountReviewCommand,
+  type AccountReviewReason,
+  type AccountReviewSession,
+} from "./review-schemas";
+import { assertOwnedResolutionContext } from "./resolution-candidates";
+import { reduceGroupCommand } from "./reducer-groups";
+import { reduceChoiceCommand } from "./reducer-choices";
+import {
+  reduceSelectRow,
+  reduceDeselectRow,
+  reduceSelectBatch,
+} from "./reducer-selection";
+import { reduceUndoRemoval } from "./reducer-undo";
+import { reduceTransactionEdit } from "./reducer-transaction-edit";
+import {
+  acceptReviewTransition,
+  acceptReviewFilterTransition,
+  isRevisionOverflow,
+  rejectReviewCommand,
+  type AccountReviewCommandResult,
+  type ReduceAccountReviewCommandInput,
+  type ReviewTransition,
+} from "./reducer-primitives";
+
+export { mergeAccountReviewLateRows } from "./reducer-merge";
+export type {
+  AccountReviewCommandResult,
+  ReduceAccountReviewCommandInput,
+  ReviewUndoLease,
+} from "./reducer-primitives";
+export type { MergeAccountReviewLateRowsInput } from "./reducer-merge";
+
+interface RoutedTransition {
+  readonly transition: ReviewTransition | null;
+  readonly reason: AccountReviewReason | null;
+  /** Accepted identical field patch must not create a business generation. */
+  readonly unchanged?: boolean;
+}
+
+function routeCommand(
+  state: AccountReviewSession,
+  input: ReduceAccountReviewCommandInput,
+  command: AccountReviewCommand
+): RoutedTransition {
+  switch (command.kind) {
+    // This branch is handled before routeCommand so that it can return the
+    // navigation-only result without the business-generation increment.
+    case "set_filter":
+      return { transition: null, reason: "review_revision_stale" };
+    case "confirm_group":
+    case "edit_group":
+    case "remove_group":
+      return reduceGroupCommand(
+        state,
+        command,
+        input.nextUndoToken,
+        input.accountSnapshots
+      );
+    case "undo_removal":
+      return reduceUndoRemoval(state, command, input.undo);
+    case "select_row":
+      return reduceSelectRow(state, command, input.accountSnapshots);
+    case "set_row_selected":
+      return reduceDeselectRow(state, command);
+    case "select_ready":
+    case "clear_selection":
+      return reduceSelectBatch(state, command, input.accountSnapshots);
+    case "choose_row_account":
+    case "replace_group_account":
+    case "confirm_row_currency":
+      return reduceChoiceCommand(state, command, input.accountSnapshots);
+    case "edit_row_transaction":
+      return reduceTransactionEdit(state, command, input);
+  }
+}
+
+function validateCommandScope(
+  state: AccountReviewSession,
+  command: AccountReviewCommand
+): AccountReviewReason | null {
+  if (command.ownerId !== state.ownerId) return "review_owner_changed";
+  if (command.sessionId !== state.sessionId) return "review_source_changed";
+  if (
+    command.expectedReviewRevision !== state.revision ||
+    command.expectedOperationGeneration !== state.operationGeneration
+  ) {
+    return "review_revision_stale";
+  }
+  return null;
+}
+
+/** No successful command can bypass final canonical reciprocal-group validation. */
+export function reduceAccountReviewCommand(
+  input: ReduceAccountReviewCommandInput
+): AccountReviewCommandResult {
+  // Reject invalid local state rather than returning a noncanonical payload.
+  accountReviewSessionSchema.parse(input.state);
+  const parsed = accountReviewCommandSchema.safeParse(input.command);
+  if (!parsed.success) {
+    return rejectReviewCommand(input.state, "account_group_snapshot_conflict");
+  }
+  const command = parsed.data;
+  const stale = validateCommandScope(input.state, command);
+  if (stale) return rejectReviewCommand(input.state, stale);
+  if (input.state.saveIntent !== null) {
+    return rejectReviewCommand(input.state, "review_revision_stale");
+  }
+  try {
+    assertOwnedResolutionContext(input.state, input.accountSnapshots);
+  } catch {
+    return rejectReviewCommand(
+      input.state,
+      input.accountSnapshots.ownerId !== input.state.ownerId
+        ? "review_owner_changed"
+        : "account_unavailable"
+    );
+  }
+  try {
+    // Common ownership/source/revision/frozen-Save and actual owned-context
+    // checks above apply to navigation as strictly as to business commands.
+    if (command.kind === "set_filter") {
+      return acceptReviewFilterTransition(input.state, command.filter);
+    }
+    const outcome = routeCommand(input.state, input, command);
+    if (outcome.unchanged) {
+      return {
+        state: input.state,
+        reasonCodes: [],
+        effect: "none",
+        undoToken: null,
+        affectedRowIds: [],
+        affectedGroupIds: [],
+      };
+    }
+    return outcome.transition
+      ? acceptReviewTransition(input.state, outcome.transition)
+      : rejectReviewCommand(
+          input.state,
+          outcome.reason ?? "account_group_snapshot_conflict"
+        );
+  } catch (error) {
+    if (isRevisionOverflow(error)) {
+      return rejectReviewCommand(input.state, "review_revision_stale");
+    }
+    throw error;
+  }
+}

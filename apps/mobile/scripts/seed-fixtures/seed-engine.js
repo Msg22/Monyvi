@@ -434,6 +434,48 @@ function resolveSeedFixture(fixture = {}) {
   };
 }
 
+/** Strictly local opt-in #395 account-review profile, checked before ANY
+ * auth-user lookup, scoped deletion or seed mutation. Normal E2E profiles
+ * retain exactly their historical behavior. */
+function assertLocalReviewProfile(config, fixture) {
+  if (fixture.requiresLocalSupabase !== true) return;
+  let host = "";
+  try {
+    host = new URL(config.supabaseUrl).hostname;
+  } catch {
+    throw new Error("account_review_e2e_local_only");
+  }
+  if (
+    config.mode !== "local" ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(host)
+  ) {
+    throw new Error("account_review_e2e_local_only");
+  }
+}
+
+/** No arbitrary id/user/default/financial columns may be rewritten by
+ * presentation-only role overrides in the opt-in local profile. */
+function localReviewRoleOverride(fixture, domain, role) {
+  if (fixture.requiresLocalSupabase !== true) return {};
+  const fields =
+    domain === "account"
+      ? ["name", "currency", "institution_id", "provider_display_name"]
+      : domain === "bank"
+        ? ["card_last_4", "account_number"]
+        : ["sender_name", "normalized_sender_name"];
+  const values =
+    domain === "account"
+      ? fixture.baseAccountOverrides?.[role]
+      : domain === "bank"
+        ? fixture.baseBankDetailOverrides?.[role]
+        : fixture.baseSmsSenderOverrides?.[role];
+  if (!values) return {};
+  if (Object.keys(values).some((field) => !fields.includes(field))) {
+    throw new Error("account_review_e2e_role_override_invalid");
+  }
+  return values;
+}
+
 function dateFromToday(daysOffset) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + daysOffset);
@@ -509,12 +551,24 @@ async function findE2eUser(client, email) {
   }
 }
 
-async function deleteScopedRows(client, table, userId, seedIds) {
+async function deleteScopedRows(
+  client,
+  table,
+  userId,
+  seedIds,
+  additionalAccountIds = []
+) {
+  // Only explicitly opted-in local review roles introduce extra accounts
+  // outside the generic seedIds map. They must be cleaned before parent rows
+  // to avoid orphaned BankDetails/sender children on local profile reseed.
+  const accountIds = [
+    ...new Set([...Object.values(seedIds.accounts), ...additionalAccountIds]),
+  ];
   if (table === "bank_details") {
     const deleteBuilder = client.from(table).delete();
     if (typeof deleteBuilder.in !== "function") {
       const fallbackDeleteResults = await Promise.all(
-        Object.values(seedIds.accounts).map((accountId) =>
+        accountIds.map((accountId) =>
           client.from(table).delete().eq("account_id", accountId)
         )
       );
@@ -528,7 +582,7 @@ async function deleteScopedRows(client, table, userId, seedIds) {
     }
 
     return assertNoError(
-      await deleteBuilder.in("account_id", Object.values(seedIds.accounts)),
+      await deleteBuilder.in("account_id", accountIds),
       `delete ${table}`
     );
   }
@@ -537,7 +591,7 @@ async function deleteScopedRows(client, table, userId, seedIds) {
     const deleteBuilder = client.from(table).delete();
     if (typeof deleteBuilder.in !== "function") {
       const fallbackDeleteResults = await Promise.all(
-        Object.values(seedIds.accounts).map((accountId) =>
+        accountIds.map((accountId) =>
           client.from(table).delete().eq("account_id", accountId)
         )
       );
@@ -551,7 +605,7 @@ async function deleteScopedRows(client, table, userId, seedIds) {
     }
 
     return assertNoError(
-      await deleteBuilder.in("account_id", Object.values(seedIds.accounts)),
+      await deleteBuilder.in("account_id", accountIds),
       `delete ${table}`
     );
   }
@@ -911,6 +965,10 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     : {};
   const expandedAccounts = extraRows.accounts ?? [];
   const expandedBankDetails = extraRows.bankDetails ?? [];
+  const expandedAccountSmsSenders =
+    fixture.requiresLocalSupabase === true
+      ? (extraRows.accountSmsSenders ?? [])
+      : [];
   const assets = extraRows.assets ?? [];
   const assetMetals = extraRows.assetMetals ?? [];
   const financialActionGroups = extraRows.financialActionGroups ?? [];
@@ -971,6 +1029,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: currentTimestamp,
+        ...localReviewRoleOverride(fixture, "account", "cash"),
       },
       {
         id: seedIds.accounts.bank,
@@ -985,6 +1044,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: currentTimestamp,
+        ...localReviewRoleOverride(fixture, "account", "bank"),
       },
       {
         id: seedIds.accounts.qnbBank,
@@ -999,6 +1059,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: currentTimestamp,
+        ...localReviewRoleOverride(fixture, "account", "qnbBank"),
       },
       {
         id: seedIds.accounts.wallet,
@@ -1013,6 +1074,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: currentTimestamp,
+        ...localReviewRoleOverride(fixture, "account", "wallet"),
       },
       ...expandedAccounts,
     ],
@@ -1025,6 +1087,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
+        ...localReviewRoleOverride(fixture, "bank", "nbe"),
       },
       {
         id: seedIds.bankDetails.qnb,
@@ -1034,6 +1097,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
+        ...localReviewRoleOverride(fixture, "bank", "qnb"),
       },
       ...expandedBankDetails,
     ],
@@ -1046,6 +1110,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
+        ...localReviewRoleOverride(fixture, "sender", "nbe"),
       },
       {
         id: seedIds.accountSmsSenders.qnb,
@@ -1055,6 +1120,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
+        ...localReviewRoleOverride(fixture, "sender", "qnb"),
       },
       {
         id: seedIds.accountSmsSenders.wallet,
@@ -1064,7 +1130,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         deleted: false,
         created_at: FIXED_NOW,
         updated_at: FIXED_NOW,
+        ...localReviewRoleOverride(fixture, "sender", "wallet"),
       },
+      ...expandedAccountSmsSenders,
     ],
     assets,
     assetMetals,
@@ -1144,6 +1212,7 @@ async function seedFixtureData(
   options = {}
 ) {
   const fixture = resolveSeedFixture(fixtureOverrides);
+  assertLocalReviewProfile(config, fixture);
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const generatedSeedIds = buildSeedIds(userId, fixture.seedScope);
@@ -1175,8 +1244,18 @@ async function seedFixtureData(
       rows.marketRateObservationCleanupRows
     );
     await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
+    const localRoleAccountIds =
+      fixture.requiresLocalSupabase === true
+        ? rows.accounts.map((account) => account.id)
+        : [];
     for (const table of SEED_TABLE_DELETE_ORDER) {
-      await deleteScopedRows(client, table, userId, seedIds);
+      await deleteScopedRows(
+        client,
+        table,
+        userId,
+        seedIds,
+        localRoleAccountIds
+      );
     }
   }
 
@@ -1270,6 +1349,7 @@ async function seedFixtureData(
 
 async function resetFixtureData(client, config, fixtureOverrides = {}) {
   const fixture = resolveSeedFixture(fixtureOverrides);
+  assertLocalReviewProfile(config, fixture);
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
@@ -1315,7 +1395,15 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
     ) {
       continue;
     }
-    await deleteScopedRows(client, table, userId, seedIds);
+    await deleteScopedRows(
+      client,
+      table,
+      userId,
+      seedIds,
+      fixture.requiresLocalSupabase === true
+        ? rows.accounts.map((account) => account.id)
+        : []
+    );
   }
 
   return { userId };
@@ -1323,6 +1411,7 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
 
 async function inspectFixtureData(client, config, fixtureOverrides = {}) {
   const fixture = resolveSeedFixture(fixtureOverrides);
+  assertLocalReviewProfile(config, fixture);
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);

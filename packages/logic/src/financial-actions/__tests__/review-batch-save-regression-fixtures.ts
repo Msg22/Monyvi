@@ -39,6 +39,10 @@ function mutableSmsSource(): ReviewBatchSavePayload {
     domainRecordRefs: [...source.domainRecordRefs],
     domainMutation: { records: [...source.domainMutation.records] },
     localSmsBookkeeping: [...source.localSmsBookkeeping],
+    creationDefaultSnapshot: {
+      ...source.creationDefaultSnapshot,
+      activeAccountIds: [...source.creationDefaultSnapshot.activeAccountIds],
+    },
   };
 }
 
@@ -90,6 +94,12 @@ export function singleSelectedNewBankPayload(): ReviewBatchSavePayload {
   return {
     ...smsNewBankPayload,
     sessionId: SMS_QUEUE_ID,
+    creationDefaultSnapshot: {
+      ...smsNewBankPayload.creationDefaultSnapshot,
+      activeAccountIds: [
+        ...smsNewBankPayload.creationDefaultSnapshot.activeAccountIds,
+      ],
+    },
     selectedSourceRefs: [smsNewBankPayload.selectedSourceRefs[0]],
     confirmedGroupRefs: [...smsNewBankPayload.confirmedGroupRefs],
     createGuards: smsNewBankPayload.createGuards.slice(0, 3),
@@ -141,12 +151,14 @@ export function voiceNewBankPayload(): ReviewBatchSavePayload {
 /** Existing-only SMS needs no new account or mandatory suggested group. */
 export function existingAccountSmsPayload(): ReviewBatchSavePayload {
   const base = singleSelectedNewBankPayload();
+  const { creationDefaultSnapshot: _unusedCreationSnapshot, ...existingOnly } =
+    base;
   const financial = base.domainMutation.records[2];
   if (financial?.entity !== "transaction") {
     throw new Error("Expected synthetic selected SMS transaction");
   }
   return {
-    ...base,
+    ...existingOnly,
     confirmedGroupRefs: [],
     createGuards: base.createGuards.filter(
       (guard) => guard.entity === "transaction"
@@ -279,11 +291,12 @@ export function validVoiceCashPayload(): ReviewBatchSavePayload {
         }),
       ],
     },
-    cashDefaultSnapshot: { activeAccountIds: [], defaultAccount: null },
+    creationDefaultSnapshot: { activeAccountIds: [], defaultAccount: null },
   };
 }
 
-export function validAtmCashDestinationPayload(): ReviewBatchSavePayload {
+/** Deliberately invalid: SMS ATM creates a Cash destination with no group. */
+export function ungroupedAtmCashDestinationPayload(): ReviewBatchSavePayload {
   const source = queuedAtmPayload();
   return {
     ...source,
@@ -298,7 +311,7 @@ export function validAtmCashDestinationPayload(): ReviewBatchSavePayload {
         ...source.domainMutation.records,
       ],
     },
-    cashDefaultSnapshot: {
+    creationDefaultSnapshot: {
       activeAccountIds: [ATM_BANK_ACCOUNT_ID],
       defaultAccount: null,
     },
@@ -331,7 +344,7 @@ function additionalSmsTransaction(): ReviewFinancialRecord {
 }
 
 export function cashUsedForOrdinarySmsPayload(): ReviewBatchSavePayload {
-  const source = validAtmCashDestinationPayload();
+  const source = ungroupedAtmCashDestinationPayload();
   const cashGuard = source.createGuards.find((g) => g.entity === "account");
   const transferGuard = source.createGuards.find(
     (g) => g.entity === "transfer"
@@ -400,7 +413,7 @@ function additionalCashSourceTransfer(): ReviewFinancialRecord {
 }
 
 export function cashUsedAsAtmSourcePayload(): ReviewBatchSavePayload {
-  const source = validAtmCashDestinationPayload();
+  const source = ungroupedAtmCashDestinationPayload();
   const cashGuard = source.createGuards.find((g) => g.entity === "account");
   const transferGuard = source.createGuards.find(
     (g) => g.entity === "transfer"

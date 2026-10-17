@@ -1,0 +1,108 @@
+appId: com.monyvi.app
+---
+# #395 T058/M10-M11 — real authored Voice-only T015/T054 scene entry.
+# AUTHORING COMPLETE, NOT EXECUTED: no device/emulator/hosted/provider proof.
+# Explicit test-only preconditions:
+# E2E_FIXTURE_PROFILE=account-review
+# E2E_SUPABASE_MODE=local
+# EXPO_PUBLIC_MONYVI_TEST_MODE=e2e
+# An authenticated local E2E user has the exact current-owned five roles,
+# plus the active shared Other category. Fixture aliases contain no financial
+# data and are resolved by the authenticated T015 service, never by the URL.
+# No recording, provider, SMS-inbox, financial Save, hosted seed or writer bypass.
+
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-combined-en&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# R3-05: 7 rows, 5 needing review, 2 checked from canonical shaped summary.
+- assertVisible:
+    id: "account-review-details-panel"
+- assertVisible:
+    id: "account-review-default-info"
+- assertVisible:
+    id: "account-review-filter-all"
+- assertVisible:
+    id: "account-review-filter-needs_review"
+- assertVisible:
+    id: "account-review-filter-selected"
+- assertVisible:
+    id: "account-review-select-ready"
+- assertVisible:
+    id: "account-review-clear-selection"
+- assertVisible:
+    id: "account-review-group-view-all"
+
+# Actual T031 modal is reached, then dismissed with its real Back callback.
+- tapOn:
+    id: "account-review-group-view-all"
+- assertVisible:
+    id: "account-review-group-all-sheet"
+- pressKey: Back
+- assertVisible:
+    id: "transaction-review-screen"
+
+# Filter state is a canonical reducer command, never shadow UI navigation.
+- tapOn:
+    id: "account-review-filter-needs_review"
+- assertVisible:
+    id: "account-review-filter-bar"
+- tapOn:
+    id: "account-review-filter-all"
+- assertVisible:
+    id: "account-review-default-info"
+
+# FR-019: real V2 controlled modal, Cancel cannot invoke financial Save.
+- tapOn:
+    id: "transaction-review-edit-action"
+- assertVisible:
+    id: "account-review-edit-modal"
+- assertVisible:
+    id: "account-review-edit-amount-input"
+- tapOn:
+    id: "account-review-edit-cancel"
+- assertNotVisible:
+    id: "account-review-edit-modal"
+- assertVisible:
+    id: "transaction-review-screen"
+
+# R3-11: selected-filter empty from its genuine fixture, not the recorder.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-selected-empty&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+- tapOn:
+    id: "account-review-filter-selected"
+- assertVisible:
+    id: "account-review-filter-empty"
+- tapOn:
+    id: "account-review-show-all"
+- assertVisible:
+    id: "account-review-filter-all"
+
+# R3-07 and R3-10 must not invent an empty shared-account details container.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-default-only&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+- assertVisible:
+    id: "account-review-default-info"
+- assertNotVisible:
+    id: "account-review-details-panel"
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-clean&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+- assertNotVisible:
+    id: "account-review-details-panel"
+# Arabic descriptor does not change app locale; RTL/device evidence is manual.
+# SMS r3-issues-only/removed Undo/save-failure remain NOT E2E here because
+# SMS requires an actual persisted owned V2 queue and namespace lease.
+# All physical effects, failure rollback, replay, and sync must be proven by
+# separately authorized real SQLite/pgTAP/owner device controls.

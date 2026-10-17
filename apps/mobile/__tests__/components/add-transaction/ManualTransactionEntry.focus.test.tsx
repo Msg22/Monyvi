@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
+import type { ReactTestInstance } from "react-test-renderer";
 import { Keyboard, Pressable, TextInput } from "react-native";
 
 const mockBack = jest.fn();
@@ -511,7 +512,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
 
     fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
     fireEvent.changeText(screen.getByTestId("manual-amount-input"), "10");
-    const targetInput: unknown = await screen.findByTestId(
+    const targetInput: ReactTestInstance = await screen.findByTestId(
       "manual-transfer-target-amount-input"
     );
     fireEvent.changeText(targetInput, "20");
@@ -582,7 +583,8 @@ describe("ManualTransactionEntry compact focus contract", () => {
     const view = render(<ManualTransactionEntry isActive />);
 
     fireEvent.press(screen.getByText("add_more_details"));
-    const noteInput: unknown = screen.getByTestId("manual-note-input");
+    const noteInput: ReactTestInstance =
+      screen.getByTestId("manual-note-input");
     fireEvent(noteInput, "focus", {});
     fireEvent.changeText(noteInput, "Coffee note");
 
@@ -626,7 +628,9 @@ describe("ManualTransactionEntry compact focus contract", () => {
 
     fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
 
-    const sourceInput: unknown = screen.getByTestId("manual-amount-input");
+    const sourceInput: ReactTestInstance = screen.getByTestId(
+      "manual-amount-input"
+    );
     expect(
       screen.getByTestId("manual-amount-input-trailing-adornment")
     ).toHaveTextContent("EGP");
@@ -635,7 +639,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
     fireEvent.changeText(sourceInput, "10");
     fireEvent.press(screen.getByTestId("calculator-key-done"));
 
-    const targetInput: unknown = await screen.findByTestId(
+    const targetInput: ReactTestInstance = await screen.findByTestId(
       "manual-transfer-target-amount-input"
     );
     const targetNativeProps = getNativeInputProps(

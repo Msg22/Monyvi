@@ -16,10 +16,10 @@ describe("#355 local historical cache schema preservation", () => {
     expect(generator).toContain("...METAL_HISTORICAL_RATE_CACHE_TABLES");
   });
 
-  it("preserves migration30 before the optional metadata migration31", () => {
+  it("keeps migration30 when later local versions belong to other features", () => {
     const schema = source("packages/db/src/schema.ts");
     const migrations = source("packages/db/src/migrations.ts");
-    const versionMatch = schema.match(/version:\s*(30|31)\b/);
+    const versionMatch = schema.match(/version:\s*(\d+)\b/);
     expect(versionMatch).not.toBeNull();
     expect(schema).toContain("...METAL_HISTORICAL_RATE_CACHE_TABLES");
     const historicalMigration = migrations.indexOf("toVersion: 30");
@@ -28,11 +28,18 @@ describe("#355 local historical cache schema preservation", () => {
     expect(migrations).toContain(
       "metal_historical_rate_cache_owner_date_unique"
     );
-    if (versionMatch?.[1] === "31") {
-      expect(migrations.indexOf("toVersion: 31")).toBeGreaterThan(
+    const schemaVersion = Number(versionMatch?.[1]);
+    expect(Number.isSafeInteger(schemaVersion)).toBe(true);
+    expect(schemaVersion).toBeGreaterThanOrEqual(30);
+    const laterVersions = [...migrations.matchAll(/toVersion:\s*(\d+)\b/g)].map(
+      (match) => Number(match[1])
+    );
+    expect(schemaVersion).toBe(Math.max(...laterVersions));
+    for (let version = 31; version <= schemaVersion; version += 1) {
+      expect(laterVersions).toContain(version);
+      expect(migrations.indexOf("toVersion: " + version)).toBeGreaterThan(
         historicalMigration
       );
-      expect(migrations).toContain('name: "metal_metadata_edit_outcomes"');
     }
   });
 

@@ -24,7 +24,7 @@ import {
   SYNCABLE_TABLES,
   type SyncableTable,
 } from "./config";
-import { createSyncTableError } from "./errors";
+import { createSyncTableError, GENERIC_SYNC_ERROR_CODES } from "./errors";
 import {
   changedRecords,
   collectAcknowledgedMetalHoldingIds,
@@ -38,22 +38,12 @@ import {
   isCompleteMetalActionGroup,
 } from "./metal-complete-group";
 import {
-  collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
   isProtectedFinancialActionRow,
   readRejectedIdsForTable,
   stripProtectedAccountFields,
 } from "./account-protected-fields";
-import {
-  createFinancialActionPushCoordinator,
-  type FinancialActionPushCoordinator,
-} from "../financial-action-sync-service";
-import {
-  markFinancialActionGroupSyncFailed,
-  markFinancialActionGroupSyncPending,
-  recordFinancialActionGroupServerOutcome,
-} from "../financial-action-foundation-repository";
-import { productionFinancialActionReconciliationService } from "../financial-action-reconciliation-production";
+import type { FinancialActionPushCoordinator } from "../financial-action-sync-service";
 import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
@@ -65,12 +55,20 @@ import { scopePushChangesToUser } from "./push-ownership-service";
 import { transformToSupabase } from "./transforms";
 import { collectLocalTerminalActionIds } from "./metal-local-terminal-lookup";
 import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
+import {
+  type AccountSyncAckCapability,
+  assertAccountSyncAckScopeCurrent,
+  runWithAccountSyncAckExclusion,
+} from "./account-sync-ack-scope";
+import { loadAccountActionProtection } from "./account-action-protection";
+import { stableTerminalAddRootIds } from "./terminal-account-add-ack";
+import {
+  resolveAccountActionAcknowledgements,
+  isAccountOrChildMetadataExcludedFromGenericUpsert,
+  pushTableAccountMetadataPatches,
+} from "./account-metadata-transport";
 
-export const GENERIC_SYNC_ERROR_CODES = {
-  AUTH_SCOPE_LOST: "sync_push_auth_scope_lost",
-  INVALID_ACTION_PUSH_OUTCOME: "sync_invalid_action_push_outcome",
-  INVALID_CHANGE_ID: "sync_invalid_change_id",
-} as const;
+export { GENERIC_SYNC_ERROR_CODES } from "./errors";
 
 const METAL_ACTION_RPC = "apply_metal_action_v1";
 const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
@@ -107,40 +105,6 @@ export type MetalOutcomeCommitter = (
 export type MetalMetadataOutcomeCommitter = (
   outcome: MetalMetadataRpcOutcome
 ) => Promise<void>;
-
-const ACCOUNT_FINANCIAL_COLUMNS: ReadonlySet<string> = new Set([
-  "balance",
-  "financial_revision",
-]);
-
-function readChangedColumns(record: unknown): readonly string[] {
-  if (typeof record !== "object" || record === null) return [];
-  const changed = (record as Record<string, unknown>)._changed;
-  if (typeof changed !== "string" || changed.length === 0) return [];
-  return Object.freeze(changed.split(","));
-}
-
-function hasPendingAccountMetadata(record: unknown): boolean {
-  return readChangedColumns(record).some(
-    (column) => !ACCOUNT_FINANCIAL_COLUMNS.has(column)
-  );
-}
-
-function collectAcknowledgedAccountIdsWithMetadata(
-  changes: SyncPushArgs["changes"],
-  handledIds: SyncRejectedIds | undefined,
-  rejectedIds: SyncRejectedIds | undefined
-): ReadonlySet<string> {
-  const handled = new Set(readRejectedIdsForTable(handledIds, "accounts"));
-  const rejected = new Set(readRejectedIdsForTable(rejectedIds, "accounts"));
-  const allowed = new Set<string>();
-  changedRecords(changes, "accounts").forEach((record) => {
-    const id = record.id;
-    if (typeof id !== "string" || !handled.has(id) || rejected.has(id)) return;
-    if (hasPendingAccountMetadata(record)) allowed.add(id);
-  });
-  return allowed;
-}
 
 function hasDedicatedDeletes(changes: SyncPushArgs["changes"]): boolean {
   return [...DEDICATED_SYNC_TABLES].some((table) => {
@@ -464,55 +428,6 @@ export async function pushMetalDedicatedChanges(
   };
 }
 
-const ACCOUNT_FINANCIAL_ACTION_RPC = "apply_account_financial_action_v1";
-let productionFinancialActionPushCoordinator:
-  | FinancialActionPushCoordinator
-  | undefined;
-
-interface FinancialActionRpcClient {
-  readonly rpc: (
-    functionName: string,
-    args: Readonly<Record<string, string>>
-  ) => Promise<{
-    readonly data: unknown;
-    readonly error: { readonly message?: string } | null;
-  }>;
-}
-
-function getProductionFinancialActionPushCoordinator(): FinancialActionPushCoordinator {
-  if (productionFinancialActionPushCoordinator) {
-    return productionFinancialActionPushCoordinator;
-  }
-  productionFinancialActionPushCoordinator =
-    createFinancialActionPushCoordinator({
-      invokeAccountFinancialActionRpc: async ({
-        payloadHash,
-        payloadJson,
-      }): Promise<unknown> => {
-        const { data, error } = await (
-          supabase as unknown as FinancialActionRpcClient
-        ).rpc(ACCOUNT_FINANCIAL_ACTION_RPC, {
-          p_payload_hash: payloadHash,
-          p_payload_json: payloadJson,
-        });
-        if (error) {
-          throw new Error(
-            error.message ?? "account_financial_action_rpc_failed"
-          );
-        }
-        return data;
-      },
-      markFinancialActionGroupSyncFailed,
-      markFinancialActionGroupSyncPending,
-      reconcileFinancialActionGroup: (actionId) =>
-        productionFinancialActionReconciliationService.reconcileRejectedAction(
-          actionId
-        ),
-      recordFinancialActionGroupServerOutcome,
-    });
-  return productionFinancialActionPushCoordinator;
-}
-
 async function assertExpectedPushUser(
   expectedUserId?: string
 ): Promise<string> {
@@ -576,53 +491,6 @@ function subtractRejectedIds(
   return Object.keys(remaining).length > 0 ? remaining : undefined;
 }
 
-function mergeBundleRowIds(
-  bundles: ReadonlyArray<{
-    readonly rowIds: Readonly<Record<string, readonly string[]>>;
-  }>
-): SyncRejectedIds | undefined {
-  return bundles.reduce<SyncRejectedIds | undefined>(
-    (result, bundle) => mergeRejectedIds(result, bundle.rowIds),
-    undefined
-  );
-}
-
-async function resolveAccountActionAcknowledgements(
-  changes: SyncPushArgs["changes"],
-  coordinator: FinancialActionPushCoordinator | undefined
-): Promise<{
-  readonly handledIds: SyncRejectedIds | undefined;
-  readonly rejectedIds: SyncRejectedIds | undefined;
-}> {
-  const bundles = collectAccountFinancialActionPushBundles(changes);
-  if (bundles.length === 0) {
-    return { handledIds: undefined, rejectedIds: undefined };
-  }
-  const resolvedCoordinator =
-    coordinator ?? getProductionFinancialActionPushCoordinator();
-  const { decisions } = await resolvedCoordinator.coordinatePush(
-    bundles.map((bundle) => bundle.candidate)
-  );
-  const decisionByActionId = new Map(
-    decisions.map((decision) => [decision.actionId, decision])
-  );
-  if (
-    decisionByActionId.size !== bundles.length ||
-    bundles.some((bundle) => !decisionByActionId.has(bundle.candidate.actionId))
-  ) {
-    throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_ACTION_PUSH_OUTCOME);
-  }
-  const rejectedBundles = bundles.filter(
-    (bundle) =>
-      decisionByActionId.get(bundle.candidate.actionId)?.disposition !==
-      "acknowledge"
-  );
-  return {
-    handledIds: mergeBundleRowIds(bundles),
-    rejectedIds: mergeBundleRowIds(rejectedBundles),
-  };
-}
-
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
   [rightTableName]: readonly [string, unknown]
@@ -666,9 +534,27 @@ export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs,
   expectedUserId?: string,
-  financialActionPushCoordinator?: FinancialActionPushCoordinator
+  financialActionPushCoordinator?: FinancialActionPushCoordinator,
+  capability?: AccountSyncAckCapability
 ): Promise<SyncPushResult | undefined | void> {
   const userId = await assertExpectedPushUser(expectedUserId);
+  if (!capability) {
+    return runWithAccountSyncAckExclusion(database, userId, (ownedScope) =>
+      pushChanges(
+        database,
+        pushArgs,
+        userId,
+        financialActionPushCoordinator,
+        ownedScope
+      )
+    );
+  }
+  assertAccountSyncAckScopeCurrent(capability, database, userId);
+  let history = await loadAccountActionProtection({
+    database,
+    expectedOwnerId: userId,
+    capability,
+  });
   const scoped = await scopePushChangesToUser(
     database,
     pushArgs.changes,
@@ -693,49 +579,80 @@ export async function pushChanges(
         commitCanonicalMetalMetadataLocally(database, outcome, userId)
       )
   );
+  const metalRejectedIds = dedicatedPush.acknowledgeAllDedicatedRows
+    ? undefined
+    : collectBlockedDedicatedRejectedIds(
+        changes,
+        dedicatedPush.acknowledgedActionIds
+      );
+  const metalRootRejections = readRejectedIdsForTable(
+    metalRejectedIds,
+    "financial_action_groups"
+  );
+  const verifiedTerminalAddIds = await stableTerminalAddRootIds(
+    database,
+    capability,
+    userId,
+    changes,
+    history,
+    metalRootRejections
+  );
+  const metalRejectionsWithoutVerifiedAdd: SyncRejectedIds | undefined =
+    metalRejectedIds && verifiedTerminalAddIds.size > 0
+      ? {
+          ...metalRejectedIds,
+          financial_action_groups: metalRootRejections.filter(
+            (id) => !verifiedTerminalAddIds.has(id)
+          ),
+        }
+      : metalRejectedIds;
+  const originalFinancialRejections = collectProtectedFinancialActionRowIds(
+    changes,
+    history
+  );
+  // This pre-push set still forbids generic financial writes. Only its
+  // *account financial* hold can be released by subsequent exact readback.
   const protectedFinancialActionIds = mergeRejectedIds(
-    dedicatedPush.acknowledgeAllDedicatedRows
-      ? undefined
-      : collectBlockedDedicatedRejectedIds(
-          changes,
-          dedicatedPush.acknowledgedActionIds
-        ),
-    collectProtectedFinancialActionRowIds(changes)
+    metalRejectionsWithoutVerifiedAdd,
+    originalFinancialRejections
   );
   const accountActionAcknowledgements =
     await resolveAccountActionAcknowledgements(
+      database,
+      userId,
+      capability,
       changes,
+      history,
       financialActionPushCoordinator
     );
+  // An initial strict dirty action may accept during the external RPC above.
+  // Refresh durable original-root proof for residual account/child metadata;
+  // never mistake the earlier local_complete catalog for accepted authority.
+  await assertExpectedPushUser(userId);
+  history = await loadAccountActionProtection({
+    database,
+    expectedOwnerId: userId,
+    capability,
+  });
   const handledMetalHoldingIds = dedicatedPush.acknowledgeAllDedicatedRows
     ? collectRpcHandledMetalHoldingIds(changes, true)
     : collectAcknowledgedMetalHoldingIds(
         changes,
         dedicatedPush.acknowledgedActionIds
       );
-  const actionRejectedIds = mergeRejectedIds(
-    mergeRejectedIds(
-      subtractRejectedIds(
-        protectedFinancialActionIds,
-        accountActionAcknowledgements.handledIds
-      ),
-      accountActionAcknowledgements.rejectedIds
-    ),
-    collectUnacknowledgedMetalRows(changes, handledMetalHoldingIds)
-  );
-  const returnedRejectedIds = mergeRejectedIds(
-    actionRejectedIds,
-    scoped.rejectedIds
-  );
-  const metadataOnlyAccountIds = collectAcknowledgedAccountIdsWithMetadata(
-    changes,
-    accountActionAcknowledgements.handledIds,
-    accountActionAcknowledgements.rejectedIds
-  );
+  const exactFinancialReadbacks = new Set<string>();
+  let hasOtherFinancialRootChanges = false;
 
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
     comparePushTableOrder
   )) {
+    const tableChanges = rawTableChanges as SyncTableChangeSet;
+    if (tableName === "financial_action_groups") {
+      hasOtherFinancialRootChanges =
+        tableChanges.created.length > 0 ||
+        tableChanges.updated.length > 0 ||
+        tableChanges.deleted.length > 0;
+    }
     const table = tableName as SyncableTable;
     if (!SYNCABLE_TABLES.includes(tableName as SyncableTable)) {
       continue;
@@ -743,7 +660,6 @@ export async function pushChanges(
     if (PULL_ONLY_SHARED_TABLES.has(tableName)) {
       continue;
     }
-    const tableChanges = rawTableChanges as SyncTableChangeSet;
 
     // Metal child rows are committed by the action/metadata RPC, never by table upsert.
     if (table === "asset_metals") continue;
@@ -790,6 +706,23 @@ export async function pushChanges(
           ]
         : null;
 
+      // Historical accepted account metadata uses one exact per-account
+      // UPDATE, never a partial/whole generic UPSERT. Deterministic existing
+      // Edit default reversal clears the previous server default before
+      // attempting the new positive flag (the two RPCs are NOT atomic).
+      const newlyVerified = await pushTableAccountMetadataPatches({
+        database,
+        capability,
+        userId,
+        table,
+        tableChanges,
+        history,
+        getSupabaseWriteTable,
+      });
+      for (const accountId of newlyVerified) {
+        exactFinancialReadbacks.add(accountId);
+      }
+
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
@@ -797,17 +730,19 @@ export async function pushChanges(
           if (table === "assets" && record.type === "METAL") return false;
           if (!isPushableRecord(table, record)) return false;
           if (
-            !isProtectedFinancialActionRow(
-              protectedFinancialActionIds,
+            isAccountOrChildMetadataExcludedFromGenericUpsert(
               table,
-              record
+              record,
+              history
             )
           ) {
-            return true;
+            return false;
           }
-          if (table !== "accounts") return false;
-          const id = record.id;
-          return typeof id === "string" && metadataOnlyAccountIds.has(id);
+          return !isProtectedFinancialActionRow(
+            protectedFinancialActionIds,
+            table,
+            record
+          );
         });
         if (pushableRecords.length === 0) {
           return;
@@ -860,7 +795,8 @@ export async function pushChanges(
             protectedFinancialActionIds,
             table,
             recordId
-          )
+          ) &&
+          !history.losingIds[table]?.has(parseChangeId(recordId))
       );
       if (genericDeletedIds.length > 0) {
         let query = getSupabaseWriteTable(table).update({
@@ -894,6 +830,47 @@ export async function pushChanges(
   }
 
   await assertExpectedPushUser(userId);
+  assertAccountSyncAckScopeCurrent(capability, database, userId);
+
+  // Earlier collection conservatively held every non-initial financial
+  // account, before the owner-scoped positive server read. An exact match
+  // can release ONLY that source's account hold, never metal/coordinator,
+  // ownership, terminal losing-member or other independent rejections.
+  // If any dirty financial root is captured alongside it, the same account
+  // could also be protected by an independent action reference; do not
+  // guess its membership from an accepted Add receipt.
+  const safelyVerifiedAccountIds = hasOtherFinancialRootChanges
+    ? []
+    : [...exactFinancialReadbacks].filter(
+        (id) =>
+          readRejectedIdsForTable(
+            originalFinancialRejections,
+            "accounts"
+          ).includes(id) && !history.losingIds.accounts?.has(id)
+      );
+  const remainingOriginalFinancialRejections = subtractRejectedIds(
+    originalFinancialRejections,
+    safelyVerifiedAccountIds.length > 0
+      ? { accounts: safelyVerifiedAccountIds }
+      : undefined
+  );
+  const actionRejectedIds = mergeRejectedIds(
+    mergeRejectedIds(
+      subtractRejectedIds(
+        mergeRejectedIds(
+          metalRejectionsWithoutVerifiedAdd,
+          remainingOriginalFinancialRejections
+        ),
+        accountActionAcknowledgements.handledIds
+      ),
+      accountActionAcknowledgements.rejectedIds
+    ),
+    collectUnacknowledgedMetalRows(changes, handledMetalHoldingIds)
+  );
+  const returnedRejectedIds = mergeRejectedIds(
+    actionRejectedIds,
+    scoped.rejectedIds
+  );
 
   return returnedRejectedIds
     ? { experimentalRejectedIds: returnedRejectedIds }

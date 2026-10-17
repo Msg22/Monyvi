@@ -30,6 +30,18 @@ import {
 } from "./sms-safeguard-policy.ts";
 import type { SmsProviderCompletionStatusAtEdge } from "./sms-provider-completion.ts";
 import {
+  prepareSmsReviewV2ProviderRequest,
+  measureSmsReviewV2ProviderRequest,
+  projectSmsReviewV2Response,
+} from "./sms-ai/sms-ai-review-v2.ts";
+import type { SmsAiProviderRequest } from "./sms-ai/sms-ai-provider.ts";
+import {
+  parseSmsRequestBody as parseRequestBody,
+  isRecord,
+  type ParseSmsRequestBody,
+  type SmsScanKind,
+} from "./sms-ai/sms-ai-request-boundary.ts";
+import {
   completeSmsAiWorkWithRetry,
   type CompleteSmsAiWorkInput,
 } from "./sms-ai-work-completion.ts";
@@ -43,12 +55,6 @@ const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
 const MAX_SCAN_START_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_ROLLING_WINDOW_EDGE_GRACE_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-// The mobile catalogue currently contains 35 currencies. Keep the structural
-// request bound above it so valid app requests are accepted without allowing
-// an unbounded dynamic response schema.
-const MAX_SUPPORTED_CURRENCIES = 64;
-const MAX_MESSAGES_BEFORE_POLICY_EVALUATION = 50;
-
 export interface SmsAiProcessingOutcomeAtEdge {
   readonly smsFingerprint: string;
   readonly isTerminal: boolean;
@@ -116,18 +122,6 @@ export interface ParseSmsHandlerDependencies {
   ) => Promise<SmsNegativeOutcomeReconciliation>;
 }
 
-type SmsScanKind = "initial" | "incremental" | "history" | "live";
-
-interface ParseSmsRequestBody {
-  readonly requestKey: string;
-  readonly scanSessionId: string | null;
-  readonly scanKind: SmsScanKind;
-  readonly scanStartedAtMs: number;
-  readonly messages: readonly ParseSmsMessage[];
-  readonly categories: string;
-  readonly supportedCurrencies: readonly string[];
-}
-
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -163,99 +157,19 @@ function isCallerCancelled(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNonEmptyString(
-  value: unknown,
-  maxLength = 100_000
-): value is string {
-  return (
-    typeof value === "string" &&
-    value.trim().length > 0 &&
-    value.length <= maxLength
-  );
-}
-
-function parseMessage(value: unknown): ParseSmsMessage | null {
-  if (!isRecord(value)) return null;
-  if (
-    !isNonEmptyString(value.id, 160) ||
-    !isNonEmptyString(value.body) ||
-    !isNonEmptyString(value.sender, 500) ||
-    !isNonEmptyString(value.date, 100) ||
-    !Number.isFinite(Date.parse(value.date)) ||
-    !isNonEmptyString(value.smsFingerprint, 256)
-  ) {
-    return null;
-  }
-  return {
-    id: value.id,
-    body: value.body,
-    sender: value.sender,
-    date: value.date,
-    smsFingerprint: value.smsFingerprint,
-  };
-}
-
-function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.messages) ||
-    value.messages.length > MAX_MESSAGES_BEFORE_POLICY_EVALUATION
-  ) {
-    return null;
-  }
-  if (
-    !isNonEmptyString(value.requestKey, 160) ||
-    !["initial", "incremental", "history", "live"].includes(
-      String(value.scanKind)
-    ) ||
-    !isNonEmptyString(value.categories) ||
-    !Array.isArray(value.supportedCurrencies) ||
-    value.supportedCurrencies.length > MAX_SUPPORTED_CURRENCIES ||
-    value.supportedCurrencies.some(
-      (currency) => !isNonEmptyString(currency, 16)
-    )
-  ) {
-    return null;
-  }
-  const scanKind = value.scanKind as SmsScanKind;
-  const scanSessionId = value.scanSessionId;
-  const scanStartedAtMs = Date.parse(String(value.scanStartedAt));
-  if (
-    !(
-      (scanKind === "live" &&
-        (scanSessionId === null || isNonEmptyString(scanSessionId, 160))) ||
-      (scanKind !== "live" && isNonEmptyString(scanSessionId, 160))
-    ) ||
-    !Number.isFinite(scanStartedAtMs)
-  ) {
-    return null;
-  }
-  const messages = value.messages.map(parseMessage);
-  if (messages.some((message) => message === null)) return null;
-  const parsedMessages = messages as ParseSmsMessage[];
-  const messageIds = new Set(parsedMessages.map((message) => message.id));
-  const fingerprints = new Set(
-    parsedMessages.map((message) => message.smsFingerprint)
-  );
-  if (
-    messageIds.size !== parsedMessages.length ||
-    fingerprints.size !== parsedMessages.length
-  ) {
-    return null;
-  }
-  return {
-    requestKey: value.requestKey,
-    scanSessionId: scanSessionId as string | null,
-    scanKind,
-    scanStartedAtMs,
-    messages: parsedMessages,
-    categories: value.categories,
-    supportedCurrencies: value.supportedCurrencies as string[],
-  };
+function prepareReviewProviderRequest(
+  body: ParseSmsRequestBody,
+  messages: readonly ParseSmsMessage[],
+  signal?: AbortSignal
+): SmsAiProviderRequest | undefined {
+  if (body.reviewContext === undefined) return undefined;
+  return prepareSmsReviewV2ProviderRequest({
+    reviewContext: body.reviewContext,
+    messages,
+    categories: body.categories,
+    supportedCurrencies: body.supportedCurrencies,
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 function calculateRequestMetrics(
@@ -263,6 +177,15 @@ function calculateRequestMetrics(
   body: ParseSmsRequestBody,
   dependencies: ParseSmsHandlerDependencies
 ): { readonly payloadBytes: number; readonly estimatedInputTokens: number } {
+  const reviewPlan = prepareReviewProviderRequest(body, body.messages);
+  if (reviewPlan !== undefined) {
+    if (!isRecord(rawBody))
+      throw new Error("Invalid SMS review metrics source");
+    return measureSmsReviewV2ProviderRequest({
+      requestBody: rawBody,
+      providerRequest: reviewPlan,
+    });
+  }
   const payloadBytes = getUtf8ByteLengthAtEdge(JSON.stringify(rawBody));
   const estimate = estimateSmsRequestInputTokensAtEdge({
     prompt: dependencies.buildFixedPrompt(body.supportedCurrencies),
@@ -451,6 +374,7 @@ async function executeAdmittedWork(input: {
   readonly terminalFingerprints: readonly string[];
   readonly suppressedNegativeFingerprints: readonly string[];
   readonly admission: SmsAiAdmissionDecision;
+  readonly reviewProviderRequest?: SmsAiProviderRequest;
   readonly dependencies: ParseSmsHandlerDependencies;
   readonly signal?: AbortSignal;
 }): Promise<Response> {
@@ -517,6 +441,9 @@ async function executeAdmittedWork(input: {
       messages: input.messages,
       categories: input.body.categories,
       supportedCurrencies: input.body.supportedCurrencies,
+      ...(input.reviewProviderRequest === undefined
+        ? {}
+        : { reviewProviderRequest: input.reviewProviderRequest }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
   } catch (error: unknown) {
@@ -652,8 +579,12 @@ async function executeAdmittedWork(input: {
   );
   if (!didComplete) return refusal("dependency_unavailable", 503);
 
+  const financialAndReview =
+    providerResult.reviewContractVersion === "account-review/v2"
+      ? projectSmsReviewV2Response(providerResult)
+      : { transactions: providerResult.transactions };
   return jsonResponse({
-    transactions: providerResult.transactions,
+    ...financialAndReview,
     completionStatus: "complete",
     negativeFingerprints: [
       ...new Set([
@@ -809,6 +740,29 @@ async function handlePost(
 
   if (isCallerCancelled(request.signal)) return callerCancelledResponse();
 
+  // This exact provider request is built for the post-exclusion/admitted
+  // message subset and reused without changing prompt/schema after admission.
+  if (!isRecord(rawBody)) return refusal("malformed_request", 400);
+  const reviewProviderRequest = prepareReviewProviderRequest(
+    body,
+    messages,
+    request.signal
+  );
+  const admissionMetrics =
+    reviewProviderRequest === undefined
+      ? metrics
+      : measureSmsReviewV2ProviderRequest({
+          requestBody: rawBody,
+          providerRequest: reviewProviderRequest,
+        });
+  if (
+    admissionMetrics.estimatedInputTokens >
+    policy.fullParser.maxEstimatedInputTokens
+  ) {
+    return refusal("input_token_limit", 413, null, {
+      sizeScope: "shared_request",
+    });
+  }
   let admission: SmsAiAdmissionDecision;
   try {
     const requestDigest = await dependencies.computeRequestDigest(rawBody);
@@ -820,8 +774,8 @@ async function handlePost(
       scanSessionId: body.scanSessionId,
       scanKind: body.scanKind,
       unitCount: messages.length,
-      payloadBytes: metrics.payloadBytes,
-      estimatedInputTokens: metrics.estimatedInputTokens,
+      payloadBytes: admissionMetrics.payloadBytes,
+      estimatedInputTokens: admissionMetrics.estimatedInputTokens,
       requestDigest,
       candidateFingerprints: messages.map((message) => message.smsFingerprint),
       policy,
@@ -840,6 +794,7 @@ async function handlePost(
     terminalFingerprints: terminal,
     suppressedNegativeFingerprints,
     admission,
+    ...(reviewProviderRequest === undefined ? {} : { reviewProviderRequest }),
     dependencies,
     signal: request.signal,
   });

@@ -7,8 +7,19 @@ const mockPullChanges = jest.fn();
 const mockPushChanges = jest.fn();
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (input: unknown): Promise<void> =>
-    mockSynchronize(input) as Promise<void>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (input: unknown): Promise<void> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(input).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(input) as Promise<void>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({
@@ -70,11 +81,23 @@ const NEXT_WATERMARK = 1_700_000_100_000;
 
 function createOwnerMarkerHarness(initialOwner?: string): OwnerMarkerHarness {
   let owner = initialOwner;
-  const getLocal = jest.fn(
-    (): Promise<string | undefined> => Promise.resolve(owner)
+  const completedReceiptKeys = new Set(
+    [USER_A, USER_B, USER_C].map(
+      (userId) => `__monyvi_sync_historical_recovery:issue255-v1:${userId}`
+    )
   );
-  const setLocal = jest.fn((_key: string, value: string): Promise<void> => {
-    owner = value;
+  const getLocal = jest.fn(
+    (key: string): Promise<string | undefined> =>
+      Promise.resolve(
+        key === "__monyvi_sync_owner_user_id"
+          ? owner
+          : completedReceiptKeys.has(key)
+            ? "complete"
+            : undefined
+      )
+  );
+  const setLocal = jest.fn((key: string, value: string): Promise<void> => {
+    if (key === "__monyvi_sync_owner_user_id") owner = value;
     return Promise.resolve();
   });
   const database = {

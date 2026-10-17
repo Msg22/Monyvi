@@ -1,0 +1,106 @@
+appId: com.monyvi.app
+---
+# #395 M04/M05/M08/M10/M11 — T015/T054 owned Voice r3-combined-en.
+# AUTHORED, NOT RUN. Requires local opted-in current-owner role fixture:
+# E2E_FIXTURE_PROFILE=account-review, E2E_SUPABASE_MODE=local,
+# EXPO_PUBLIC_MONYVI_TEST_MODE=e2e, non-production EN locale.
+# The owned fixture has unique QNB Everyday 0007, separate QNB Savings 9221,
+# distinct CIB 5566 and current EGP Cash default. Voice route consumes ONLY a
+# scene ID. No provider, microphone, SMS namespace, financial JSON/deep link
+# payload, fake post-Save receipt or production-gated fixture bypass.
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-combined-en&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# R3-05 initial canonical summary: 7 rows, 5 distinct needing review,
+# 2 independently checked default rows. QNB has 3 linked, CIB has 1.
+- assertVisible:
+    id: "account-review-details-panel"
+- assertVisible: "5 need review.*2 selected"
+- assertVisible: "All, 7"
+- assertVisible: "Needs review, 5"
+- assertVisible: "Selected, 2"
+- assertVisible: "QNB"
+- assertVisible: "CIB"
+- assertVisible: "3 Linked transactions"
+- assertVisible: "1 Linked transactions"
+- assertVisible: "Confirm QNB, 3"
+- assertVisible: "Confirm CIB, 1"
+- assertVisible: "Save 2 selected"
+
+# An explicit scoped QNB Confirm changes that ONE group. It is neither
+# "Confirm all" nor selection of three rows and must leave CIB pending.
+# The button's verified accessibilityLabel contains original group name/count,
+# avoiding invented client-side UUIDs for derived runtime group IDs.
+- tapOn: "Confirm QNB, 3"
+- assertNotVisible: "Confirm QNB, 3"
+- assertVisible: "Confirm CIB, 1"
+- assertVisible: "Confirmed"
+- assertVisible: "Selected, 2"
+- assertVisible: "Save 2 selected"
+
+# Select ONE actual first unchecked QNB transaction row, after the group is
+# confirmed. The real checkbox accessibilityLabel is derived from the Voice
+# fixture origin "Synthetic Voice"; QNB rows precede CIB in the canonical
+# fixture's original visible order. This does not select the linked group.
+- scrollUntilVisible:
+    element: "Select Synthetic Voice suggestion"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Select Synthetic Voice suggestion"
+- assertVisible: "Save 3 selected"
+
+# Actual QNB Remove command produces a transient reducer undo lease.
+# Return to the QNB card, open its real Change menu, remove, then immediately
+# Undo in this same Voice session before any newer command revokes the lease.
+# Never load r3-removed-undo: it is SMS and already removed, not a real removal.
+- scrollUntilVisible:
+    element: "Change QNB, 3"
+    direction: UP
+    timeout: 30000
+- assertVisible: "Selected, 3"
+- assertVisible: "Confirm CIB, 1"
+- tapOn: "Change QNB, 3"
+- assertVisible:
+    id: "account-review-group-action-sheet"
+- tapOn:
+    id: "account-review-group-remove"
+- extendedWaitUntil:
+    visible:
+      id: "account-review-group-undo"
+    timeout: 10000
+- tapOn:
+    id: "account-review-group-undo"
+- assertNotVisible:
+    id: "account-review-group-undo"
+- assertVisible: "Confirm CIB, 1"
+- assertVisible: "Selected, 3"
+- assertVisible: "Save 3 selected"
+
+# Controlled transaction editing: the actual V2 modal must cancel without
+# invoking Save or mutating a financial row via a legacy shortcut.
+- scrollUntilVisible:
+    element:
+      id: "transaction-review-edit-action"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "transaction-review-edit-action"
+- assertVisible:
+    id: "account-review-edit-modal"
+- assertVisible:
+    id: "account-review-edit-amount-input"
+- tapOn:
+    id: "account-review-edit-cancel"
+- assertNotVisible:
+    id: "account-review-edit-modal"
+- assertVisible:
+    id: "transaction-review-screen"
+# The existing reviewed Save button is intentionally NOT tapped. Neither
+# independent confirmation nor a synthetic Voice scene establishes persisted
+# financial result or idempotency. SQLite/pgTAP/SDK and owner manual evidence
+# remain mandatory for M13/M14/M15/M19. Actual RTL/keyboard/screen reader,
+# provider interpretation and offline/restart: NOT RUN.

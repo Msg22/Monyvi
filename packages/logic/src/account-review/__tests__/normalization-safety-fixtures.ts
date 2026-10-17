@@ -3,11 +3,12 @@
  * Uses the existing mapped Voice/SMS domain types and canonical v2 response
  * shapes; all account and message identities are from existing test fixtures.
  */
-import type {
-  AccountReviewCurrencyEvidence,
-  AccountReviewAccountEvidence,
-  AccountReviewSmsResponseV2,
-  AccountReviewVoiceResponseV2,
+import {
+  accountReviewRequestContextSchema,
+  type AccountReviewCurrencyEvidence,
+  type AccountReviewAccountEvidence,
+  type AccountReviewSmsResponseV2,
+  type AccountReviewVoiceResponseV2,
 } from "../schemas";
 import type { ParsedVoiceTransaction } from "../../types";
 import { makeEvidenceSpan, REVIEW_WIRE_IDS } from "./fixtures";
@@ -442,6 +443,125 @@ export function makeOrdinarySmsMissingRequiredDestination(): {
     rawV2Response: {
       ...input.providerResponse,
       transactions: [missingRequiredField],
+    },
+  };
+}
+
+/** L2: untrusted model's BankX name is shared by two truly owned accounts.
+ * Only one has the original SMS sender; eligibility constraints select
+ * the OTHER. Candidate IDs are deliberately advisory, never source proof.
+ */
+export type SplitSenderConstraint =
+  | "currency"
+  | "type"
+  | "institution"
+  | "card";
+
+export const SPLIT_SENDER_BANK_B = "00000000-0000-4000-8000-000000000119";
+
+/**
+ * Genuine SMS source, real EGP transaction, exact body/sender/card spans,
+ * and full owner/provider projections that pass the canonical wire schemas.
+ */
+export function makeSplitSenderOwnedSmsInput(
+  variant: SplitSenderConstraint,
+  candidateAccountIds: readonly string[],
+  originalSender: "ALERT-A" | "ALERT-B" = "ALERT-A"
+): ReturnType<typeof makeSmsInput> {
+  const input = makeSmsInput();
+  const financial = input.providerResponse.transactions[0];
+  const mapped = input.mappedTransactions[0];
+  const submitted = input.submittedMessages[0];
+  if (!financial || !mapped || !submitted)
+    throw new Error("missing_authentic_sms_source");
+  const withCard = variant === "card";
+  const body = withCard
+    ? "BankX purchase EGP 50 card ending 0018"
+    : "BankX purchase EGP 50";
+  const one = {
+    id: REVIEW_WIRE_IDS.bankAccountId,
+    name: "BankX",
+    currency: variant === "currency" ? ("USD" as const) : ("EGP" as const),
+    type: variant === "type" ? ("DIGITAL_WALLET" as const) : ("BANK" as const),
+    institutionId: "inst-A",
+    providerDisplayName: "BankX",
+    cardLast4: "0007",
+    senderNames: ["ALERT-A"],
+  };
+  const two = {
+    ...one,
+    id: SPLIT_SENDER_BANK_B,
+    currency: "EGP" as const,
+    type: "BANK" as const,
+    institutionId: "inst-B",
+    cardLast4: "0018",
+    senderNames: ["ALERT-B"],
+  };
+  const provider = accountReviewRequestContextSchema.parse({
+    reviewContractVersion: "account-review/v2",
+    preferredCurrency: "EGP",
+    accounts: [one, two],
+  });
+  const evidence = {
+    ...financial.accountEvidence,
+    state: "explicit" as const,
+    name: "BankX",
+    type: "BANK" as const,
+    institutionId: variant === "institution" ? "inst-B" : null,
+    providerDisplayName: "BankX",
+    cardLast4: withCard ? "0018" : null,
+    candidateAccountIds: [...candidateAccountIds],
+    evidenceSpans: [
+      makeEvidenceSpan(submitted.id, "body", body, "BankX"),
+      ...(withCard
+        ? [makeEvidenceSpan(submitted.id, "body", body, "card ending 0018")]
+        : []),
+      makeEvidenceSpan(submitted.id, "sender", originalSender, originalSender),
+    ],
+  };
+  const row: AccountReviewSmsResponseV2["transactions"][number] = {
+    ...financial,
+    suggestionRef: null,
+    accountEvidence: evidence,
+    currencyEvidence: {
+      ...financial.currencyEvidence,
+      state: "explicit",
+      statedCode: "EGP",
+      candidateCodes: ["EGP"],
+      evidenceSpans: [makeEvidenceSpan(submitted.id, "body", body, "EGP")],
+    },
+  };
+  return {
+    ...input,
+    reviewAccountSnapshots: {
+      ownerId: input.ownerId,
+      preferredCurrency: "EGP",
+      accounts: provider.accounts.map((account) => ({
+        ...account,
+        isDefault: false,
+      })),
+      providerContext: provider,
+    },
+    financialRows: [row],
+    mappedTransactions: [
+      {
+        ...mapped,
+        rawSmsBody: body,
+        senderDisplayName: originalSender,
+        originLabel: originalSender,
+      },
+    ],
+    submittedMessages: [
+      {
+        ...submitted,
+        body,
+        sender: originalSender,
+      },
+    ],
+    providerResponse: {
+      ...input.providerResponse,
+      transactions: [row],
+      suggestedAccounts: [],
     },
   };
 }

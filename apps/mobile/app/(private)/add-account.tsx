@@ -15,6 +15,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountPreviewCard } from "@/components/add-account/AccountPreviewCard";
+import {
+  AccountDefaultField,
+  AccountDefaultRecoveryNotice,
+} from "@/components/accounts/AccountDefaultField";
 import { AccountTypeSelector } from "@/components/add-account/AccountTypeSelector";
 import { InstitutionProviderSection } from "@/components/add-account/InstitutionProviderSection";
 import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection";
@@ -30,6 +34,7 @@ import {
   useEgyptianInstitutionEligibility,
 } from "@/hooks";
 import type { CurrencyType } from "@monyvi/db";
+import { useOwnedAccountDefaultState } from "@/hooks/useOwnedAccountDefaultState";
 
 const FOCUSED_FIELD_KEYBOARD_GAP = 24;
 
@@ -128,6 +133,23 @@ export default function AddAccount(): React.ReactNode {
   });
 
   const { createAccount, isSubmitting } = useCreateAccount();
+  const { state: defaultState, retry: retryDefaultState } =
+    useOwnedAccountDefaultState();
+  const [requestedDefaultIntent, setRequestedDefaultIntent] = useState(false);
+  const initialOwnerRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      defaultState.status !== "loading" &&
+      initialOwnerRef.current !== defaultState.ownerId
+    ) {
+      initialOwnerRef.current = defaultState.ownerId;
+      setRequestedDefaultIntent(false);
+    }
+  }, [defaultState.ownerId, defaultState.status]);
+  const defaultReady = defaultState.status === "ready";
+  const firstOwnedAccount =
+    defaultReady && defaultState.snapshot.activeAccountIds.length === 0;
+  const defaultIntent = firstOwnedAccount || requestedDefaultIntent;
   const { isEligible: isKnownProviderEligible } =
     useEgyptianInstitutionEligibility();
 
@@ -203,10 +225,11 @@ export default function AddAccount(): React.ReactNode {
    * Handles the save action by validating the form and calling the creation hook.
    */
   const handleSave = async (): Promise<void> => {
-    if (isSubmitting) return;
+    if (isSubmitting || defaultState.status !== "ready") return;
 
     if (validate()) {
-      await createAccount(formData);
+      const data = { ...formData, defaultIntent };
+      await createAccount(data);
     }
   };
 
@@ -236,7 +259,8 @@ export default function AddAccount(): React.ReactNode {
             void handleSave();
           },
           loading: isSubmitting,
-          disabled: isSubmitting || isCheckingUniqueness || !isValid,
+          disabled:
+            isSubmitting || isCheckingUniqueness || !isValid || !defaultReady,
         }}
       />
 
@@ -326,6 +350,31 @@ export default function AddAccount(): React.ReactNode {
               keyboardType="numeric"
               onFocus={handleBalanceFieldFocus}
             />
+          </View>
+
+          <View testID={"account-default-state-" + defaultState.status}>
+            {defaultState.status === "loading" ? (
+              <Text
+                accessibilityRole="progressbar"
+                className="mb-3 py-4 text-sm text-text-secondary dark:text-text-secondary-dark"
+              >
+                {tCommon("loading")}
+              </Text>
+            ) : (
+              <AccountDefaultField
+                accountType={formData.accountType}
+                checked={defaultIntent}
+                disabled={!defaultReady || isSubmitting || firstOwnedAccount}
+                firstOwnedAccount={firstOwnedAccount}
+                previousDefaultName={
+                  defaultReady ? defaultState.defaultAccountName : null
+                }
+                onChange={setRequestedDefaultIntent}
+              />
+            )}
+            {defaultState.status === "recovery" ? (
+              <AccountDefaultRecoveryNotice onRetry={retryDefaultState} />
+            ) : null}
           </View>
 
           <View ref={smsMatchingSectionRef}>

@@ -16,6 +16,13 @@
  */
 
 import * as Crypto from "expo-crypto";
+import type { AccountReviewOwnedContext } from "../../../packages/logic/src/account-review/normalization-types";
+import type { AccountReviewSession } from "../../../packages/logic/src/account-review/review-schemas";
+import type { SmsReviewChunk } from "./ai-sms-parser-review";
+import {
+  completeInitialSmsReviewResult,
+  captureInitialSmsReviewNamespaceEpoch,
+} from "./sms-review-namespace-session-service";
 import { logger } from "@/utils/logger";
 import {
   shouldBlockUnsafeSmsParserConfiguration,
@@ -24,6 +31,7 @@ import {
 import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted, createAbortError } from "./abort-utils";
 import { assertExpectedCurrentUser } from "./user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import {
   buildCategoryMap,
   type CategoryMap,
@@ -78,6 +86,10 @@ export {
 /** Result from AI parsing */
 export interface AiParseResult {
   readonly transactions: readonly ParsedSmsTransaction[];
+  /** Successful canonical chunk provenance for T014-M's stateful adapter. */
+  readonly reviewChunks?: readonly SmsReviewChunk[];
+  /** Full current owner/session is created by T014-M, not this parser. */
+  readonly reviewSession?: AccountReviewSession;
   readonly hasError?: boolean;
   readonly isRetryable?: boolean;
   readonly unresolvedCandidates?: readonly AiUnresolvedCandidate[];
@@ -127,6 +139,8 @@ export interface SmsAiRetryRequest {
 export interface ParseSmsContext {
   readonly categories: readonly CategoryTreeSource[];
   readonly supportedCurrencies: readonly string[];
+  /** Single scoped T010 snapshot, never sent wholesale to Edge. */
+  readonly reviewAccountSnapshots?: AccountReviewOwnedContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +270,9 @@ async function emitProgress(
 function resultFromState(state: ParseSessionState): AiParseResult {
   return {
     transactions: state.transactions,
+    ...(state.reviewChunks !== undefined && state.reviewChunks.length > 0
+      ? { reviewChunks: state.reviewChunks }
+      : {}),
     hasError: state.hasError,
     isRetryable:
       state.hasError || state.oversizedCandidates.size > 0
@@ -656,7 +673,7 @@ async function runConcurrentChunks(
  * @throws AbortError when the caller cancels, or AiConsentRequiredError when
  * the existing AI consent gate rejects the request.
  */
-export async function parseSmsWithAi(
+async function parseSmsWithAiCore(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   onProgress?: AiParseProgressCallback,
@@ -668,6 +685,15 @@ export async function parseSmsWithAi(
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
   throwIfAborted(abortSignal);
+  if (
+    context.reviewAccountSnapshots !== undefined &&
+    expectedUserId !== undefined &&
+    context.reviewAccountSnapshots.ownerId !== expectedUserId
+  ) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+  }
+  const pinnedUserId =
+    context.reviewAccountSnapshots?.ownerId ?? expectedUserId;
 
   if (shouldBlockUnsafeSmsParserConfiguration()) {
     logger.warn("aiSmsParser.unsafeConfigurationBlocked", {
@@ -721,7 +747,7 @@ export async function parseSmsWithAi(
         candidatesByFingerprint,
         validCategoryMap,
         onProgress,
-        expectedUserId,
+        expectedUserId: pinnedUserId,
         abortSignal,
       });
     }
@@ -744,7 +770,7 @@ export async function parseSmsWithAi(
         candidatesByFingerprint,
         validCategoryMap,
         onProgress,
-        expectedUserId,
+        expectedUserId: pinnedUserId,
         runSignal,
         runController,
       });
@@ -779,6 +805,38 @@ export async function parseSmsWithAi(
       })),
     };
   }
+}
+
+/** Preserve the original parser call contract; publish initial review only once. */
+export async function parseSmsWithAi(
+  candidates: readonly SmsCandidate[],
+  context: ParseSmsContext,
+  onProgress?: AiParseProgressCallback,
+  abortSignal?: AbortSignal,
+  expectedUserId?: string,
+  requestContext?: SmsAiRequestContext,
+  requestKey?: string
+): Promise<AiParseResult> {
+  const namespaceEpoch =
+    candidates.length > 0
+      ? await captureInitialSmsReviewNamespaceEpoch(context)
+      : undefined;
+  const success = await parseSmsWithAiCore(
+    candidates,
+    context,
+    onProgress,
+    abortSignal,
+    expectedUserId,
+    requestContext,
+    requestKey
+  );
+  return completeInitialSmsReviewResult({
+    success,
+    context,
+    candidates,
+    signal: abortSignal,
+    namespaceEpoch,
+  });
 }
 
 export async function initializeSmsAiScanSession(

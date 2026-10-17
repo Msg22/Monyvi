@@ -1,4 +1,21 @@
 import type { FinancialActionFoundationRepository } from "./financial-action-foundation-repository";
+import { database } from "@monyvi/db";
+import { productionFinancialActionHashProvider } from "./account-balance-command-production";
+import {
+  assertProtectedFinancialActionEnvelopeHash,
+  assertReviewDefaultPredecessorsAccepted,
+} from "./account-review-default-predecessors";
+import { clearAcceptedAccountReviewPrivateEvidence } from "./account-review-retention-terminal";
+import { getCurrentUserId } from "./supabase";
+import { parseFinancialActionEnvelopeJson } from "@monyvi/logic";
+import { createAccountReviewFinancialRegistry } from "./account-review-financial-command-service";
+import {
+  runWithAccountSyncAckExclusion,
+  assertAccountSyncAckScopeCurrent,
+  type AccountSyncAckCapability,
+  registerBoundFinancialActionTransition,
+} from "./sync/account-sync-ack-scope";
+import type { Database } from "@nozbe/watermelondb";
 
 export const FINANCIAL_ACTION_SYNC_ERROR_CODES = {
   INVALID_OUTCOME: "financial_action_sync_invalid_outcome",
@@ -12,13 +29,9 @@ interface FinancialActionRpcInput {
 }
 
 export interface FinancialActionSyncDependencies {
-  readonly foundationRepository: {
-    readonly getFinancialActionGroup: (actionId: string) => Promise<{
-      readonly payloadHash: string;
-      readonly payloadJson: string;
-    } | null>;
-  } & Pick<
+  readonly foundationRepository: Pick<
     FinancialActionFoundationRepository,
+    | "getFinancialActionGroup"
     | "markFinancialActionGroupSyncFailed"
     | "markFinancialActionGroupSyncPending"
     | "recordFinancialActionGroupServerOutcome"
@@ -54,7 +67,8 @@ export interface FinancialActionPushDecision {
 
 export interface FinancialActionPushCoordinator {
   readonly coordinatePush: (
-    candidates: readonly FinancialActionPushCandidate[]
+    candidates: readonly FinancialActionPushCandidate[],
+    capability?: AccountSyncAckCapability
   ) => Promise<{ readonly decisions: readonly FinancialActionPushDecision[] }>;
 }
 
@@ -70,6 +84,9 @@ export interface FinancialActionPushCoordinatorDependencies extends Pick<
   readonly reconcileFinancialActionGroup?: (
     actionId: string
   ) => Promise<"incomplete" | "reconciled" | "replay">;
+  /** Production protected push always supplies the owned-root lookup. */
+  readonly getFinancialActionGroup?: FinancialActionFoundationRepository["getFinancialActionGroup"];
+  readonly database?: Database;
 }
 
 function fail(code: string): never {
@@ -137,6 +154,68 @@ function assertSyncable<
   return record;
 }
 
+const FINANCIAL_REGISTRY = createAccountReviewFinancialRegistry();
+function isAddTuple(value: { readonly payloadJson: string }): boolean {
+  try {
+    const envelope = parseFinancialActionEnvelopeJson(
+      value.payloadJson,
+      FINANCIAL_REGISTRY
+    );
+    return (
+      envelope.domain === "accounts" &&
+      envelope.kind === "create_with_default" &&
+      envelope.payloadVersion === "account.create-default/v1"
+    );
+  } catch {
+    return false;
+  }
+}
+function boundRootProof(
+  record: unknown,
+  candidate: {
+    readonly payloadJson: string;
+    readonly payloadHash: string;
+    readonly actionId?: string;
+  }
+): { readonly id: string; readonly ownerId: string } | null {
+  if (!isObject(record)) return null;
+  const id = record.id;
+  const userId = record.userId;
+  if (
+    typeof id !== "string" ||
+    typeof userId !== "string" ||
+    record.payloadHash !== candidate.payloadHash ||
+    record.payloadJson !== candidate.payloadJson ||
+    ("actionId" in candidate && record.actionId !== candidate.actionId)
+  )
+    return null;
+  return { id, ownerId: userId };
+}
+async function reassertBoundRoot(
+  original: { readonly id: string; readonly ownerId: string },
+  candidate: FinancialActionPushCandidate,
+  load: NonNullable<
+    FinancialActionPushCoordinatorDependencies["getFinancialActionGroup"]
+  >,
+  capability: AccountSyncAckCapability | undefined,
+  currentDatabase: Database
+): Promise<void> {
+  if ((await getCurrentUserId()) !== original.ownerId) {
+    fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+  }
+  if (capability) {
+    assertAccountSyncAckScopeCurrent(
+      capability,
+      currentDatabase,
+      original.ownerId
+    );
+  }
+  const reloaded = await load(candidate.actionId);
+  const bound = boundRootProof(reloaded, candidate);
+  if (!bound || bound.id !== original.id || bound.ownerId !== original.ownerId)
+    fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+}
+
 export function createFinancialActionSyncService(
   dependencies: FinancialActionSyncDependencies
 ): FinancialActionSyncService {
@@ -147,29 +226,143 @@ export function createFinancialActionSyncService(
           actionId
         )
       );
-      await dependencies.foundationRepository.markFinancialActionGroupSyncPending(
-        actionId
-      );
-      let rawOutcome: unknown;
-      try {
-        rawOutcome = await dependencies.invokeAccountFinancialActionRpc({
-          payloadHash: record.payloadHash,
-          payloadJson: record.payloadJson,
-        });
-      } catch (error) {
-        await dependencies.foundationRepository.markFinancialActionGroupSyncFailed(
+      if (isAddTuple(record)) {
+        // Decorated Watermelon fields live on Model prototypes. Spreading the
+        // instance omits payloadJson/payloadHash and falsely rejects this root.
+        // Bind the exact immutable values BEFORE the awaited owner check so
+        // later cache/getter drift cannot silently resample the original proof.
+        const candidate: FinancialActionPushCandidate = {
           actionId,
-          FINANCIAL_ACTION_SYNC_ERROR_CODES.TRANSPORT_FAILED
+          payloadJson: record.payloadJson,
+          payloadHash: record.payloadHash,
+          state: "local_complete",
+        };
+        const actor = await getCurrentUserId();
+        const identity = boundRootProof(record, candidate);
+        if (!actor || !identity || actor !== identity.ownerId)
+          fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+        await runWithAccountSyncAckExclusion(
+          database,
+          actor,
+          async (capability): Promise<void> => {
+            const load =
+              dependencies.foundationRepository.getFinancialActionGroup;
+            await reassertBoundRoot(
+              identity,
+              candidate,
+              load,
+              capability,
+              database
+            );
+            registerBoundFinancialActionTransition(
+              capability,
+              database,
+              actor,
+              {
+                physicalRootId: identity.id,
+                actionId,
+                ownerId: actor,
+                payloadHash: candidate.payloadHash,
+                payloadJson: candidate.payloadJson,
+              }
+            );
+            await executeOriginalAction(capability, identity, candidate);
+          }
         );
-        throw error;
+        return;
       }
-      const outcome = parseOutcome(rawOutcome, actionId);
-      await dependencies.foundationRepository.recordFinancialActionGroupServerOutcome(
-        actionId,
-        outcome.status,
-        outcome.outcomeJson,
-        outcome.code
-      );
+      await executeOriginalAction(undefined, null, null);
+
+      async function executeOriginalAction(
+        capability: AccountSyncAckCapability | undefined,
+        bound: { readonly id: string; readonly ownerId: string } | null,
+        candidate: FinancialActionPushCandidate | null
+      ): Promise<void> {
+        await assertProtectedFinancialActionEnvelopeHash(
+          record,
+          productionFinancialActionHashProvider
+        );
+        await assertReviewDefaultPredecessorsAccepted({
+          root: record,
+          database,
+          hashProvider: productionFinancialActionHashProvider,
+          loadOwnedRoot:
+            dependencies.foundationRepository.getFinancialActionGroup,
+        });
+        if (bound && candidate)
+          await reassertBoundRoot(
+            bound,
+            candidate,
+            dependencies.foundationRepository.getFinancialActionGroup,
+            capability,
+            database
+          );
+        await dependencies.foundationRepository.markFinancialActionGroupSyncPending(
+          actionId
+        );
+        // Recheck the durable immutable action and ancestry after awaits.
+        const current = assertSyncable(
+          await dependencies.foundationRepository.getFinancialActionGroup(
+            actionId
+          )
+        );
+        if (
+          current.payloadHash !== record.payloadHash ||
+          current.payloadJson !== record.payloadJson
+        )
+          fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+        await assertReviewDefaultPredecessorsAccepted({
+          root: current,
+          database,
+          hashProvider: productionFinancialActionHashProvider,
+          loadOwnedRoot:
+            dependencies.foundationRepository.getFinancialActionGroup,
+        });
+        if (bound && candidate)
+          await reassertBoundRoot(
+            bound,
+            candidate,
+            dependencies.foundationRepository.getFinancialActionGroup,
+            capability,
+            database
+          );
+        let rawOutcome: unknown;
+        try {
+          rawOutcome = await dependencies.invokeAccountFinancialActionRpc({
+            payloadHash: record.payloadHash,
+            payloadJson: record.payloadJson,
+          });
+        } catch (error) {
+          await dependencies.foundationRepository.markFinancialActionGroupSyncFailed(
+            actionId,
+            FINANCIAL_ACTION_SYNC_ERROR_CODES.TRANSPORT_FAILED
+          );
+          throw error;
+        }
+        const outcome = parseOutcome(rawOutcome, actionId);
+        if (bound && candidate)
+          await reassertBoundRoot(
+            bound,
+            candidate,
+            dependencies.foundationRepository.getFinancialActionGroup,
+            capability,
+            database
+          );
+        await dependencies.foundationRepository.recordFinancialActionGroupServerOutcome(
+          actionId,
+          outcome.status,
+          outcome.outcomeJson,
+          outcome.code
+        );
+        if (
+          (outcome.status === "accepted" || outcome.status === "idempotent") &&
+          record.payloadJson.includes('"review.batch-save/v1"')
+        )
+          await clearAcceptedAccountReviewPrivateEvidence({
+            database,
+            actionId,
+          });
+      }
     },
   };
 }
@@ -179,10 +372,25 @@ export function createFinancialActionPushCoordinator(
 ): FinancialActionPushCoordinator {
   return Object.freeze({
     coordinatePush: async (
-      candidates: readonly FinancialActionPushCandidate[]
+      candidates: readonly FinancialActionPushCandidate[],
+      capability?: AccountSyncAckCapability
     ): Promise<{
       readonly decisions: readonly FinancialActionPushDecision[];
     }> => {
+      if (!capability && candidates.some(isAddTuple)) {
+        const owner = await getCurrentUserId();
+        if (!owner) fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+        return runWithAccountSyncAckExclusion(
+          dependencies.database ?? database,
+          owner,
+          (owned) =>
+            createFinancialActionPushCoordinator(dependencies).coordinatePush(
+              candidates,
+              owned
+            )
+        );
+      }
+      const scopedDatabase = dependencies.database ?? database;
       const reconcileSafely = async (
         actionId: string
       ): Promise<string | null | undefined> => {
@@ -195,6 +403,46 @@ export function createFinancialActionPushCoordinator(
       const decisions: FinancialActionPushDecision[] = [];
       for (const candidate of candidates) {
         assertSyncable(candidate);
+        const isAdd = isAddTuple(candidate);
+        const originalOwned =
+          isAdd && dependencies.getFinancialActionGroup
+            ? await dependencies.getFinancialActionGroup(candidate.actionId)
+            : null;
+        const originalBinding = isAdd
+          ? boundRootProof(originalOwned, candidate)
+          : null;
+        if (
+          isAdd &&
+          (!dependencies.getFinancialActionGroup || !originalBinding)
+        )
+          fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+        if (originalBinding && dependencies.getFinancialActionGroup) {
+          await reassertBoundRoot(
+            originalBinding,
+            candidate,
+            dependencies.getFinancialActionGroup,
+            capability,
+            scopedDatabase
+          );
+          if (capability) {
+            registerBoundFinancialActionTransition(
+              capability,
+              scopedDatabase,
+              originalBinding.ownerId,
+              {
+                physicalRootId: originalBinding.id,
+                actionId: candidate.actionId,
+                ownerId: originalBinding.ownerId,
+                payloadHash: candidate.payloadHash,
+                payloadJson: candidate.payloadJson,
+              }
+            );
+          }
+        }
+        await assertProtectedFinancialActionEnvelopeHash(
+          candidate,
+          productionFinancialActionHashProvider
+        );
         if (candidate.state === "accepted") {
           decisions.push({
             actionId: candidate.actionId,
@@ -215,7 +463,9 @@ export function createFinancialActionPushCoordinator(
           candidate.state === "rejected_compensating" ||
           candidate.state === "reconciliation_incomplete"
         ) {
-          const reconciliation = await reconcileSafely(candidate.actionId);
+          const reconciliation = isAdd
+            ? null
+            : await reconcileSafely(candidate.actionId);
           decisions.push({
             actionId: candidate.actionId,
             disposition:
@@ -226,9 +476,61 @@ export function createFinancialActionPushCoordinator(
           });
           continue;
         }
+        if (dependencies.getFinancialActionGroup) {
+          const owned = await dependencies.getFinancialActionGroup(
+            candidate.actionId
+          );
+          if (
+            !owned ||
+            owned.payloadHash !== candidate.payloadHash ||
+            owned.payloadJson !== candidate.payloadJson
+          )
+            fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+          await assertReviewDefaultPredecessorsAccepted({
+            root: owned,
+            database,
+            hashProvider: productionFinancialActionHashProvider,
+            loadOwnedRoot: dependencies.getFinancialActionGroup,
+          });
+        }
         if (candidate.state !== "sync_pending") {
+          if (originalBinding && dependencies.getFinancialActionGroup) {
+            await reassertBoundRoot(
+              originalBinding,
+              candidate,
+              dependencies.getFinancialActionGroup,
+              capability,
+              scopedDatabase
+            );
+          }
           await dependencies.markFinancialActionGroupSyncPending(
             candidate.actionId
+          );
+        }
+        if (dependencies.getFinancialActionGroup) {
+          const current = await dependencies.getFinancialActionGroup(
+            candidate.actionId
+          );
+          if (
+            !current ||
+            current.payloadHash !== candidate.payloadHash ||
+            current.payloadJson !== candidate.payloadJson
+          )
+            fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+          await assertReviewDefaultPredecessorsAccepted({
+            root: current,
+            database,
+            hashProvider: productionFinancialActionHashProvider,
+            loadOwnedRoot: dependencies.getFinancialActionGroup,
+          });
+        }
+        if (originalBinding && dependencies.getFinancialActionGroup) {
+          await reassertBoundRoot(
+            originalBinding,
+            candidate,
+            dependencies.getFinancialActionGroup,
+            capability,
+            scopedDatabase
           );
         }
         let rawOutcome: unknown;
@@ -245,17 +547,36 @@ export function createFinancialActionPushCoordinator(
           throw error;
         }
         const outcome = parseOutcome(rawOutcome, candidate.actionId);
+        if (originalBinding && dependencies.getFinancialActionGroup) {
+          await reassertBoundRoot(
+            originalBinding,
+            candidate,
+            dependencies.getFinancialActionGroup,
+            capability,
+            scopedDatabase
+          );
+        }
         await dependencies.recordFinancialActionGroupServerOutcome(
           candidate.actionId,
           outcome.status,
           outcome.outcomeJson,
           outcome.code
         );
+        if (
+          dependencies.getFinancialActionGroup &&
+          candidate.payloadJson.includes('"review.batch-save/v1"') &&
+          (outcome.status === "accepted" || outcome.status === "idempotent")
+        )
+          await clearAcceptedAccountReviewPrivateEvidence({
+            database,
+            actionId: candidate.actionId,
+          });
         const needsReconciliation =
           outcome.status === "stale" || outcome.status === "rejected";
-        const reconciliation = needsReconciliation
-          ? await reconcileSafely(candidate.actionId)
-          : null;
+        const reconciliation =
+          needsReconciliation && !isAdd
+            ? await reconcileSafely(candidate.actionId)
+            : null;
         decisions.push({
           actionId: candidate.actionId,
           disposition:

@@ -88,6 +88,11 @@ export const accountFormSchema = z
         (val) => parseFloat(val) >= 0,
         "validation_initial_balance_non_negative"
       ),
+    // Explicit optional Add intent: unchanged Edit and legacy Add inputs stay
+    // valid until T070 connects the controlled default switch.
+    defaultIntent: z.boolean().optional(),
+    // Optional BANK-only form field; retain the original optional card/sender.
+    accountNumber: z.string().trim().optional(),
     bankName: z
       .string()
       .max(50, "validation_bank_name_max")
@@ -237,7 +242,10 @@ export function validateEditAccountForm(
   if (result.success) {
     if (
       accountType &&
-      !isInstitutionAllowedForAccountType(result.data.institutionId, accountType)
+      !isInstitutionAllowedForAccountType(
+        result.data.institutionId,
+        accountType
+      )
     ) {
       return {
         isValid: false,

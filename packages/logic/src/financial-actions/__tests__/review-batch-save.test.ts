@@ -19,6 +19,8 @@ import {
   REVIEW_INCOME_RECORD_ID,
   SMS_INCOME_FINGERPRINT,
   SMS_NET_EFFECT_ID,
+  SMS_DRAFT_ID,
+  SMS_QUEUE_ID,
   atmTransferEnvelope,
   atmTransferPayload,
   legacyEditBalanceEnvelope,
@@ -313,6 +315,52 @@ describe("review.batch-save/v1 acceptance scenarios", () => {
     );
     expect(canonical.payload).toEqual(smsNewBankPayload);
     expect(canonical.accountGuards).toEqual(smsNewBankEnvelope.accountGuards);
+  });
+
+  it("accepts two selected SMS deletions with one new financial row", () => {
+    const original = atmTransferPayload.localSmsBookkeeping[0];
+    if (!original) throw new Error("missing_original_atm_cleanup");
+    const mixed = {
+      ...atmTransferPayload,
+      localSmsBookkeeping: [{ ...original, draftId: SMS_DRAFT_ID }, original],
+    };
+    const accepted = validateReviewBatchSavePayload(mixed);
+    expect(accepted.selectedSourceRefs).toHaveLength(1);
+    expect(
+      accepted.domainMutation.records.filter(
+        (record) =>
+          record.entity === "transaction" || record.entity === "transfer"
+      )
+    ).toHaveLength(1);
+    expect(
+      accepted.localSmsBookkeeping.filter(
+        (entry) => entry.operation === "delete_saved"
+      )
+    ).toHaveLength(2);
+    expect(accepted).toEqual(mixed);
+  });
+
+  it("refuses insufficient SMS deletions, duplicate draft IDs and foreign queue descriptors", () => {
+    expect(() =>
+      validateReviewBatchSavePayload({
+        ...atmTransferPayload,
+        localSmsBookkeeping: [],
+      })
+    ).toThrow();
+    const first = atmTransferPayload.localSmsBookkeeping[0];
+    if (!first) throw new Error("missing_original_atm_cleanup");
+    expect(() =>
+      validateReviewBatchSavePayload({
+        ...atmTransferPayload,
+        localSmsBookkeeping: [first, first],
+      })
+    ).toThrow();
+    expect(() =>
+      validateReviewBatchSavePayload({
+        ...atmTransferPayload,
+        localSmsBookkeeping: [{ ...first, queueId: SMS_QUEUE_ID }],
+      })
+    ).toThrow();
   });
 
   it("rejects the SMS scenario when only the net aggregate is wrong", () => {

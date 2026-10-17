@@ -4,6 +4,7 @@ import {
   REVIEW_CATEGORY_ID,
   REVIEW_CREATED_AT,
   REVIEW_EFFECT_ID,
+  REVIEW_FROZEN_INTENT_DIGEST,
   REVIEW_INCOME_RECORD_ID,
   REVIEW_INCOME_ROW_ID,
   REVIEW_SESSION_ID,
@@ -20,6 +21,7 @@ const validCashPayload = {
   operationCode: "review.batch-save",
   source: "VOICE",
   sessionId: REVIEW_SESSION_ID,
+  frozenIntentDigest: REVIEW_FROZEN_INTENT_DIGEST,
   selectedSourceRefs: [
     {
       rowId: REVIEW_INCOME_ROW_ID,
@@ -98,7 +100,7 @@ const validCashPayload = {
     ],
   },
   localSmsBookkeeping: [],
-  cashDefaultSnapshot: {
+  creationDefaultSnapshot: {
     activeAccountIds: [],
     defaultAccount: null,
   },
@@ -272,27 +274,27 @@ describe("review.batch-save/v1 invariant validation", () => {
     });
   });
 
-  describe("Cash snapshot exact presence", () => {
-    it("rejects unexpected cashDefaultSnapshot when no Cash account is created", () => {
-      const unexpectedCashSnapshotPayload = {
-        ...smsNewBankPayload,
-        cashDefaultSnapshot: {
+  describe("Review creation snapshot exact presence", () => {
+    it("rejects unexpected creationDefaultSnapshot when no account is created", () => {
+      const unexpectedSnapshotPayload = {
+        ...reviewBatchSavePayload,
+        creationDefaultSnapshot: {
           activeAccountIds: [],
           defaultAccount: null,
         },
       };
       expect(() =>
-        validateReviewBatchSavePayload(unexpectedCashSnapshotPayload)
+        validateReviewBatchSavePayload(unexpectedSnapshotPayload)
       ).toThrow();
     });
 
-    it("rejects Cash account creation when cashDefaultSnapshot is omitted", () => {
+    it("rejects Cash account creation when creationDefaultSnapshot is omitted", () => {
       const {
-        cashDefaultSnapshot: _omittedSnapshot,
-        ...missingCashSnapshotPayload
+        creationDefaultSnapshot: _omittedSnapshot,
+        ...missingCreationSnapshotPayload
       } = validCashPayload;
       expect(() =>
-        validateReviewBatchSavePayload(missingCashSnapshotPayload)
+        validateReviewBatchSavePayload(missingCreationSnapshotPayload)
       ).toThrow();
     });
   });

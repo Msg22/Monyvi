@@ -81,10 +81,10 @@ export function validateReviewBatchSavePayload(
 function toCanonicalRegistryPayload(
   payload: ReviewBatchSavePayload
 ): RegisteredActionPayload {
-  const { cashDefaultSnapshot, ...required } = payload;
-  return cashDefaultSnapshot === undefined
+  const { creationDefaultSnapshot, ...required } = payload;
+  return creationDefaultSnapshot === undefined
     ? required
-    : { ...required, cashDefaultSnapshot };
+    : { ...required, creationDefaultSnapshot };
 }
 
 /**

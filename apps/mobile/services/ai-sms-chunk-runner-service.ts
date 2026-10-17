@@ -10,10 +10,6 @@
 
 import {
   buildCategoryTree,
-  clampConfidence,
-  normalizeCurrency,
-  normalizeType,
-  parseCategory,
   type CategoryMap,
   type ParsedSmsTransaction,
 } from "@monyvi/logic";
@@ -28,7 +24,6 @@ import {
   parseAiResponse,
   parseSmsProviderRetry,
   parseSmsSafeguardRefusal,
-  type AiSmsTransaction,
   type ChunkAiResult,
   type SmsProviderRetry,
   type SmsSafeguardRefusal,
@@ -41,6 +36,13 @@ import type {
   SmsAiRetryRequest,
   SmsCandidate,
 } from "./ai-sms-parser-service";
+import {
+  mapAiTransactions,
+  type AiMappingResult,
+} from "./ai-sms-parser-transaction-mapping";
+export { mapAiTransactions } from "./ai-sms-parser-transaction-mapping";
+export type { AiMappingResult } from "./ai-sms-parser-transaction-mapping";
+import type { SmsReviewChunk } from "./ai-sms-parser-review";
 import { assertNotAborted } from "./abort-utils";
 import { assertExpectedCurrentUser } from "./user-data-access";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
@@ -132,13 +134,6 @@ export interface InvokeParseChunkInput {
   readonly expectedUserId?: string;
 }
 
-export interface AiMappingResult {
-  readonly transactions: readonly ParsedSmsTransaction[];
-  readonly resolvedMessageIds: ReadonlySet<string>;
-  readonly failedMessageIds: ReadonlySet<string>;
-  readonly hasUncorrelatedFailure: boolean;
-}
-
 export interface ChunkRunInput {
   readonly work: ChunkWork;
   readonly context: ParseSmsContext;
@@ -204,93 +199,6 @@ export function createUnexpectedChunkOutcome(
   };
 }
 
-function parseDate(dateStr: string, fallbackMs: number): Date {
-  const parsed = new Date(dateStr);
-  if (isNaN(parsed.getTime())) {
-    return new Date(fallbackMs);
-  }
-  return parsed;
-}
-
-function mapAiTransaction(
-  aiTx: AiSmsTransaction,
-  candidate: SmsCandidate,
-  validCategoryMap: CategoryMap
-): ParsedSmsTransaction {
-  const counterparty =
-    candidate.message.address &&
-    aiTx.counterparty.toLowerCase().trim() ===
-      candidate.message.address.toLowerCase().trim()
-      ? ""
-      : aiTx.counterparty;
-  const category = parseCategory(aiTx.categorySystemName, validCategoryMap);
-
-  return {
-    amount: aiTx.amount,
-    currency: normalizeCurrency(aiTx.currency),
-    type: normalizeType(aiTx.type),
-    counterparty,
-    date: parseDate(aiTx.date, candidate.message.date),
-    source: "SMS",
-    originLabel: candidate.message.address,
-    deduplicationHash: candidate.smsFingerprint,
-    smsFingerprint: candidate.smsFingerprint,
-    senderDisplayName: candidate.message.address,
-    categoryId: category.id,
-    categoryDisplayName: category.displayName,
-    rawSmsBody: candidate.message.body,
-    confidence: clampConfidence(aiTx.confidenceScore),
-    isAtmWithdrawal: aiTx.isAtmWithdrawal ?? false,
-    cardLast4: aiTx.cardLast4,
-  };
-}
-
-export function mapAiTransactions(
-  aiTransactions: readonly AiSmsTransaction[],
-  candidateMap: ReadonlyMap<string, SmsCandidate>,
-  validCategoryMap: CategoryMap
-): AiMappingResult {
-  const transactions: ParsedSmsTransaction[] = [];
-  const resolvedMessageIds = new Set<string>();
-  const failedMessageIds = new Set<string>();
-  let hasUncorrelatedFailure = false;
-
-  for (const aiTx of aiTransactions) {
-    const candidate = candidateMap.get(aiTx.messageId);
-    if (!candidate) {
-      logger.warn("[ai-sms-parser] Unknown message identity, skipping", {
-        reasonCode: "candidate_identity_unknown",
-      });
-      hasUncorrelatedFailure = true;
-      continue;
-    }
-    if (!aiTx.isTrusted) {
-      logger.info("[ai-sms-parser] Untrusted transaction, skipping", {
-        reasonCode: "ai_result_untrusted",
-      });
-      resolvedMessageIds.add(aiTx.messageId);
-      continue;
-    }
-    try {
-      transactions.push(mapAiTransaction(aiTx, candidate, validCategoryMap));
-      resolvedMessageIds.add(aiTx.messageId);
-    } catch (error: unknown) {
-      failedMessageIds.add(aiTx.messageId);
-      logger.warn("[ai-sms-parser] Transaction mapping failed", {
-        reasonCode: "transaction_mapping_failed",
-        errorName: error instanceof Error ? error.name : "unknown",
-      });
-    }
-  }
-
-  return {
-    transactions,
-    resolvedMessageIds,
-    failedMessageIds,
-    hasUncorrelatedFailure,
-  };
-}
-
 async function retryGuard(input: InvokeParseChunkInput): Promise<void> {
   throwIfAborted(input.abortSignal);
   if (input.expectedUserId !== undefined) {
@@ -325,6 +233,14 @@ export async function invokeParseChunk(
         messages: input.messages,
         categories: buildCategoryTree(input.context.categories),
         supportedCurrencies: input.context.supportedCurrencies,
+        ...(input.transport.functionName === "parse-sms" &&
+        input.context.reviewAccountSnapshots !== undefined
+          ? {
+              reviewContractVersion: "account-review/v2" as const,
+              reviewContext:
+                input.context.reviewAccountSnapshots.providerContext,
+            }
+          : {}),
         ...(input.transport.qaProfileId === undefined
           ? {}
           : {
@@ -434,7 +350,10 @@ export async function invokeParseChunk(
 
   return parseAiResponse(
     response.data,
-    new Set(input.messages.map((message) => message.smsFingerprint))
+    new Set(input.messages.map((message) => message.smsFingerprint)),
+    input.messages,
+    input.transport.functionName === "parse-sms" &&
+      input.context.reviewAccountSnapshots !== undefined
   );
 }
 
@@ -460,7 +379,8 @@ export async function runChunk(input: ChunkRunInput): Promise<ChunkRunOutcome> {
   const mapped = mapAiTransactions(
     chunkResult.transactions,
     input.candidateMap,
-    input.validCategoryMap
+    input.validCategoryMap,
+    input.context.reviewAccountSnapshots?.preferredCurrency
   );
   return { work: input.work, chunkResult, mapped };
 }
@@ -530,6 +450,7 @@ export function createCapacityLimitedCandidates(
 
 export interface ChunkAggregationState {
   readonly transactions: readonly ParsedSmsTransaction[];
+  readonly reviewChunks?: readonly SmsReviewChunk[];
   readonly unresolvedCandidates: readonly AiUnresolvedCandidate[];
   readonly unresolvedFingerprints: ReadonlySet<string>;
   readonly durableNegativeFingerprints: ReadonlySet<string>;
@@ -548,6 +469,7 @@ export function createInitialAggregationState(
 ): ChunkAggregationState {
   return {
     transactions: [],
+    reviewChunks: [],
     unresolvedCandidates: [],
     unresolvedFingerprints: new Set(),
     durableNegativeFingerprints: new Set(),
@@ -669,6 +591,38 @@ function appendUnresolved(
   };
 }
 
+/**
+ * Preserve original source/provenance only for successfully mapped candidates.
+ * Session identity/late merge remains exclusively T014-M/T027 authority.
+ */
+function reviewChunkFor(input: {
+  readonly chunkResult: ChunkAiResult;
+  readonly mapped: AiMappingResult;
+  readonly work: ChunkWork;
+}): SmsReviewChunk | null {
+  const finance = input.chunkResult.reviewV2FinancialRows;
+  if (!finance || input.chunkResult.reviewV2ProviderResponse === undefined)
+    return null;
+  const fingerprints = new Set(
+    input.mapped.transactions.map((t) => t.smsFingerprint)
+  );
+  const originals = input.work.messages.filter((m) =>
+    fingerprints.has(m.smsFingerprint)
+  );
+  const ids = new Set(originals.map((m) => m.id));
+  const financialRows = finance.filter((row) => ids.has(row.messageId));
+  if (financialRows.length === 0) return null;
+  return {
+    requestKey: input.work.requestKey,
+    financialRows,
+    mappedTransactions: input.mapped.transactions.filter((t) =>
+      originals.some((m) => m.smsFingerprint === t.smsFingerprint)
+    ),
+    submittedMessages: originals,
+    providerResponse: input.chunkResult.reviewV2ProviderResponse,
+  };
+}
+
 export function applyChunkResolution(
   state: ChunkAggregationState,
   input: {
@@ -691,9 +645,15 @@ export function applyChunkResolution(
     transport,
   } = input;
 
+  const reviewChunk = reviewChunkFor({ chunkResult, mapped, work });
   let next: ChunkAggregationState = {
     ...state,
     transactions: [...state.transactions, ...mapped.transactions],
+    ...(reviewChunk === null
+      ? {}
+      : {
+          reviewChunks: [...(state.reviewChunks ?? []), reviewChunk],
+        }),
     durableNegativeFingerprints: new Set([
       ...state.durableNegativeFingerprints,
       ...(chunkResult.durableNegativeFingerprints ?? []),

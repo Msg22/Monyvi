@@ -1,8 +1,13 @@
 import type { Account } from "@monyvi/db";
 import type { Model } from "@nozbe/watermelondb";
+import { createReviewFinancialActionDefinitions } from "../../../packages/logic/src/financial-actions/review-batch-save";
 import {
+  ACTION_REGISTRY_ERROR_CODES,
   CURRENCY_PRECISION,
+  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   DEFAULT_PRECISION,
+  canonicalizeFinancialActionEnvelope,
+  createFinancialActionRegistry,
   fromMinorUnits,
   parseCanonicalDecimal,
   parseCanonicalUnsignedIntegerString,
@@ -464,6 +469,39 @@ export function createCoreAccountFinancialActionService(
           },
       };
       return dependencies.executeAccountBalanceCommand(command);
+    },
+  };
+}
+
+/**
+ * #395 T047 — opt-in review adapter, NOT the legacy balance-effects writer.
+ * The separate review command and real prepared writer require T048 ownership.
+ */
+export function createCoreReviewBatchSaveAdapter(dependencies: {
+  readonly executeReviewCommand: AccountBalanceCommandService["execute"];
+}): Pick<AccountBalanceCommandService, "execute"> {
+  const registry = createFinancialActionRegistry([
+    ...DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions,
+    ...createReviewFinancialActionDefinitions(
+      ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD
+    ),
+  ]);
+
+  return {
+    execute: async (input: ExecuteAccountBalanceCommandInput) => {
+      const envelope = input.envelope;
+      if (
+        envelope.domain !== "transactions" ||
+        envelope.kind !== "review_batch_save" ||
+        envelope.payloadVersion !== "review.batch-save/v1"
+      ) {
+        fail(CORE_ACCOUNT_FINANCIAL_ACTION_ERROR_CODES.INVALID_MUTATION);
+      }
+      const canonical = canonicalizeFinancialActionEnvelope(envelope, registry);
+      return dependencies.executeReviewCommand({
+        ...input,
+        envelope: canonical,
+      });
     },
   };
 }

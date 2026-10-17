@@ -17,8 +17,19 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (args: unknown): Promise<unknown> =>
-    mockSynchronize(args) as Promise<unknown>,
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (args: unknown): Promise<unknown> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(args).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(args) as Promise<unknown>;
+  },
 }));
 
 jest.mock("@/services/supabase", () => ({
@@ -52,7 +63,17 @@ import { syncDatabase } from "../../services/sync";
 function makeDatabase(): Database {
   return {
     adapter: {
-      getLocal: jest.fn().mockResolvedValue("current-user"),
+      getLocal: jest.fn(
+        (key: string): Promise<string | undefined> =>
+          Promise.resolve(
+            key === "__monyvi_sync_owner_user_id"
+              ? "current-user"
+              : key ===
+                  "__monyvi_sync_historical_recovery:issue255-v1:current-user"
+                ? "complete"
+                : undefined
+          )
+      ),
       setLocal: jest.fn().mockResolvedValue(undefined),
     },
   } as unknown as Database;

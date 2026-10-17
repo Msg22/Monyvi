@@ -13,6 +13,8 @@ export interface ReviewActionBarProps {
   readonly onSave: () => Promise<void>;
   readonly onDiscard: () => void;
   readonly isSmsWorkspace?: boolean;
+  /** The V2 owned SMS route retains Review later; no legacy discard writer. */
+  readonly hideDiscard?: boolean;
   readonly onReviewLater?: () => void;
 }
 
@@ -25,6 +27,7 @@ export function ReviewActionBar({
   onSave,
   onDiscard,
   onReviewLater,
+  hideDiscard = false,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
@@ -49,20 +52,22 @@ export function ReviewActionBar({
       className="border-t border-border bg-background px-5 py-2 dark:border-border-dark dark:bg-background-dark"
     >
       <View testID="review-actions-row" className="h-12 flex-row gap-3">
-        <TouchableOpacity
-          onPress={onDiscard}
-          disabled={isSaving}
-          activeOpacity={0.8}
-          className="min-w-28 flex-row items-center justify-center rounded-lg border border-border px-3 dark:border-border-dark"
-        >
-          <Ionicons name="trash-outline" size={18} color={palette.red[500]} />
-          <Text
-            numberOfLines={1}
-            className="ms-2 text-sm font-semibold text-red-600 dark:text-red-400"
+        {!hideDiscard && (
+          <TouchableOpacity
+            onPress={onDiscard}
+            disabled={isSaving}
+            activeOpacity={0.8}
+            className="min-w-28 flex-row items-center justify-center rounded-lg border border-border px-3 dark:border-border-dark"
           >
-            {t("discard_all")}
-          </Text>
-        </TouchableOpacity>
+            <Ionicons name="trash-outline" size={18} color={palette.red[500]} />
+            <Text
+              numberOfLines={1}
+              className="ms-2 text-sm font-semibold text-red-600 dark:text-red-400"
+            >
+              {t("discard_all")}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           testID="review-save-button"
           onPress={handleSaveWrapper}

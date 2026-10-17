@@ -17,6 +17,17 @@
  */
 
 import { supabase } from "./supabase";
+import * as Crypto from "expo-crypto";
+import { assertExpectedCurrentUser } from "./user-data-access";
+import { createVoiceAccountReviewSession } from "./account-review-source-adapter-service";
+import { uuidV8FromSha256 } from "../../../packages/logic/src/account-review/identity";
+import {
+  classifyVoiceReviewV2Response,
+  projectVoiceFinancialAtSourceIndex,
+  attachVoiceReviewSession,
+} from "./ai-voice-parser-review";
+import type { VoiceReviewNormalizationInput } from "../../../packages/logic/src/account-review/normalization-types";
+import type { AccountReviewSession } from "../../../packages/logic/src/account-review/review-schemas";
 import { z } from "zod";
 import { t } from "i18next";
 import { logger } from "@/utils/logger";
@@ -67,6 +78,8 @@ interface AccountInput {
 }
 
 interface ParseVoiceOptions {
+  /** Only approved opt-in: T010 owner's closed providerContext is sent to Gemini. */
+  readonly reviewAccountSnapshots?: VoiceReviewNormalizationInput["reviewAccountSnapshots"];
   /** Audio file URI */
   readonly audioUri: string;
   /** Stable opaque identity for this logical voice submission. */
@@ -90,6 +103,8 @@ interface ParseVoiceResult {
   readonly transcript: string;
   readonly originalTranscript: string;
   readonly detectedLanguage: string;
+  /** Full T014-M-produced canonical local session, never a provider DTO. */
+  readonly reviewSession?: AccountReviewSession;
 }
 
 /** Public alias — consumed by voice-flow-submission.ts for buildParserPayload return type. */
@@ -110,6 +125,44 @@ export interface VoiceParserTransportFailure extends VoiceParserError {
 export type VoiceParserFailure =
   | VoiceParserTransportFailure
   | VoiceQuotaParserError;
+
+const VOICE_REVIEW_SESSION_DOMAIN = "monyvi.account-review.voice-session.v1";
+
+/** Current actor must still match the pre-captured T010 review owner. */
+async function assertVoiceReviewOwner(ownerId: string): Promise<void> {
+  await assertExpectedCurrentUser(ownerId);
+}
+
+/** Expo's existing SHA-256 platform primitive and pure canonical UUIDv8. */
+async function buildVoiceReviewNormalizationInput(input: {
+  readonly ownerId: VoiceReviewNormalizationInput["ownerId"];
+  readonly requestKey: string;
+  readonly reviewAccountSnapshots: VoiceReviewNormalizationInput["reviewAccountSnapshots"];
+  readonly categoryIdsBySystemName: VoiceReviewNormalizationInput["categoryIdsBySystemName"];
+  readonly financialRows: VoiceReviewNormalizationInput["financialRows"];
+  readonly mappedTransactions: VoiceReviewNormalizationInput["mappedTransactions"];
+  readonly providerResponse: unknown;
+  readonly originalTranscript: string;
+}): Promise<VoiceReviewNormalizationInput> {
+  const hashProvider: VoiceReviewNormalizationInput["hashProvider"] = {
+    digestUtf8: (value: string): Promise<string> =>
+      Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
+  };
+  const digest = await hashProvider.digestUtf8(
+    JSON.stringify([
+      VOICE_REVIEW_SESSION_DOMAIN,
+      input.ownerId,
+      input.requestKey,
+    ])
+  );
+  return {
+    ...input,
+    source: "VOICE",
+    sourceRevision: "0",
+    sessionId: uuidV8FromSha256(digest),
+    hashProvider,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Schemas — AI response validation
@@ -247,6 +300,9 @@ export async function parseVoiceWithAi(
     };
   }
 
+  const ownedReview = options.reviewAccountSnapshots;
+  const reviewMode = ownedReview !== undefined;
+
   // Compute caller's local date in YYYY-MM-DD format for relative date resolution
   const now = new Date();
   const callerLocalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -263,6 +319,24 @@ export async function parseVoiceWithAi(
   }, AI_TIMEOUT_MS);
 
   try {
+    if (reviewMode) {
+      try {
+        await assertVoiceReviewOwner(ownedReview.ownerId);
+      } catch {
+        return {
+          kind: "config",
+          message: "Account review context is unavailable. Please retry.",
+          retryableSameRequest: false,
+        };
+      }
+      if (abortController.signal.aborted) {
+        return {
+          kind: didClientTimeout ? "timeout" : "network",
+          message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+          retryableSameRequest: didClientTimeout,
+        };
+      }
+    }
     let response: {
       data: unknown;
       error: { message: string } | null;
@@ -291,7 +365,18 @@ export async function parseVoiceWithAi(
       if (options.categories) {
         formData.append("categories", options.categories);
       }
-      if (options.accounts && options.accounts.length > 0) {
+      if (reviewMode) {
+        // Existing multipart account field, but only the closed provider shape.
+        formData.append(
+          "accounts",
+          JSON.stringify(ownedReview.providerContext.accounts)
+        );
+        formData.append("reviewContractVersion", "account-review/v2");
+        formData.append(
+          "preferredCurrency",
+          ownedReview.providerContext.preferredCurrency
+        );
+      } else if (options.accounts && options.accounts.length > 0) {
         formData.append("accounts", JSON.stringify(options.accounts));
       }
       formData.append("callerLocalDate", callerLocalDate);
@@ -432,15 +517,25 @@ export async function parseVoiceWithAi(
     }
 
     const transcript = data.transcript;
-    const originalTranscript = data.original_transcript || transcript;
+    // V2 source spans must reference the exact original transcript, including
+    // the empty-string case; v1 retains its historical display fallback.
+    const originalTranscript = reviewMode
+      ? data.original_transcript
+      : data.original_transcript || transcript;
     const detectedLanguage = data.detected_language;
+    const classification = reviewMode
+      ? classifyVoiceReviewV2Response(rawData)
+      : null;
 
     // Validate and map AI response to ParsedVoiceTransaction
-    const validTransactions: AiVoiceTransaction[] = [];
-    for (const raw of data.transactions) {
+    const validTransactions: Array<{
+      readonly sourceIndex: number;
+      readonly transaction: AiVoiceTransaction;
+    }> = [];
+    for (const [sourceIndex, raw] of data.transactions.entries()) {
       const parsed = AiVoiceTransactionSchema.safeParse(raw);
       if (parsed.success) {
-        validTransactions.push(parsed.data);
+        validTransactions.push({ sourceIndex, transaction: parsed.data });
       } else {
         // PII/privacy: do NOT log `raw` (it contains the AI-parsed transaction
         // with counterparty, amount, description, etc.). Log only aggregate
@@ -466,10 +561,25 @@ export async function parseVoiceWithAi(
 
     // Parse categories using pre-validated categoryMap
 
-    const validatedCurrency = normalizeCurrency(options.preferredCurrency);
+    const validatedCurrency = normalizeCurrency(
+      reviewMode ? ownedReview.preferredCurrency : options.preferredCurrency
+    );
     const results: ParsedVoiceTransaction[] = [];
+    const originalFinancialRows: Array<
+      VoiceReviewNormalizationInput["financialRows"][number]
+    > = [];
+    const categoryIdsBySystemName = new Map<string, string>();
 
-    for (const aiTx of validTransactions) {
+    for (const { sourceIndex, transaction: aiTx } of validTransactions) {
+      const financial = reviewMode
+        ? projectVoiceFinancialAtSourceIndex(data.transactions, sourceIndex)
+        : null;
+      if (reviewMode && financial === null) {
+        logger.warn("[ai-voice-parser] Invalid Voice review financial row", {
+          reasonCode: "review_financial_invalid",
+        });
+        continue;
+      }
       try {
         const resolvedCategory = parseCategory(
           aiTx.categorySystemName,
@@ -491,11 +601,13 @@ export async function parseVoiceWithAi(
           ? normalizeCurrencySafe(aiTx.currency, validatedCurrency)
           : null;
 
-        const resolvedCurrency: CurrencyType = matchedAccount
-          ? normalizeCurrencySafe(matchedAccount.currency, validatedCurrency)
-          : (aiDetectedCurrency ?? validatedCurrency);
+        const resolvedCurrency: CurrencyType = reviewMode
+          ? (aiDetectedCurrency ?? validatedCurrency)
+          : matchedAccount
+            ? normalizeCurrencySafe(matchedAccount.currency, validatedCurrency)
+            : (aiDetectedCurrency ?? validatedCurrency);
 
-        results.push({
+        const mappedTransaction: ParsedVoiceTransaction = {
           amount: aiTx.amount,
           currency: resolvedCurrency,
           type: normalizeType(aiTx.type),
@@ -506,26 +618,33 @@ export async function parseVoiceWithAi(
           categoryId: resolvedCategory.id,
           categoryDisplayName: resolvedCategory.displayName,
           confidence: clampConfidence(aiTx.confidenceScore),
-          accountId: aiTx.accountId || undefined,
+          accountId: reviewMode ? undefined : aiTx.accountId || undefined,
           note: aiTx.description,
           originalTranscript,
           detectedLanguage,
           aiDetectedCurrency,
-        });
-      } catch (error) {
-        // PII/privacy: do NOT log the full `aiTx` object — it contains the
-        // user's transcript-derived transaction (counterparty, amount, note,
-        // description). Log only the category system name (enum-ish) and
-        // currency for diagnostics.
+        };
+        if (reviewMode && financial !== null) {
+          originalFinancialRows.push(financial);
+          const previousId = categoryIdsBySystemName.get(
+            financial.categorySystemName
+          );
+          if (previousId !== undefined && previousId !== resolvedCategory.id) {
+            throw new Error("account_review_category_identity_conflict");
+          }
+          categoryIdsBySystemName.set(
+            financial.categorySystemName,
+            resolvedCategory.id
+          );
+        }
+        results.push(mappedTransaction);
+      } catch {
+        // Only the approved fixed reason code: all other model-derived
+        // diagnostic metadata may contain private user input.
         logger.warn(
           "[ai-voice-parser] Skipping semantically invalid transaction",
           {
-            categorySystemNameLength: aiTx.categorySystemName,
-            currency: aiTx.currency
-              ? normalizeCurrencySafe(aiTx.currency, validatedCurrency)
-              : null,
-
-            error: error instanceof Error ? error.message : String(error),
+            reasonCode: "voice_semantic_mapping_failed",
           }
         );
       }
@@ -538,12 +657,80 @@ export async function parseVoiceWithAi(
       };
     }
 
-    return {
+    const success: AiVoiceParserSuccess = {
       transactions: results,
       transcript,
       originalTranscript,
       detectedLanguage,
     };
+    if (!reviewMode) return success;
+
+    // A successful opt-in must include the full canonical local session.
+    // T014-M owns the actual implementation; this call is never mocked/stubbed.
+    if (
+      classification === null ||
+      originalFinancialRows.length !== results.length
+    ) {
+      return {
+        kind: "schema",
+        message:
+          "The server returned an unexpected response format. Please try again.",
+      };
+    }
+    if (abortController.signal.aborted) {
+      return {
+        kind: didClientTimeout ? "timeout" : "network",
+        message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest: didClientTimeout,
+      };
+    }
+    try {
+      await assertVoiceReviewOwner(ownedReview.ownerId);
+      const input = await buildVoiceReviewNormalizationInput({
+        ownerId: ownedReview.ownerId,
+        requestKey: options.requestKey,
+        reviewAccountSnapshots: ownedReview,
+        categoryIdsBySystemName,
+        financialRows: originalFinancialRows,
+        mappedTransactions: results,
+        providerResponse: classification.providerResponse,
+        originalTranscript,
+      });
+      // The SQL-owned adapter is statically linked but invoked only for an
+      // opted-in result; v1 never loads account snapshots or creates a session.
+      const reviewSession = await createVoiceAccountReviewSession(input);
+      if (abortController.signal.aborted) {
+        return {
+          kind: didClientTimeout ? "timeout" : "network",
+          message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+          retryableSameRequest: didClientTimeout,
+        };
+      }
+      await assertVoiceReviewOwner(ownedReview.ownerId);
+      return attachVoiceReviewSession({
+        success,
+        reviewSession,
+        expectedOwnerId: ownedReview.ownerId,
+        expectedSessionId: input.sessionId,
+      });
+    } catch (reviewError: unknown) {
+      // No raw provider, transcript, category, account or Zod issue payload.
+      logger.warn("[ai-voice-parser] Review session unavailable", {
+        reasonCode: "review_session_unavailable",
+        errorName: reviewError instanceof Error ? reviewError.name : "unknown",
+      });
+      return {
+        kind: abortController.signal.aborted
+          ? didClientTimeout
+            ? "timeout"
+            : "network"
+          : "schema",
+        message: abortController.signal.aborted
+          ? VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE
+          : "Account review could not be prepared. Please retry.",
+        retryableSameRequest: didClientTimeout,
+      };
+    }
   } catch (err: unknown) {
     // FR-024: Handle timeout specifically
     if (err instanceof Error && err.name === "AbortError") {

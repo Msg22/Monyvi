@@ -1,4 +1,5 @@
 import type { SmsProviderCompletionStatusAtEdge } from "../sms-provider-completion.ts";
+import type { SmsReviewV2FinancialRow } from "./sms-ai-review-v2.ts";
 
 export interface ParseSmsMessage {
   readonly id: string;
@@ -22,18 +23,36 @@ export interface ParseSmsProviderTransaction {
   readonly isTrusted: boolean;
 }
 
-export interface SmsProviderExecutionResult {
+interface SmsProviderExecutionBase {
   readonly completionStatus: SmsProviderCompletionStatusAtEdge;
   readonly isResponseSchemaValid: boolean;
-  readonly transactions: readonly ParseSmsProviderTransaction[];
   readonly invalidMessageIds?: readonly string[];
   readonly hasUncorrelatedInvalidEntries?: boolean;
 }
+
+/** Legacy v1 financial string-currency ABI is strictly unchanged. */
+export interface SmsProviderLegacyResult extends SmsProviderExecutionBase {
+  readonly reviewContractVersion?: never;
+  readonly transactions: readonly ParseSmsProviderTransaction[];
+}
+
+/** Canonical v2 financial currency may be null; proof remains advisory. */
+export interface SmsProviderReviewV2Result extends SmsProviderExecutionBase {
+  readonly reviewContractVersion: "account-review/v2";
+  readonly transactions: readonly SmsReviewV2FinancialRow[];
+  readonly rawReviewResponse: unknown;
+}
+
+export type SmsProviderExecutionResult =
+  | SmsProviderLegacyResult
+  | SmsProviderReviewV2Result;
 
 export interface ExecuteSmsProviderInput {
   readonly messages: readonly ParseSmsMessage[];
   readonly categories: string;
   readonly supportedCurrencies: readonly string[];
+  /** Already measured pre-admission, sent unchanged in the one provider call. */
+  readonly reviewProviderRequest?: SmsAiProviderRequest;
   readonly signal?: AbortSignal;
 }
 

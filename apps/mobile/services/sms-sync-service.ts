@@ -712,6 +712,11 @@ async function executeScanPipeline(
     expectedUserId: initiatingScope.userId,
     parsedAt,
     baselineTransactions: [...persistedProgressBaselines.values()],
+    // Only the final complete result owns the exact published WeakMap session.
+    // Chunk progress intentionally keeps its existing V1 publishing behavior.
+    ...(aiResult.reviewSession
+      ? { reviewSession: aiResult.reviewSession }
+      : {}),
   });
   if (mergeResult.rejectedCount > 0) {
     logger.warn("smsReviewDraft.resultRejected", {

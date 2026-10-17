@@ -8,6 +8,7 @@ import {
   type RegisteredActionPayload,
 } from "./action-registry";
 import { assertReviewBatchSaveEnvelope } from "./review-batch-save-envelope";
+import { validateAccountCreateDefaultPayload } from "./account-create-default";
 import {
   FINANCIAL_ACTION_INVALID_REVISION_CODE,
   parseCanonicalUnsignedIntegerString,
@@ -292,6 +293,63 @@ function validateAccountGuards(
   return Object.freeze(guards);
 }
 
+/**
+ * #395 T068: only the explicitly registered accounts/create_with_default/v1
+ * tuple may carry the newly-created account's revision-0 financial guard.
+ * The closed Add payload has already been validated by its scoped registry.
+ * Recheck the envelope linkage here; no legacy/Review guard relaxation.
+ */
+function assertAccountCreateDefaultEnvelope(
+  rawPayload: RegisteredActionPayload,
+  guards: readonly FinancialActionAccountGuard[],
+  domainReferenceId: string
+): void {
+  const payload = validateAccountCreateDefaultPayload(rawPayload);
+  const created = payload.domainMutation.records.filter(
+    (record) => record.entity === "account"
+  );
+  const account = created[0];
+  const absentAccountGuards = payload.createGuards.filter(
+    (guard) => guard.entity === "account"
+  );
+  if (
+    created.length !== 1 ||
+    !account ||
+    account.entity !== "account" ||
+    account.after.id !== domainReferenceId ||
+    !payload.domainRecordRefs.includes(domainReferenceId) ||
+    absentAccountGuards.length !== 1 ||
+    absentAccountGuards[0]?.id !== domainReferenceId ||
+    absentAccountGuards[0]?.expectedAbsent !== true
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
+
+  const opening = account.after.openingBalanceMinorUnits;
+  if (opening === "0") {
+    if (guards.length !== 0 || payload.accountEffects.length !== 0) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+    return;
+  }
+
+  const guard = guards[0];
+  const effect = payload.accountEffects[0];
+  if (
+    guards.length !== 1 ||
+    payload.accountEffects.length !== 1 ||
+    !guard ||
+    guard.accountId !== domainReferenceId ||
+    guard.expectedRevision !== "0" ||
+    !effect ||
+    effect.accountId !== domainReferenceId ||
+    effect.currency !== account.after.currency ||
+    effect.amountMinorUnits !== opening
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
+}
+
 export function canonicalizeFinancialActionEnvelope(
   value: unknown,
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
@@ -359,6 +417,16 @@ export function canonicalizeFinancialActionEnvelope(
     value.payloadVersion === "review.batch-save/v1"
   ) {
     assertReviewBatchSaveEnvelope(
+      payload,
+      accountGuards,
+      value.domainReferenceId
+    );
+  } else if (
+    value.domain === "accounts" &&
+    value.kind === "create_with_default" &&
+    value.payloadVersion === "account.create-default/v1"
+  ) {
+    assertAccountCreateDefaultEnvelope(
       payload,
       accountGuards,
       value.domainReferenceId

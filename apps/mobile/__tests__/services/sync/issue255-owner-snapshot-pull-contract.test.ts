@@ -2,6 +2,7 @@ import {
   pullCategories,
   pullChildTable,
   pullMetalDedicatedTable,
+  pullMarketRates,
   pullSnapshotTable,
   pullUserTable,
 } from "../../../services/sync/pull-strategies";
@@ -133,6 +134,45 @@ describe("#255 public pull caller contracts", () => {
     expect(result.deleted).toEqual([FIRST]);
     expect(result.updated).toHaveLength(1);
     expect(result.updated[0]).not.toHaveProperty("sync_owner");
+  });
+
+  it("uses the market-rate-specific daysToKeep cutoff rather than the snapshot cutoff", async () => {
+    jest.useFakeTimers().setSystemTime(new Date(UPPER));
+    try {
+      const query = chain([], 0);
+      mockFrom.mockReturnValue(query);
+      const expected = new Date(UPPER);
+      expected.setDate(expected.getDate() - 7);
+
+      await pullMarketRates(7, UPPER);
+
+      expect(mockFrom).toHaveBeenCalledWith("market_rates");
+      expect(query.gt).toHaveBeenCalledWith(
+        "created_at",
+        expected.toISOString()
+      );
+      expect(query.lte).toHaveBeenCalledWith("created_at", UPPER);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("uses the explicitly frozen snapshot cutoff across an existing-checkpoint pull", async () => {
+    const query = chain([], 0);
+    mockFrom.mockReturnValue(query);
+    const cutoff = "2026-07-01T00:00:00.000Z";
+
+    await pullSnapshotTable(
+      "daily_snapshot_assets",
+      USER,
+      LOWER,
+      UPPER,
+      cutoff
+    );
+
+    expect(query.gt).toHaveBeenCalledWith("created_at", cutoff);
+    expect(query.gt).toHaveBeenCalledWith("created_at", LOWER);
+    expect(query.lte).toHaveBeenCalledWith("created_at", UPPER);
   });
 
   it("keeps snapshot retention, owner and incremental bounds", async () => {

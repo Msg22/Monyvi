@@ -1,8 +1,11 @@
 /**
- * #395 T046 exact posted effects and Cash snapshot checks. Bigint arithmetic
+ * #395 T046 exact posted effects and account-creation snapshot checks. Bigint arithmetic
  * preserves canonical integer minor units (no Number summation or rounding).
  */
-import type { ReviewBatchSavePayload } from "./review-batch-save-shapes";
+import type {
+  ReviewBatchSavePayload,
+  ReviewNewAccount,
+} from "./review-batch-save-shapes";
 import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
 import { getCurrencyPrecision } from "../utils/currency";
 import {
@@ -118,54 +121,71 @@ function validateEffectCurrencies(
   return null;
 }
 
+/**
+ * The review action owns only newly created account flags. The captured owned
+ * active/default snapshot is a closed *logical* CAS input; current ownership,
+ * lock serialization and freshness still belong to the local/SQL writers.
+ */
 export function validateCreatedAccountBalances(
   payload: ReviewBatchSavePayload
 ): string | null {
-  for (const account of newAccountRecords(payload)) {
+  const accounts = newAccountRecords(payload);
+  const smsCashDestinations = new Set<string>();
+  if (payload.source === "SMS") {
+    for (const record of financialRecords(payload)) {
+      if (record.entity === "transfer")
+        smsCashDestinations.add(record.after.toAccountId);
+    }
+  }
+  for (const account of accounts) {
     if (
       account.after.openingBalanceMinorUnits !== "0" ||
       account.after.targetBalanceMinorUnits !== null
     )
       return "review_inferred_new_account_balance";
-    if (account.after.type !== "CASH" && account.after.isDefault)
-      return "review_suggested_account_default_forbidden";
-  }
-  const cash = newAccountRecords(payload).filter(
-    (account) => account.after.type === "CASH"
-  );
-  if (cash.length === 0)
-    return payload.cashDefaultSnapshot === undefined
-      ? null
-      : "review_unexpected_cash_snapshot";
-  if (cash.length !== 1) return "review_multiple_new_cash_accounts";
-  const cashAccount = cash[0];
-  if (!cashAccount) return "review_cash_account_missing";
-  if (
-    payload.source === "SMS" &&
-    !financialRecords(payload).some(
-      (record) =>
-        record.entity === "transfer" &&
-        record.after.toAccountId === cashAccount.after.id
+    if (
+      payload.source === "SMS" &&
+      account.after.type === "CASH" &&
+      !smsCashDestinations.has(account.after.id)
     )
-  )
-    return "review_sms_cash_only_for_atm";
-  const snapshot = payload.cashDefaultSnapshot;
-  if (!snapshot) return "review_cash_snapshot_missing";
+      return "review_sms_cash_only_for_atm";
+  }
+
+  const snapshot = payload.creationDefaultSnapshot;
+  if (accounts.length === 0)
+    return snapshot === undefined
+      ? null
+      : "review_unexpected_creation_default_snapshot";
+  if (!snapshot) return "review_creation_default_snapshot_missing";
+  return validateCreationDefaultSnapshot(accounts, snapshot);
+}
+
+/** Validate captured logical default state independently of current DB state. */
+function validateCreationDefaultSnapshot(
+  accounts: readonly ReviewNewAccount[],
+  snapshot: NonNullable<ReviewBatchSavePayload["creationDefaultSnapshot"]>
+): string | null {
   if (!sortedDistinct(snapshot.activeAccountIds, (id) => id))
-    return "review_cash_snapshot_unsorted";
-  const currentDefault = snapshot.defaultAccount?.accountId;
-  if (
-    currentDefault !== undefined &&
-    !snapshot.activeAccountIds.includes(currentDefault)
+    return "review_creation_snapshot_unsorted";
+
+  const activeIds = new Set(snapshot.activeAccountIds);
+  const currentDefaultId = snapshot.defaultAccount?.accountId;
+  if (currentDefaultId !== undefined && !activeIds.has(currentDefaultId))
+    return "review_creation_snapshot_default_not_active";
+  if (accounts.some((account) => activeIds.has(account.after.id)))
+    return "review_created_account_already_active_in_snapshot";
+
+  // Use actual frozen CREATE UUIDs, not source/group/currency or incoming order.
+  const firstCreatedId =
+    snapshot.activeAccountIds.length === 0
+      ? accounts.map((account) => account.after.id).sort()[0]
+      : undefined;
+  return accounts.every(
+    (account) =>
+      account.after.isDefault === (account.after.id === firstCreatedId)
   )
-    return "review_cash_default_not_active";
-  const currentCash = cash[0];
-  if (!currentCash || snapshot.activeAccountIds.includes(currentCash.after.id))
-    return "review_cash_not_absent_from_snapshot";
-  return currentCash.after.isDefault ===
-    (snapshot.activeAccountIds.length === 0)
     ? null
-    : "review_cash_default_first_active_mismatch";
+    : "review_creation_first_active_default_mismatch";
 }
 
 export function validateAffectedAccountCoverage(

@@ -11,6 +11,7 @@ import type { AccountReviewNormalizationInput } from "./normalization-types";
 import type { FinancialEntry } from "./normalization-financial";
 import { currencyCode } from "./schema-primitives";
 import { normalizeGroundedIdentity } from "./identity";
+import { hasSourceCardSuffixSpan } from "./normalization-card-grounding";
 
 export interface NormalizedRowEvidence {
   readonly accountEvidence: AccountReviewAccountEvidence;
@@ -147,6 +148,45 @@ function originalSmsSenderMatchesOwned(
   );
 }
 
+/** Only a matching original owner-scoped source may supply card proof. */
+function cardSpanOriginalSource(
+  input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
+  span: AccountReviewEvidenceSpan
+): string | null {
+  if (!spanMatches(input, entry, span)) return null;
+  if (input.source === "VOICE") return input.originalTranscript;
+  if (entry.source !== "SMS") return null;
+  const submitted = input.submittedMessages.find(
+    (item) =>
+      item.id === entry.financial.messageId &&
+      item.smsFingerprint === entry.mapped.smsFingerprint
+  );
+  if (!submitted) return null;
+  return span.field === "body"
+    ? submitted.body
+    : span.field === "sender"
+      ? submitted.sender
+      : null;
+}
+
+/** Account metadata agreement does not independently ground a card claim. */
+function claimedCardSuffixGrounded(
+  input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
+  evidence: AccountReviewAccountEvidence
+): boolean {
+  const claimedSuffix = evidence.cardLast4;
+  if (claimedSuffix === null) return true;
+  return evidence.evidenceSpans.some((span) => {
+    const original = cardSpanOriginalSource(input, entry, span);
+    return (
+      original !== null &&
+      hasSourceCardSuffixSpan(original, span, claimedSuffix)
+    );
+  });
+}
+
 function ownedSmsRoleCompatible(
   entry: FinancialEntry,
   role: "source" | "destination",
@@ -156,6 +196,78 @@ function ownedSmsRoleCompatible(
   return role === "destination"
     ? actualType === "CASH"
     : actualType === "BANK" || actualType === "DIGITAL_WALLET";
+}
+
+/**
+ * Ground SMS source identity before consulting optional model candidate IDs.
+ * In particular, [] cannot bypass the original sender/provider check.
+ *
+ * If the evidence points to an owned provider/name, only an original sender
+ * compatible with that owned account can support it. Genuinely unmatched
+ * named evidence may still form a pending draft when its *own* claimed name
+ * or provider is actually present in an original source span.
+ */
+function originalSmsSourceIdentityGrounded(
+  input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
+  evidence: AccountReviewAccountEvidence,
+  currency: AccountReviewCurrency
+): boolean {
+  if (
+    input.source !== "SMS" ||
+    entry.source !== "SMS" ||
+    evidence.state !== "explicit"
+  ) {
+    return true;
+  }
+  const submitted = input.submittedMessages.find(
+    (item) =>
+      item.id === entry.financial.messageId &&
+      item.smsFingerprint === entry.mapped.smsFingerprint
+  );
+  if (!submitted || !submitted.sender.trim()) return false;
+
+  const claimedOwned = input.reviewAccountSnapshots.accounts.filter(
+    (account) =>
+      ownedSmsRoleCompatible(entry, "source", account.type) &&
+      candidateIdentityMatches(input, entry, evidence, account)
+  );
+  if (claimedOwned.length > 0) {
+    // Every owned account which the FINAL automatic resolver can select must
+    // have its OWN original sender witness. A USD/WALLET/different-card BankX
+    // cannot authorize a separate EGP/BANK/card BankX merely because both
+    // share a display name. This check never uses provider-supplied candidate
+    // IDs as independent source authority.
+    const eligible = claimedOwned.filter(
+      (account) =>
+        (evidence.type === null || evidence.type === account.type) &&
+        (currency.state !== "known" || currency.code === account.currency) &&
+        (evidence.institutionId === null ||
+          evidence.institutionId === account.institutionId) &&
+        (evidence.cardLast4 === null ||
+          evidence.cardLast4 === account.cardLast4)
+    );
+    return (
+      eligible.length > 0 &&
+      eligible.every((account) =>
+        originalSmsSenderMatchesOwned(input, entry, account)
+      )
+    );
+  }
+
+  // For an unmatched named draft, a stated provider takes precedence:
+  // an unrelated nickname/source span cannot ground a different provider.
+  // This still permits a new issuer when its own original message names it.
+  const assertedIdentity = evidence.providerDisplayName ?? evidence.name;
+  return (
+    assertedIdentity !== null &&
+    (sameGroundedName(submitted.sender, assertedIdentity) ||
+      evidence.evidenceSpans.some(
+        (span) =>
+          (span.field === "body" || span.field === "sender") &&
+          sameGroundedName(span.text, assertedIdentity)
+      ))
+  );
 }
 
 export function candidatesOwned(
@@ -178,6 +290,12 @@ export function candidatesOwned(
     evidence.candidateAccountIds.length > 0 &&
     evidence.state !== "explicit" &&
     evidence.state !== "contextual"
+  )
+    return false;
+  // Always validate source/sender provenance, even for candidate IDs [].
+  if (
+    role === "source" &&
+    !originalSmsSourceIdentityGrounded(input, entry, evidence, currency)
   )
     return false;
   return evidence.candidateAccountIds.every((id) => {
@@ -280,6 +398,7 @@ export function normalizeRowEvidence(
   const isAccountEvidenceValid =
     advisory !== null &&
     spansMatch(input, entry, original.evidenceSpans) &&
+    claimedCardSuffixGrounded(input, entry, original) &&
     candidatesOwned(input, entry, original, currency, "source") &&
     !(input.source === "SMS" && original.state === "contextual");
   const accountEvidence: AccountReviewAccountEvidence = isAccountEvidenceValid

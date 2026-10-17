@@ -904,5 +904,20 @@ end;`
         ),
       ],
     },
+    {
+      toVersion: 31,
+      steps: [
+        addColumns({
+          table: "financial_action_groups",
+          columns: [
+            {
+              name: "local_recovery_snapshot_json",
+              type: "string",
+              isOptional: true,
+            },
+          ],
+        }),
+      ],
+    },
   ],
 });

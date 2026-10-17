@@ -301,10 +301,13 @@ not a claim that the current parser/review implements them.
   known currency matches, regardless of account count. Explain this choice in
   review and keep it editable; remove only the account blocker.
 - Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
-  destination resolve separately; use same-currency Cash default or sole Cash
-  for destination, otherwise require choice. Regular transfer sides require
-  reliable endpoint evidence or explicit choice, never one account on both
-  sides.
+  destination resolve separately. Only genuinely absent destination evidence
+  permits eligible same-currency default Cash, then sole eligible Cash; explicit
+  or uncertain `toAccountEvidence` requires a compatible owned choice. Current
+  ATM Save uses an existing eligible Cash (default/sole/manual) or a genuine
+  already-canonical confirmed referenced destination group; it never invents a
+  new Cash destination group/account. Regular transfers require reliable proof
+  or explicit choices and distinct endpoints.
 - Proven currency omission uses the preferred currency. Ambiguous, conflicting
   or unsupported currency requires confirmation before automatic account
   assignment. Currency correction preserves the numeric amount without
@@ -325,7 +328,22 @@ not a claim that the current parser/review implements them.
   final Save, with one atomic idempotent revision-guarded financial action.
   Preserve existing financial outcomes, exact amount rules, source fingerprints
   and owned references; no AI bank-balance inference or extra parsing call for
-  review actions.
+  review actions. Compatible independently confirmed Voice Cash accounts in
+  different currencies may be created together; there is no one-Cash-per-Save
+  restriction. Each account has its own approved currency and exact selected
+  minor-unit effects, with zero inferred opening balance.
+- First-active default applies to **every** account created by review Save:
+  Cash, Bank and Wallet. Freeze one `creationDefaultSnapshot` (existing closed
+  DefaultSnapshot shape, sorted active owned IDs and current default or null)
+  exactly when any review account is created. If its captured active set is
+  empty, exactly the **first actual frozen created-account UUID in canonical
+  ASCII order** is default; all other new accounts are false. If the captured
+  set is nonempty, every new account is nondefault and any existing or
+  intentionally missing default remains unchanged. Validate this under one
+  owner-wide logical-state CAS with at-most-one default, action replay and
+  atomic rollback. Confirmation creates/changes no account or default; review
+  never clears a prior default separately. This does **not** change Add's
+  existing `expectedDefaultSnapshot`, user-controlled default intent, or Edit.
 - Add Account exposes Edit's Default flag: first active account ON/disabled;
   later accounts start OFF, preserving existing/no default. ON replaces prior
   default only after successful creation; unsaved toggle/cancel/failure changes
@@ -334,6 +352,55 @@ not a claim that the current parser/review implements them.
 - Reuse the existing currency modal with transaction context and honest
   unconfirmed selection. Opening/cancelling applies nothing; do not build a new
   picker.
+
+#### #395 first-release scope — human decision (2026-10-17)
+
+The first release preserves the already approved Voice/SMS shared-account
+review, Add/default UI and selected-Save behavior, with **authenticated
+ownership, atomic local Save, rollback and immutable retry/duplicate protection,
+and safe push/pull/ACK handling**. An unknown, rejected, stale or unverifiable
+server result is **not success**: keep the local financial data, unsynced/dirty
+action state and necessary private proof for later resolution; do not silently
+acknowledge, overwrite, compensate or delete it.
+
+Advanced Add compensation-carrier encoding, financial-successor chain
+reconstruction and elaborate rejected-Add/historical restoration are **deferred
+from first-release gates**, not approved for deletion or safety relaxation. The
+following October 16 private-recovery direction is preserved as historical
+future technical design; it must not be mistaken for functionality already
+implemented or mandatory Green for the narrowed initial release. The approved
+spec and B1 decisions remain unchanged. See
+[the #395 controlling first-release scope](../../specs/395-shared-account-review/validation/first-release-scope.md),
+which also preserves the unshipped experimental carrier suite's published SHA.
+
+#### #395 technical storage decision — private local recovery (2026-10-16)
+
+**Status:** Approved implementation direction under the existing #395 Voice/SMS
+review and atomic selected-Save rules above; **not yet implemented or
+deployed**. This is a **technical storage/retention and privacy
+reconciliation**, not a new product behavior or customer-visible choice. The
+feature's accepted spec/approved B1/review Save semantics remain unchanged. The
+separately reviewed Constitution VII 1.8.0 exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) authorizes strictly device-only
+Watermelon migration routing, not a hosted migration.
+
+| Storage scope               | Approved target / boundary                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device-owned root extension | Existing `financial_action_groups` receives nullable **Watermelon-only** `local_recovery_snapshot_json`, accessed via non-generated `localRecoverySnapshotJson`. Old roots remain null; unresolved newly committed review roots require private recovery data. No Supabase column, public generated type, server action field or dummy SQL.                                                                     |
+| Versioned local upgrade     | Reserve Watermelon migration **31** after current 30; generator-consumed local-only declaration, regenerated schema/non-generated model and repeatable local migration/parity tests must be committed together. This has **not** been applied.                                                                                                                                                                  |
+| Private evidence            | Local strict `account-review-local-save/v1` has nine keys: version, action/owner/session, SMS drafts, created entity refs, default preimages, actual sorted predecessor IDs and `queuePreimage`. It binds captured owned preimages to actual prepared postimages in the same atomic writer; it is not the public financial tuple.                                                                               |
+| SMS restoration boundary    | Preserve recoverable unexpired draft choices. A proven automatic `pruned_empty` queue may be restored by exact original owned header only when no current owned queue exists. Explicit discard/reset, expired entries and a newer queue cannot be resurrected. At each draft's **inclusive 30-day parsedAt cutoff**, purge only that expired entry's raw recovery data; leave valid unexpired siblings.         |
+| Voice and sync privacy      | No durable Voice transcript/audio/review session. Private SMS evidence is excluded from Supabase payload/RPC/outbox, `payloadJson`, `outcomeJson`, logs and generic push; dedicated owned root pull must preserve validated local evidence without accepting server-supplied private fields. The opaque `frozenIntentDigest` and financial envelope `payloadHash` stay distinct from the local recovery record. |
+| Recovery ordering           | A rejected grouped action reconciles at most once after authenticated root/postimage/effect/child/default verification. Restore no newer overwritten choice; unresolved optimistic default/active-set predecessor actions must reach canonical acceptance before dependent actions push.                                                                                                                        |
+
+The complete technical guard, retention variants and task coverage are recorded
+in `specs/395-shared-account-review/contracts/local-recovery.md`,
+`contracts/wire-shapes.md` and the existing
+**T043/T044/T048/T049/T050/T051/T053/T074** tasks. No new table in Supabase,
+action format, business approval, default rule or runtime fallback is inferred.
+Local storage and pull implementation still require fresh tests-first Red,
+Speckit analysis, scope-specific source authorization and independent
+database/security review.
 
 ### Bank Details And SMS Senders
 
@@ -1778,6 +1845,50 @@ Business rules:
   - All pages and tombstones buffer into one apply with one checkpoint; a failed
     pull advances no metadata; a later push failure keeps a good pull with
     retryable dirty groups. Financial behavior is unchanged.
+
+### Approved bounded historical recovery — #255/#367/#377
+
+The following four rules extend the PR381 core under the approved continuation.
+They record required behavior, not an assertion of implementation, deployment or
+successful upgrade validation.
+
+1. **Shared complete repair and owner receipt.** A due repair reuses normal
+   complete pulling without the lower checkpoint bound; it does not reset data,
+   change owner, rewrite server timestamps or fabricate historical values. Store
+   only `complete` at `__monyvi_sync_historical_recovery:issue255-v1:${userId}`
+   in existing database-local metadata, after successful SDK
+   synchronization/application and owner checks. If the attempt starts with any
+   canonical unresolved owned financial root, leave the receipt absent for that
+   entire attempt. After actual resolution, a subsequent full pull hydrates
+   withheld evidence before completion. Failed/skipped attempts remain
+   retryable; good pull/bad push preserves its applied checkpoint and dirty work
+   without completing repair.
+2. **Dedicated effect delivery.** Deliver owned account_financial_effects with
+   exact amount/revision strings and stable account/action/effect links, keeping
+   generic financial writes excluded. Preserve null compensated_at, convert a
+   valid server timestamp to local numeric time and reject malformed values.
+   Imported effects are evidence; never post their amounts to balance again.
+3. **Protect unresolved local financial work.** Preserve whole existing
+   unresolved roots and colliding effects after validating immutable identity.
+   Keep local persistence IDs, action IDs, canonical payload/hash, links, state
+   and optimistic recovery evidence until actual existing reconciliation.
+   Imported terminal/compensated flags do not prove local undo. Determine this
+   protection by canonical action state, independently of SDK dirty status.
+   Missing records retain normal hydration. Do not compensate during pull,
+   reinterpret financial evidence or strand withheld records behind a receipt.
+4. **One-time pre-journal snapshot cleanup.** Only during a complete due repair,
+   remove absent clean current-owner identities from daily_snapshot_balance,
+   daily_snapshot_assets and daily_snapshot_net_worth inside the same frozen
+   created_at interval (cutoff,H] used by their full pulls. Complete every
+   required page before buffered application and recheck ownership/cleanliness.
+   Preserve dirty/foreign/out-of-window records and pending deletion intent.
+   Normal retained-journal delivery and the 90-day policy remain unchanged.
+
+These rules require no schema bump, SQL migration or generic recovery registry.
+Broader #339 liveness, already-corrupted terminal actions and #382 frozen-clock
+work remain deferred. Unknown installed-build/backend origins are not evidence
+that upgrades are unnecessary; deployment and actual upgrade acceptance require
+their own verified evidence. Canonical details: specs/389-sync-pagination/.
 
 ## 11. Current Known Product And Documentation Gaps
 

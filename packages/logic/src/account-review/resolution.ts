@@ -128,8 +128,9 @@ function priorAssignmentStillEligible(
     account.currency !== row.assignment.currency
   )
     return false;
-  if (row.assignment.origin === "user" || row.hasUserAccountOverride)
-    return true;
+  // Historical destination-only Cash choices can set the row-wide flag.
+  // Source assignment provenance, not that flag, is authoritative.
+  if (row.assignment.origin === "user") return true;
   if (row.assignment.origin === "default") {
     return (
       row.accountEvidence.state === "absent" &&
@@ -216,9 +217,22 @@ function resolveSource(
     row.currency.code
   );
   if (row.assignment.state === "existing") {
-    return priorAssignmentStillEligible(row, eligible, snapshots.accounts)
-      ? { ...row, reviewReasons: removeAccountBlockers(row.reviewReasons) }
-      : unresolvedSource(row, "account_unavailable", [], true);
+    if (priorAssignmentStillEligible(row, eligible, snapshots.accounts)) {
+      return {
+        ...row,
+        reviewReasons: removeAccountBlockers(row.reviewReasons),
+      };
+    }
+    // A previously eligible automatic default is not a user-selected source.
+    // Re-evaluate absent source evidence against the current owned default.
+    // Never turn explicit source choice or grounded evidence into absence.
+    if (
+      row.assignment.origin === "default" &&
+      row.accountEvidence.state === "absent"
+    ) {
+      return resolveAbsentSource(row, eligible, snapshots.accounts);
+    }
+    return unresolvedSource(row, "account_unavailable", [], true);
   }
   // A previously invalidated explicit user choice cannot silently become default.
   if (row.hasUserAccountOverride) return { ...row, selected: false };

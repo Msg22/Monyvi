@@ -49,6 +49,11 @@ import {
   type UseTransactionEditStateReturn,
 } from "@/hooks/useTransactionEditState";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { useAccountReviewEditorCategories } from "@/hooks/useAccountReviewEditorCategories";
+import {
+  ControlledReviewTransactionEditModal,
+  type ControlledReviewTransactionEditModalProps,
+} from "./ControlledReviewTransactionEditModal";
 import { formatSelectedSnapshotConversionPreview } from "@/services/transaction-conversion-preview-service";
 import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
@@ -84,7 +89,40 @@ export interface TransactionEditModalProps {
   readonly onClose: () => void;
 }
 
+/** Canonical V2 is a separate controlled React branch. It NEVER mounts
+ * the legacy editor hook, account creator or direct transaction writer. */
 export function TransactionEditModal(
+  props: TransactionEditModalProps | ControlledReviewTransactionEditModalProps
+): React.JSX.Element {
+  if ("controlledReview" in props) {
+    return <CanonicalReviewTransactionEditModal {...props} />;
+  }
+  return <LegacyTransactionEditModal {...props} />;
+}
+
+/** Container for authenticated loading and cancellation. The controlled
+ * field sheet is presentational and cannot import a scoped query service. */
+function CanonicalReviewTransactionEditModal(
+  props: ControlledReviewTransactionEditModalProps
+): React.JSX.Element {
+  const categories = useAccountReviewEditorCategories({
+    visible: props.visible,
+    ownerId: props.ownerId,
+    rowId: props.row.rowId,
+    rowRevision: props.row.revision,
+    signal: props.signal,
+  });
+  return (
+    <ControlledReviewTransactionEditModal
+      {...props}
+      categories={categories.categories}
+      categoriesLoaded={categories.isReady}
+      categoryLoadFailed={categories.hasError}
+    />
+  );
+}
+
+function LegacyTransactionEditModal(
   props: TransactionEditModalProps
 ): React.JSX.Element {
   const {

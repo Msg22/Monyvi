@@ -1,4 +1,5 @@
 import type { SyncPullResult } from "@nozbe/watermelondb/sync";
+import type { Database } from "@nozbe/watermelondb";
 
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
@@ -169,7 +170,7 @@ beforeEach(() => {
             data: [
               {
                 id: "11111111-1111-4111-8111-000000000001",
-                action_id: "action-1",
+                action_id: "11111111-1111-4111-8111-000000000001",
                 user_id: "current-user",
                 account_guards_json_text: "[]",
                 outcome_json_text: null,
@@ -184,8 +185,8 @@ beforeEach(() => {
           ? {
               data: [
                 {
-                  id: "11111111-1111-4111-8111-000000000002",
-                  action_id: "action-1",
+                  id: "11111111-1111-4111-8111-000000000001",
+                  action_id: "11111111-1111-4111-8111-000000000001",
                   user_id: "current-user",
                   canonical_holding_revision_text: "0",
                   domain_payload_json_text:
@@ -201,8 +202,8 @@ beforeEach(() => {
             ? {
                 data: [
                   {
-                    id: "11111111-1111-4111-8111-000000000003",
-                    action_id: "action-1",
+                    id: "11111111-1111-4111-8111-000000000001",
+                    action_id: "11111111-1111-4111-8111-000000000001",
                     user_id: "current-user",
                     payload_json_text:
                       '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
@@ -217,7 +218,7 @@ beforeEach(() => {
                   data: [
                     {
                       id: "11111111-1111-4111-8111-000000000004",
-                      action_id: "action-1",
+                      action_id: "11111111-1111-4111-8111-000000000001",
                       user_id: "current-user",
                       value_decimal_text: "3510.500000000000000001",
                       deleted: false,
@@ -235,7 +236,8 @@ beforeEach(() => {
                         purchase_currency: "EGP",
                         updated_at: "2026-05-18T08:02:00.000Z",
                         purchase_price_decimal_text: "100000.125",
-                        acquisition_action_id: "action-1",
+                        acquisition_action_id:
+                          "11111111-1111-4111-8111-000000000001",
                       },
                     ],
                     error: null,
@@ -284,7 +286,20 @@ beforeEach(() => {
 
 describe("pullChanges", () => {
   it("dispatches each syncable table through its scoped pull strategy", async () => {
-    const result = await pullChanges(Date.UTC(2026, 4, 18, 8), "current-user");
+    // Genuine owner-bound read boundary with no preexisting local financial
+    // root. A server row is not a protected-local ACK authority.
+    const ownedReads = jest.fn(() => ({
+      query: jest.fn(() => ({
+        fetch: (): Promise<never[]> => Promise.resolve([]),
+      })),
+    }));
+    const database = { get: ownedReads } as unknown as Database;
+    const result = await pullChanges(
+      Date.UTC(2026, 4, 18, 8),
+      "current-user",
+      database
+    );
+    expect(ownedReads).toHaveBeenCalledWith("financial_action_groups");
     expectCompletedPullResult(result);
 
     expect(result.timestamp).toBe(Date.UTC(2026, 4, 18, 8, 5));
@@ -396,7 +411,7 @@ describe("pullChanges", () => {
       { readonly updated: ReadonlyArray<Record<string, unknown>> }
     >;
     expect(changes.assets?.updated[0]).toMatchObject({
-      acquisition_action_id: "action-1",
+      acquisition_action_id: "11111111-1111-4111-8111-000000000001",
       purchase_currency: "EGP",
       purchase_price_decimal: "100000.125",
     });
@@ -628,7 +643,7 @@ describe("pullMetalHoldingStates", () => {
     expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 
-  it("maps a server root to the optimistic local root by owner and action ID", async () => {
+  it("maps a server root to the settled local root by owner and action ID", async () => {
     mockFrom.mockReturnValue(
       makeSelectChain({
         data: [
@@ -650,7 +665,14 @@ describe("pullMetalHoldingStates", () => {
       get: jest.fn(() => ({
         query: jest.fn(() => ({
           fetch: jest.fn(() =>
-            Promise.resolve([{ actionId: "action-1", id: "local-root-1" }])
+            Promise.resolve([
+              {
+                actionId: "action-1",
+                id: "local-root-1",
+                userId: "current-user",
+                state: "accepted",
+              },
+            ])
           ),
         })),
       })),

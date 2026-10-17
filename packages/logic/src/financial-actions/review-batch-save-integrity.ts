@@ -159,6 +159,11 @@ export function validateSourceAndChildren(
     );
     if (reason !== null) return reason;
   }
+  for (const account of newAccounts.values()) {
+    // Canonical T043 preparation creates exactly one bank-details child for BANK.
+    if (account.type === "BANK" && !bankDetailsByAccount.has(account.id))
+      return "review_bank_details_missing";
+  }
   return null;
 }
 
@@ -226,15 +231,9 @@ export function validateGroupAndBookkeeping(
     payload.confirmedGroupRefs.map((ref) => ref.accountId)
   );
   for (const account of newAccountRecords(payload)) {
-    const isSmsAtmCashDestination =
-      payload.source === "SMS" &&
-      account.after.type === "CASH" &&
-      financialRecords(payload).some(
-        (record) =>
-          record.entity === "transfer" &&
-          record.after.toAccountId === account.after.id
-      );
-    if (!isSmsAtmCashDestination && !confirmed.has(account.after.id))
+    // T043: an ATM destination cannot bypass the confirmed canonical group
+    // contract. Whether a group is genuine/current is writer-owned evidence.
+    if (!confirmed.has(account.after.id))
       return "review_created_account_requires_confirmed_group";
   }
   const bookkeeping = payload.localSmsBookkeeping;
@@ -256,7 +255,10 @@ export function validateGroupAndBookkeeping(
   const deleted = bookkeeping.filter(
     (item) => item.operation === "delete_saved"
   );
-  return deleted.length === payload.selectedSourceRefs.length
+  // Every newly created financial row requires a selected SMS deletion.
+  // Additional already-saved selected drafts are cleanup-only: the device
+  // writer must prove exact physical membership and original snapshots.
+  return deleted.length >= payload.selectedSourceRefs.length
     ? null
     : "review_sms_saved_cleanup_mismatch";
 }

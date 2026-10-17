@@ -20,11 +20,22 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAccountReviewFixtureScene } from "@/hooks/useAccountReviewFixtureScene";
+import {
+  captureAccountReviewRuntimeSave,
+  saveCapturedAccountReview,
+  type AccountReviewRuntimeSaveCapture,
+} from "@/services/account-review-runtime-save";
+import {
+  accountReviewSessionSchema,
+  type AccountReviewSession,
+  type ReviewableTransaction,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -47,10 +58,68 @@ export default function VoiceReviewScreen(): React.JSX.Element {
     originalTranscript: string;
     detectedLanguage: string;
     originTabIndex: string;
+    reviewSession?: string;
+    /** Test-only allowlisted identifier, never a serialized financial object. */
+    reviewFixtureSceneId?: string | string[];
   }>();
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
+  const { userId, isResolvingUser } = useCurrentUser();
+  const saveCaptureRef = useRef<AccountReviewRuntimeSaveCapture | null>(null);
+  const activeReviewRef = useRef<AccountReviewSession | null>(null);
+  const saveAdmissionRef = useRef(false);
+  const onCurrentV2Session = useCallback(
+    (value: AccountReviewSession | null) => {
+      activeReviewRef.current = value;
+    },
+    []
+  );
+  const hasFixtureSceneParam = params.reviewFixtureSceneId !== undefined;
+  const fixtureSceneId =
+    typeof params.reviewFixtureSceneId === "string"
+      ? params.reviewFixtureSceneId
+      : null;
+  const fixtureScene = useAccountReviewFixtureScene({
+    sceneId: fixtureSceneId,
+    ownerId: userId,
+    isResolvingUser,
+  });
+  const hasDirectV2Payload = params.reviewSession !== undefined;
+  const hasV2Payload = hasDirectV2Payload || hasFixtureSceneParam;
+  const parsedCanonical = useMemo((): AccountReviewSession | null => {
+    if (typeof params.reviewSession !== "string") return null;
+    try {
+      // JSON.parse accepts unknown, not a forged typed array. Only the
+      // canonical transaction.date values are revived before strict schema.
+      const unknownSession: unknown = JSON.parse(
+        params.reviewSession,
+        (key: string, value: unknown): unknown =>
+          key === "date" && typeof value === "string" ? new Date(value) : value
+      );
+      const parsed = accountReviewSessionSchema.safeParse(unknownSession);
+      return parsed.success &&
+        parsed.data.source === "VOICE" &&
+        parsed.data.rows.every((row) => row.source === "VOICE")
+        ? parsed.data
+        : null;
+    } catch {
+      return null;
+    }
+  }, [params.reviewSession]);
+  // Unknown/array scene parameters, combined direct session + scene, foreign
+  // owner, and SMS descriptors are explicit failures, not legacy fallbacks.
+  const candidate = hasFixtureSceneParam
+    ? !hasDirectV2Payload && fixtureScene.status === "ready"
+      ? fixtureScene.session
+      : null
+    : parsedCanonical;
+  const canonical =
+    candidate?.source === "VOICE" &&
+    candidate.ownerId === userId &&
+    candidate.rows.every((row) => row.source === "VOICE")
+      ? candidate
+      : null;
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardModalVisible, setDiscardModalVisible] = useState(false);
@@ -139,6 +208,70 @@ export default function VoiceReviewScreen(): React.JSX.Element {
     [router, showToast, originTabRoute, t, tCommon]
   );
 
+  /** Only the existing atomic financial Save service may persist V2. */
+  const handleV2Save = useCallback(
+    async (selectedSession: AccountReviewSession): Promise<void> => {
+      if (saveAdmissionRef.current) return;
+      saveAdmissionRef.current = true;
+      setIsSaving(true);
+      try {
+        if (
+          !canonical ||
+          !userId ||
+          isResolvingUser ||
+          selectedSession.ownerId !== userId ||
+          selectedSession.sessionId !== canonical.sessionId ||
+          selectedSession.source !== "VOICE" ||
+          (activeReviewRef.current &&
+            JSON.stringify(activeReviewRef.current) !==
+              JSON.stringify(selectedSession))
+        ) {
+          throw new Error("account_review_voice_scope_changed");
+        }
+        const capture = captureAccountReviewRuntimeSave(
+          selectedSession,
+          saveCaptureRef.current
+        );
+        saveCaptureRef.current = capture;
+        const result = await saveCapturedAccountReview(
+          capture,
+          (): Promise<AccountReviewSession> => {
+            const current = activeReviewRef.current;
+            return current
+              ? Promise.resolve(current)
+              : Promise.reject(
+                  new Error("account_review_voice_view_invalidated")
+                );
+          }
+        );
+        if (result.kind !== "committed" && result.kind !== "replay")
+          throw new Error("account_review_voice_save_not_committed");
+        router.replace(originTabRoute);
+      } catch (error: unknown) {
+        showToast({
+          type: "error",
+          title: tCommon("error"),
+          message: t("voice_save_error", {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        });
+      } finally {
+        saveAdmissionRef.current = false;
+        setIsSaving(false);
+      }
+    },
+    [
+      canonical,
+      userId,
+      isResolvingUser,
+      router,
+      originTabRoute,
+      showToast,
+      t,
+      tCommon,
+    ]
+  );
+
   // ── Discard ─────────────────────────────────────────────────────────
 
   const handleDiscard = useCallback((): void => {
@@ -149,9 +282,35 @@ export default function VoiceReviewScreen(): React.JSX.Element {
     router.replace(originTabRoute);
   }, [router, originTabRoute]);
 
+  // ── Bounded nonproduction E2E scene loading ────────────────────────
+  if (
+    hasFixtureSceneParam &&
+    !hasDirectV2Payload &&
+    fixtureScene.status === "loading"
+  ) {
+    return (
+      <SafeAreaView
+        testID="account-review-fixture-loading"
+        className="flex-1 items-center justify-center bg-background dark:bg-background-dark"
+      >
+        <Text className="text-text-secondary dark:text-text-secondary-dark">
+          {tCommon("loading")}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
   // ── No transactions guard ───────────────────────────────────────────
 
-  if (transactions.length === 0) {
+  if (
+    (hasV2Payload &&
+      (canonical === null ||
+        !userId ||
+        isResolvingUser ||
+        canonical.ownerId !== userId ||
+        canonical.rows.length === 0)) ||
+    (!hasV2Payload && transactions.length === 0)
+  ) {
     return (
       <SafeAreaView className="flex-1 bg-background dark:bg-background-dark items-center justify-center px-6">
         <Ionicons
@@ -253,10 +412,35 @@ export default function VoiceReviewScreen(): React.JSX.Element {
       )}
 
       <TransactionReview
-        transactions={transactions}
-        onSave={handleSave}
+        transactions={
+          hasV2Payload && canonical
+            ? canonical.rows.map((row) => row.transaction)
+            : transactions
+        }
+        onSave={
+          hasV2Payload
+            ? () =>
+                Promise.reject(
+                  new Error("account_review_v2_legacy_save_forbidden")
+                )
+            : handleSave
+        }
         onDiscard={handleDiscard}
         isSaving={isSaving}
+        accountReview={
+          hasV2Payload && canonical && userId
+            ? {
+                input: {
+                  mode: "VOICE",
+                  ownerId: userId,
+                  sessionId: canonical.sessionId,
+                  voiceSession: canonical,
+                },
+                onSaveSelected: handleV2Save,
+                onSessionChange: onCurrentV2Session,
+              }
+            : undefined
+        }
       />
 
       <ConfirmationModal

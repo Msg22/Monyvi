@@ -1,0 +1,70 @@
+appId: com.monyvi.app
+---
+# #395 T035/T054 — executable-authored Voice-only account-choice journey.
+# NOT EXECUTED. Requires the opted-in local current-owner role profile:
+# E2E_FIXTURE_PROFILE=account-review
+# E2E_SUPABASE_MODE=local
+# EXPO_PUBLIC_MONYVI_TEST_MODE=e2e
+# The T015 service checks current account/active-category roles and validates
+# the canonical VOICE source. Link carries scene ID ONLY, no financial data.
+# The third QNB Premier card ending 4402 is a real separate seeded option,
+# not an invented B1 candidate. No provider, microphone, writer or financial Save.
+
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r1-account-chooser&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# T039 row-specific action—not tapping the row body, which opens FR-019 Edit.
+- tapOn:
+    id: "account-review-row-account-action"
+- assertVisible:
+    id: "account-review-account-choice-sheet"
+- assertVisible: "QNB Everyday"
+- assertVisible: "QNB Savings"
+# Third real owner-bound choice includes the 4402 BankDetails suffix,
+# not a duplicate known-provider account name.
+- assertVisible: "QNB Premier"
+- assertVisible: "QNB.*4402.*EGP"
+- assertVisible:
+    id: "account-review-account-use"
+# The use button is disabled until selection (separate Jest accessibility proof).
+- tapOn: "QNB Savings EGP"
+- tapOn:
+    id: "account-review-account-use"
+- assertNotVisible:
+    id: "account-review-account-choice-sheet"
+- assertVisible:
+    id: "transaction-review-screen"
+
+# R3-13: original QNB group controls remain independent from row assignment.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-combined-en&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+- assertVisible:
+    id: "account-review-details-panel"
+- tapOn:
+    id: "account-review-group-actions-.*"
+- assertVisible:
+    id: "account-review-group-action-sheet"
+- tapOn:
+    id: "account-review-group-replace"
+- assertVisible:
+    id: "account-review-account-choice-sheet"
+- tapOn:
+    id: "account-review-account-cancel"
+- assertNotVisible:
+    id: "account-review-account-choice-sheet"
+- assertVisible:
+    id: "transaction-review-screen"
+# R1-11/R3-03/R3-04 conflicting-currency fixture is SMS in the approved
+# T008 catalogue. NO synthetic SMS session may enter Voice; the actual
+# /sms-review route requires a durable owner-bound queue, V2 codec, namespace
+# lease and real writer. The currency modal remains separately covered by
+# T035/T037-T039 component tests; SMS Maestro is NOT RUN or asserted here.
+# R1-12 Arabic/RTL, screen reader, font scale and the 340/390/tablet layouts
+# still require owner-rendered device evidence. This script never taps Save.

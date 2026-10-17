@@ -1,13 +1,19 @@
 import {
-  buildCategoryMap,
-  clampConfidence,
+  completeInitialSmsReviewResult,
+  deferSmsReviewPublicationToOrchestrator,
+  carryLocalSmsReviewRows,
+  captureInitialSmsReviewNamespaceEpoch,
+} from "./sms-review-namespace-session-service";
+import {
+  mapTrustedTransaction,
+  toCategoryCandidate,
+  createEmptyCategoryEnrichmentResult,
+} from "./sms-review-namespace-trusted-mapping";
+import {
   getParsedSmsTransactionKey,
   isExcludedBeforeSmsParsing,
   matchTrustedSmsTemplate,
-  normalizeCurrency,
-  normalizeType,
   createBundledTrustedSmsCatalogProvider,
-  parseCategory,
   parseSmsWithTrustedCatalog,
   QNB_EGYPT_TRUSTED_SMS_CATALOG,
   selectSmsAiWork,
@@ -35,12 +41,8 @@ import {
 } from "./ai-sms-parser-service";
 import {
   enrichTrustedSmsCategories,
-  MIN_ACCEPTED_CATEGORY_CONFIDENCE,
-  MIN_AUTO_SELECT_CATEGORY_CONFIDENCE,
-  TRUSTED_ENRICHED_PURCHASE_CONFIDENCE,
   type TrustedSmsCategoryCandidate,
   type TrustedSmsCategoryEnrichmentResult,
-  type TrustedSmsCategoryOutcome,
   type SmsCategoryEnrichmentRequestContext,
 } from "./ai-sms-category-enrichment-service";
 import {
@@ -129,108 +131,6 @@ export function getTrustedPrefilterDisposition(
   return hasTrustedPatternEvidence(disabledMatch)
     ? "route_to_parser"
     : "not_trusted_candidate";
-}
-
-function mapTrustedTransaction(
-  transaction: TrustedSmsParsedTransaction,
-  candidate: SmsCandidate,
-  context: ParseSmsContext,
-  categoryOutcome?: TrustedSmsCategoryOutcome
-): ParsedSmsTransaction {
-  const acceptedCategory =
-    transaction.messageFamily === "card_purchase" &&
-    categoryOutcome !== undefined &&
-    Number.isFinite(categoryOutcome.confidence) &&
-    categoryOutcome.confidence >= MIN_ACCEPTED_CATEGORY_CONFIDENCE
-      ? context.categories.find(
-          (category) =>
-            category.isSystem === true &&
-            category.type === "EXPENSE" &&
-            category.isHidden !== true &&
-            category.isInternal !== true &&
-            category.deleted !== true &&
-            category.systemName === categoryOutcome.categorySystemName
-        )
-      : undefined;
-  const acceptedCategoryOutcome =
-    acceptedCategory !== undefined && categoryOutcome !== undefined
-      ? categoryOutcome
-      : undefined;
-  const requiresCategoryReview =
-    acceptedCategoryOutcome !== undefined &&
-    acceptedCategoryOutcome.confidence <
-      MIN_AUTO_SELECT_CATEGORY_CONFIDENCE;
-  const category = acceptedCategory
-    ? {
-        id: acceptedCategory.id,
-        displayName: acceptedCategory.displayName,
-      }
-    : parseCategory(
-        transaction.categorySystemName,
-        buildCategoryMap(context.categories)
-      );
-  const preservedReviewReasons = acceptedCategoryOutcome !== undefined
-    ? transaction.reviewReasons.filter(
-        (reason) => reason !== "low_confidence" && reason !== "category_needed"
-      )
-    : transaction.reviewReasons;
-  const reviewReasons = requiresCategoryReview
-    ? [...preservedReviewReasons, "category_needed" as const]
-    : preservedReviewReasons;
-  return {
-    amount: transaction.amount,
-    currency: normalizeCurrency(transaction.currency),
-    type: normalizeType(transaction.type),
-    counterparty: transaction.counterparty,
-    date: transaction.date,
-    categoryId: category.id,
-    categoryDisplayName: category.displayName,
-    confidence: acceptedCategoryOutcome !== undefined
-      ? TRUSTED_ENRICHED_PURCHASE_CONFIDENCE
-      : clampConfidence(transaction.confidence),
-    originLabel: candidate.message.address,
-    source: "SMS",
-    deduplicationHash: candidate.smsFingerprint,
-    smsFingerprint: candidate.smsFingerprint,
-    senderDisplayName: candidate.message.address,
-    rawSmsBody: candidate.message.body,
-    reviewStatus:
-      acceptedCategoryOutcome !== undefined && reviewReasons.length === 0
-        ? "auto_selectable"
-        : "needs_review",
-    reviewReasons,
-    isAtmWithdrawal: transaction.isAtmWithdrawal,
-    cardLast4: transaction.cardLast4,
-  };
-}
-
-function toCategoryCandidate(
-  transaction: TrustedSmsParsedTransaction
-): TrustedSmsCategoryCandidate | null {
-  if (
-    transaction.messageFamily !== "card_purchase" ||
-    transaction.type !== "EXPENSE" ||
-    transaction.counterparty.trim().length === 0
-  ) {
-    return null;
-  }
-  return {
-    candidateId: transaction.messageId,
-    merchant: transaction.counterparty,
-    transactionType: transaction.type,
-    messageFamily: transaction.messageFamily,
-  };
-}
-
-function createEmptyCategoryEnrichmentResult(): TrustedSmsCategoryEnrichmentResult {
-  return {
-    outcomesByCandidateId: new Map(),
-    attemptedMerchantCount: 0,
-    acceptedCandidateCount: 0,
-    rejectedResultCount: 0,
-    missingResultCount: 0,
-    hasError: false,
-  };
 }
 
 interface HybridAiFallbackResult extends AiParseResult {
@@ -662,62 +562,68 @@ async function parseHybrid(
   const capacityLimitedCount = countCapacityLimitedCandidates(
     aiUnresolvedCandidates
   );
-  return {
-    transactions,
-    hasError: aiResult.hasError || deferredCandidates.length > 0,
-    isRetryable:
-      aiResult.isRetryable ??
-      (deferredCandidates.length > 0 ? false : undefined),
-    isConsentRequired: isCategoryConsentRequired || undefined,
-    unresolvedCandidates,
-    durableLocalRejectionFingerprints,
-    durableNegativeFingerprints: aiResult.durableNegativeFingerprints,
-    oversizedCandidates: aiResult.oversizedCandidates,
-    availability,
-    safeguardSummary: createSafeguardSummary({
-      admittedAiCount: aiSelection.admitted.length,
-      deferredAiCount: aiSelection.deferred.length + capacityLimitedCount,
-      oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
-      unresolvedCount: countOtherUnresolvedCandidates(unresolvedCandidates),
+  return carryLocalSmsReviewRows(
+    {
+      transactions,
+      ...(aiResult.reviewChunks === undefined
+        ? {}
+        : { reviewChunks: aiResult.reviewChunks }),
+      hasError: aiResult.hasError || deferredCandidates.length > 0,
+      isRetryable:
+        aiResult.isRetryable ??
+        (deferredCandidates.length > 0 ? false : undefined),
+      isConsentRequired: isCategoryConsentRequired || undefined,
+      unresolvedCandidates,
+      durableLocalRejectionFingerprints,
+      durableNegativeFingerprints: aiResult.durableNegativeFingerprints,
+      oversizedCandidates: aiResult.oversizedCandidates,
       availability,
-    }),
-    terminalFingerprints: [
-      ...new Set([
-        ...(options.terminalFingerprints ?? []),
-        ...(aiResult.terminalFingerprints ?? []),
-      ]),
-    ],
-    diagnostics: createDiagnostics({
-      mode: "hybrid",
-      attemptedAi: aiSelection.admitted.length > 0,
-      attemptedLocal: true,
-      candidateCount: candidates.length,
-      resultCount: transactions.length,
-      matchedPatternIds: trustedMatches.map(
-        ({ transaction }) => transaction.patternId
-      ),
-      runtimeScopeCounts: { trusted_production: localTransactions.length },
-      catalogVersion: trustedCatalogActivation.catalogVersion ?? undefined,
-      localMatchedCount: countOutcomes(localResult.outcomes, "matched"),
-      localRejectedCount: countOutcomes(localResult.outcomes, "rejected"),
-      localUnresolvedCount: countOutcomes(localResult.outcomes, "unresolved"),
-      localAmbiguousCount: countOutcomes(localResult.outcomes, "ambiguous"),
-      aiAttemptedCount: aiSelection.admitted.length,
-      aiMatchedCount: aiResult.transactions.length,
-      aiDeferredCount: aiSelection.deferred.length,
-      categoryEnrichmentAttemptedCount: categoryResult.attemptedMerchantCount,
-      categoryEnrichedCount: categoryResult.acceptedCandidateCount,
-      categoryEnrichmentRejectedCount: categoryResult.rejectedResultCount,
-      categoryEnrichmentMissingCount: categoryResult.missingResultCount,
-      categoryEnrichmentFailed: categoryResult.hasError,
-      unresolvedCount: unresolvedCandidates.length,
-      duplicateDiscardedCount: mergedResult.duplicateDiscardedCount,
-      reasonCounts: createHybridReasonCounts(
-        localResult.outcomes,
-        unresolvedCandidates
-      ),
-    }),
-  };
+      safeguardSummary: createSafeguardSummary({
+        admittedAiCount: aiSelection.admitted.length,
+        deferredAiCount: aiSelection.deferred.length + capacityLimitedCount,
+        oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
+        unresolvedCount: countOtherUnresolvedCandidates(unresolvedCandidates),
+        availability,
+      }),
+      terminalFingerprints: [
+        ...new Set([
+          ...(options.terminalFingerprints ?? []),
+          ...(aiResult.terminalFingerprints ?? []),
+        ]),
+      ],
+      diagnostics: createDiagnostics({
+        mode: "hybrid",
+        attemptedAi: aiSelection.admitted.length > 0,
+        attemptedLocal: true,
+        candidateCount: candidates.length,
+        resultCount: transactions.length,
+        matchedPatternIds: trustedMatches.map(
+          ({ transaction }) => transaction.patternId
+        ),
+        runtimeScopeCounts: { trusted_production: localTransactions.length },
+        catalogVersion: trustedCatalogActivation.catalogVersion ?? undefined,
+        localMatchedCount: countOutcomes(localResult.outcomes, "matched"),
+        localRejectedCount: countOutcomes(localResult.outcomes, "rejected"),
+        localUnresolvedCount: countOutcomes(localResult.outcomes, "unresolved"),
+        localAmbiguousCount: countOutcomes(localResult.outcomes, "ambiguous"),
+        aiAttemptedCount: aiSelection.admitted.length,
+        aiMatchedCount: aiResult.transactions.length,
+        aiDeferredCount: aiSelection.deferred.length,
+        categoryEnrichmentAttemptedCount: categoryResult.attemptedMerchantCount,
+        categoryEnrichedCount: categoryResult.acceptedCandidateCount,
+        categoryEnrichmentRejectedCount: categoryResult.rejectedResultCount,
+        categoryEnrichmentMissingCount: categoryResult.missingResultCount,
+        categoryEnrichmentFailed: categoryResult.hasError,
+        unresolvedCount: unresolvedCandidates.length,
+        duplicateDiscardedCount: mergedResult.duplicateDiscardedCount,
+        reasonCounts: createHybridReasonCounts(
+          localResult.outcomes,
+          unresolvedCandidates
+        ),
+      }),
+    },
+    localTransactions
+  );
 }
 
 function getAiDiagnosticsMode(): SmsParserMode {
@@ -747,7 +653,7 @@ function assertExpectedUserId(
   }
 }
 
-export async function parseSmsWithOrchestrator(
+async function parseSmsWithOrchestratorCore(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void | Promise<void>,
@@ -797,7 +703,7 @@ export async function parseSmsWithOrchestrator(
     });
     throwIfAborted(abortSignal);
 
-    return result;
+    return carryLocalSmsReviewRows(result, result.transactions);
   }
 
   if (shouldUseHybridSmsParser()) {
@@ -949,4 +855,33 @@ export async function parseSmsWithOrchestrator(
       }),
     };
   }
+}
+
+/** No interim AI session escapes: only the final admitted financial set is assembled. */
+export async function parseSmsWithOrchestrator(
+  candidates: readonly SmsCandidate[],
+  context: ParseSmsContext,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
+  abortSignal?: AbortSignal,
+  options: SmsParserOrchestratorOptions = {}
+): Promise<SmsParserOrchestratorResult> {
+  const namespaceEpoch =
+    candidates.length > 0
+      ? await captureInitialSmsReviewNamespaceEpoch(context)
+      : undefined;
+  const success = await parseSmsWithOrchestratorCore(
+    candidates,
+    deferSmsReviewPublicationToOrchestrator(context),
+    onProgress,
+    abortSignal,
+    options
+  );
+  return completeInitialSmsReviewResult({
+    success,
+    context,
+    candidates,
+    signal: abortSignal,
+    allowLocalSources: shouldUseHybridSmsParser() || shouldUseLocalSmsParser(),
+    namespaceEpoch,
+  });
 }

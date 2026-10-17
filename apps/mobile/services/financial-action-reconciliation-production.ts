@@ -20,8 +20,6 @@ import {
 import {
   createFinancialActionReconciliationService,
   FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
-  type CanonicalAccountSnapshot,
-  type CanonicalEffectSnapshot,
   type FinancialActionReconciliationBundle,
   type InstallCanonicalAccountSnapshotInput,
 } from "./financial-action-reconciliation-service";
@@ -37,105 +35,16 @@ import {
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
 import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import { parseCanonicalAccountsFromOutcomeJson } from "./account-review-recovery-canonical";
+import { reconcileRejectedAccountReviewInSqlite } from "./account-review-recovery-commit";
+import { reconcileRejectedAccountDefaultInSqlite } from "./account-default-intent-local-recovery-commit";
+export { parseCanonicalAccountsFromOutcomeJson } from "./account-review-recovery-canonical";
 
 function fail(): never {
   throw new Error(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
 }
-
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(
-  value: Readonly<Record<string, unknown>>,
-  expected: readonly string[]
-): boolean {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  return (
-    actual.length === sortedExpected.length &&
-    actual.every((key, index) => key === sortedExpected[index])
-  );
-}
-
-function readString(
-  value: Readonly<Record<string, unknown>>,
-  key: string
-): string {
-  const candidate = value[key];
-  if (typeof candidate !== "string") fail();
-  return candidate;
-}
-
-function parseCanonicalEffect(value: unknown): CanonicalEffectSnapshot {
-  if (
-    !isObject(value) ||
-    !hasExactKeys(value, [
-      "acceptedRevision",
-      "actionId",
-      "amountMinorUnits",
-      "effectEvidenceHash",
-      "effectId",
-      "kind",
-    ])
-  ) {
-    fail();
-  }
-  return Object.freeze({
-    acceptedRevision: readString(value, "acceptedRevision"),
-    actionId: readString(value, "actionId"),
-    amountMinorUnits: readString(value, "amountMinorUnits"),
-    effectEvidenceHash: readString(value, "effectEvidenceHash"),
-    effectId: readString(value, "effectId"),
-    kind: readString(value, "kind"),
-  });
-}
-
-function parseCanonicalAccount(value: unknown): CanonicalAccountSnapshot {
-  if (
-    !isObject(value) ||
-    !hasExactKeys(value, [
-      "accountId",
-      "balanceMinorUnits",
-      "canonicalActionId",
-      "canonicalEvidenceHash",
-      "canonicalRevision",
-      "currency",
-      "effectChain",
-    ]) ||
-    !Array.isArray(value.effectChain) ||
-    !(
-      value.canonicalActionId === null ||
-      typeof value.canonicalActionId === "string"
-    )
-  ) {
-    fail();
-  }
-  return Object.freeze({
-    accountId: readString(value, "accountId"),
-    balanceMinorUnits: readString(value, "balanceMinorUnits"),
-    canonicalActionId: value.canonicalActionId,
-    canonicalEvidenceHash: readString(value, "canonicalEvidenceHash"),
-    canonicalRevision: readString(value, "canonicalRevision"),
-    currency: readString(value, "currency"),
-    effectChain: Object.freeze(value.effectChain.map(parseCanonicalEffect)),
-  });
-}
-
-export function parseCanonicalAccountsFromOutcomeJson(
-  outcomeJson: string | null
-): readonly CanonicalAccountSnapshot[] | undefined {
-  if (outcomeJson === null) return undefined;
-  let outcome: unknown;
-  try {
-    outcome = JSON.parse(outcomeJson);
-  } catch {
-    fail();
-  }
-  if (!isObject(outcome)) fail();
-  if (outcome.canonicalAccounts === undefined) return undefined;
-  if (!Array.isArray(outcome.canonicalAccounts)) fail();
-  return Object.freeze(outcome.canonicalAccounts.map(parseCanonicalAccount));
 }
 
 async function findOwnedRoot(
@@ -565,7 +474,7 @@ async function installCanonicalSnapshotAtomically(
   });
 }
 
-export const productionFinancialActionReconciliationService =
+const legacyFinancialActionReconciliationService =
   createFinancialActionReconciliationService({
     commitCompensationAtomically: (): Promise<never> =>
       Promise.reject(
@@ -575,3 +484,53 @@ export const productionFinancialActionReconciliationService =
     installCanonicalSnapshotAtomically,
     loadReconciliationBundle: loadProductionReconciliationBundle,
   });
+
+export const productionFinancialActionReconciliationService: ReturnType<
+  typeof createFinancialActionReconciliationService
+> = {
+  reconcileRejectedAction: async (
+    actionId
+  ): Promise<"reconciled" | "replay"> => {
+    const scope = await getCurrentUserDataScope();
+    const roots = await scope
+      .queryOwned(
+        database.get<FinancialActionGroup>("financial_action_groups"),
+        Q.where("action_id", actionId)
+      )
+      .fetch();
+    if (roots.length !== 1 || !roots[0]) fail();
+    const root = scope.assertOwned(roots[0]);
+    await assertExpectedCurrentUser(scope.userId);
+    if (root.kind === "review_batch_save") {
+      return reconcileRejectedAccountReviewInSqlite({
+        database,
+        actionId,
+        // The original dispatcher's verified actor and physical root are the
+        // authority. Recovery must not silently select another owner's K.
+        expectedOwnerId: scope.userId,
+        expectedPhysicalRootId: root.id,
+        expectedPayloadHash: root.payloadHash,
+        expectedPayloadJson: root.payloadJson,
+        hashProvider: productionFinancialActionHashProvider,
+      });
+    }
+    // Add requires its separate twelve-key private proof and complete
+    // canonical default rejection authority. Reuse the dispatcher's original
+    // actor/physical root identity; never resolve a substitute owner or pass
+    // the tuple to the generic inverse reconciler.
+    if (root.kind === "create_with_default") {
+      return reconcileRejectedAccountDefaultInSqlite({
+        database,
+        actionId,
+        expectedOwnerId: scope.userId,
+        expectedPhysicalRootId: root.id,
+        expectedPayloadHash: root.payloadHash,
+        expectedPayloadJson: root.payloadJson,
+        hashProvider: productionFinancialActionHashProvider,
+      });
+    }
+    return legacyFinancialActionReconciliationService.reconcileRejectedAction(
+      actionId
+    );
+  },
+};

@@ -286,6 +286,17 @@ for (const patch of patches) {
   applied++;
 }
 
+// Required SDK patch: refuse absent, unknown or mixed WatermelonDB content.
+// The patcher preflights every pinned file and is idempotent after a complete
+// known postimage. Its failure must terminate postinstall (never silently skip).
+const {
+  patchWatermelonSyncHooks,
+} = require("./patch-watermelon-sync-hooks.cjs");
+const watermelonSyncHooks = patchWatermelonSyncHooks();
+console.log(
+  "[postinstall] WatermelonDB sync writer guards: " + watermelonSyncHooks.status
+);
+
 console.log(
   `[postinstall] Done. ${applied} patch(es) applied, ${skipped} skipped.`
 );

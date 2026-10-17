@@ -119,10 +119,35 @@ const defaultAccountSchema = z.strictObject({
   accountId: uuidSchema,
   isDefault: z.literal(true),
 });
-export const accountDefaultSnapshotSchema = z.strictObject({
-  activeAccountIds: z.array(uuidSchema),
-  defaultAccount: defaultAccountSchema.nullable(),
-});
+/** Shared Add/Review logical default snapshot: closed, sorted and owner-scoped at capture. */
+export const accountDefaultSnapshotSchema = z
+  .strictObject({
+    activeAccountIds: z.array(uuidSchema),
+    defaultAccount: defaultAccountSchema.nullable(),
+  })
+  .superRefine((snapshot, ctx) => {
+    let previous: string | null = null;
+    for (const [index, id] of snapshot.activeAccountIds.entries()) {
+      if (previous !== null && id <= previous) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["activeAccountIds", index],
+          message: "account_default_snapshot_unsorted_or_duplicate",
+        });
+      }
+      previous = id;
+    }
+    if (
+      snapshot.defaultAccount !== null &&
+      !snapshot.activeAccountIds.includes(snapshot.defaultAccount.accountId)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["defaultAccount", "accountId"],
+        message: "account_default_snapshot_unowned_default",
+      });
+    }
+  });
 
 const accountAfterSchema = z.strictObject({
   id: uuidSchema,
@@ -221,6 +246,7 @@ export const reviewBatchSaveWireSchema = z.strictObject({
   operationCode: z.literal("review.batch-save"),
   source: z.enum(["VOICE", "SMS"]),
   sessionId: uuidSchema,
+  frozenIntentDigest: z.string().regex(/^[0-9a-f]{64}$/),
   selectedSourceRefs: z.array(selectedSourceRefSchema).min(1),
   confirmedGroupRefs: z.array(confirmedGroupRefSchema),
   createGuards: z.array(createGuardSchema).min(1),
@@ -230,7 +256,7 @@ export const reviewBatchSaveWireSchema = z.strictObject({
     records: z.array(reviewMutationSchema).min(1),
   }),
   localSmsBookkeeping: z.array(localSmsBookkeepingSchema),
-  cashDefaultSnapshot: accountDefaultSnapshotSchema.optional(),
+  creationDefaultSnapshot: accountDefaultSnapshotSchema.optional(),
 });
 
 export type ReviewBatchSavePayload = z.infer<typeof reviewBatchSaveWireSchema>;

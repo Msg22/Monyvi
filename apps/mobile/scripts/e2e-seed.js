@@ -23,14 +23,15 @@ function getE2eSeedConfig(env = process.env, options = {}) {
 
 function getE2eFixtureForEnv(env = process.env) {
   const sharedProfile = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (sharedProfile === "account-review" && env.E2E_SUPABASE_MODE !== "local") {
+    throw new Error("account_review_e2e_local_only");
+  }
   if (sharedProfile) return getE2eFixture(sharedProfile);
   if (!env.E2E_BUDGET_PROFILE) return getE2eFixture();
 
   const budgetFixture = E2E_BUDGET_FIXTURES[env.E2E_BUDGET_PROFILE];
   if (!budgetFixture) {
-    throw new Error(
-      `Unknown E2E budget profile: ${env.E2E_BUDGET_PROFILE}`
-    );
+    throw new Error(`Unknown E2E budget profile: ${env.E2E_BUDGET_PROFILE}`);
   }
   return budgetFixture;
 }

@@ -11,6 +11,7 @@ import {
   type AccountReviewSession,
 } from "../schemas";
 import { normalizeAccountReviewParserResult } from "../normalization";
+import { resolveAccountReviewSession } from "../resolution";
 import { NORMALIZATION_IDS } from "./normalization-fixtures";
 import {
   makeCrossMessageSenderAliasAttack,
@@ -20,6 +21,9 @@ import {
   makeOrdinaryCashSenderSms,
   makeOrdinarySmsMissingRequiredDestination,
   makeTwoSmsGroundedControl,
+  makeSplitSenderOwnedSmsInput,
+  SPLIT_SENDER_BANK_B,
+  type SplitSenderConstraint,
 } from "./normalization-safety-fixtures";
 import { REVIEW_WIRE_IDS } from "./fixtures";
 
@@ -429,5 +433,126 @@ describe("#395 F-R2 — a tagged v2 destination field remains required", () => {
     expect(row.toAssignment).toBeNull();
     expect(row.reviewReasons).toContain("account_evidence_invalid");
     expect(row.selected).toBe(false);
+  });
+});
+
+describe("#395 L2 — automatic SMS sender must witness SAME final eligible account", () => {
+  it.each([
+    "currency",
+    "type",
+    "institution",
+    "card",
+  ] as const satisfies readonly SplitSenderConstraint[])(
+    "L2-%s: an unrelated owned BankX sender cannot authorize EGP Bank B with candidate IDs []",
+    async (constraint): Promise<void> => {
+      const input = makeSplitSenderOwnedSmsInput(constraint, [], "ALERT-A");
+      expect(
+        accountReviewSmsResponseV2Schema.safeParse(input.providerResponse)
+          .success
+      ).toBe(true);
+      const normalized = await canonical(input);
+      const resolved = resolveAccountReviewSession({
+        session: normalized,
+        accountSnapshots: input.reviewAccountSnapshots,
+      });
+      const row = requireSmsRow(resolved, NORMALIZATION_IDS.smsFingerprint);
+      expect(row.assignment).not.toMatchObject({
+        state: "existing",
+        origin: "exact",
+        accountId: SPLIT_SENDER_BANK_B,
+      });
+      expect(row.reviewReasons).toContain("account_evidence_invalid");
+      expect(row.selected).toBe(false);
+      expect(row.currency).toMatchObject({ state: "known", code: "EGP" });
+      expect(row.transaction.amount).toBe(50);
+    }
+  );
+
+  it.each([
+    "currency",
+    "type",
+    "institution",
+    "card",
+  ] as const satisfies readonly SplitSenderConstraint[])(
+    "L2-%s: advisory [B] cannot bypass B's missing ORIGINAL sender witness",
+    async (constraint): Promise<void> => {
+      const input = makeSplitSenderOwnedSmsInput(
+        constraint,
+        [SPLIT_SENDER_BANK_B],
+        "ALERT-A"
+      );
+      const normalized = await canonical(input);
+      const row = requireSmsRow(normalized, NORMALIZATION_IDS.smsFingerprint);
+      expect(row.reviewReasons).toContain("account_evidence_invalid");
+      const resolved = resolveAccountReviewSession({
+        session: normalized,
+        accountSnapshots: input.reviewAccountSnapshots,
+      });
+      expect(
+        requireSmsRow(resolved, NORMALIZATION_IDS.smsFingerprint).assignment
+          .state
+      ).toBe("unresolved");
+    }
+  );
+
+  // Jest object rows pass the complete candidate-ID array as one argument.
+  // Direct nested arrays would instead be expanded into callback parameters.
+  it.each([{ ids: [] }, { ids: [SPLIT_SENDER_BANK_B] }] as const)(
+    "L2 genuine eligible Bank B sender still grounds exactly B for model IDs $ids",
+    async ({ ids }): Promise<void> => {
+      const input = makeSplitSenderOwnedSmsInput("currency", ids, "ALERT-B");
+      const normalized = await canonical(input);
+      const row = requireSmsRow(normalized, NORMALIZATION_IDS.smsFingerprint);
+      expect(row.accountEvidence.state).toBe("explicit");
+      expect(row.reviewReasons).not.toContain("account_evidence_invalid");
+      const resolved = resolveAccountReviewSession({
+        session: normalized,
+        accountSnapshots: input.reviewAccountSnapshots,
+      });
+      expect(
+        requireSmsRow(resolved, NORMALIZATION_IDS.smsFingerprint).assignment
+      ).toMatchObject({
+        state: "existing",
+        origin: "exact",
+        accountId: SPLIT_SENDER_BANK_B,
+        currency: "EGP",
+      });
+    }
+  );
+
+  it("L2 explicit USER override remains user authority, not an inferred SMS sender match", async () => {
+    const input = makeSplitSenderOwnedSmsInput("currency", [], "ALERT-A");
+    const normalized = await canonical(input);
+    const row = requireSmsRow(normalized, NORMALIZATION_IDS.smsFingerprint);
+    const manuallyConfirmed = accountReviewSessionSchema.parse({
+      ...normalized,
+      rows: [
+        {
+          ...row,
+          assignment: {
+            state: "existing",
+            origin: "user",
+            accountId: SPLIT_SENDER_BANK_B,
+            currency: "EGP",
+            identityRevision: row.revision,
+          },
+          hasUserAccountOverride: true,
+        },
+      ],
+    });
+    const resolved = resolveAccountReviewSession({
+      session: manuallyConfirmed,
+      accountSnapshots: input.reviewAccountSnapshots,
+    });
+    expect(
+      requireSmsRow(resolved, NORMALIZATION_IDS.smsFingerprint).assignment
+    ).toMatchObject({
+      state: "existing",
+      origin: "user",
+      accountId: SPLIT_SENDER_BANK_B,
+    });
+    expect(
+      requireSmsRow(resolved, NORMALIZATION_IDS.smsFingerprint).selected
+    ).toBe(false);
   });
 });

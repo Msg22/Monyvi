@@ -51,7 +51,7 @@ import {
   existingAccountSmsPayload,
   queuedAtmPayload,
   sharedSmsQueuePayload,
-  validAtmCashDestinationPayload,
+  ungroupedAtmCashDestinationPayload,
   validVoiceCashPayload,
   voiceNewBankPayload,
   voiceZeroNetAtAmount,
@@ -395,7 +395,7 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     const payload = validVoiceCashPayload();
     const cashId = payload.confirmedGroupRefs[0]?.accountId;
     if (!cashId) throw new Error("Missing confirmed Voice Cash group");
-    expect(payload.cashDefaultSnapshot).toEqual({
+    expect(payload.creationDefaultSnapshot).toEqual({
       activeAccountIds: [],
       defaultAccount: null,
     });
@@ -424,13 +424,13 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     ).toEqual(payload);
   });
 
-  it("accepts newly created Cash only as selected ATM transfer destination", () => {
-    const payload = validAtmCashDestinationPayload();
+  it("rejects invented ungrouped ATM Cash destination despite correct transfer effects", () => {
+    const payload = ungroupedAtmCashDestinationPayload();
     const newCash = payload.domainMutation.records.find(
       (record) => record.entity === "account"
     );
     if (!newCash) throw new Error("Missing selected ATM Cash destination");
-    expect(payload.cashDefaultSnapshot).toEqual({
+    expect(payload.creationDefaultSnapshot).toEqual({
       activeAccountIds: [ATM_BANK_ACCOUNT_ID],
       defaultAccount: null,
     });
@@ -444,7 +444,11 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(
       payload.createGuards.some((guard) => guard.entity === "bank_details")
     ).toBe(false);
-    expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
+    // A real existing Cash destination remains valid (separate positive case).
+    expect(validateReviewBatchSavePayload(atmTransferEnvelope.payload)).toEqual(
+      atmTransferEnvelope.payload
+    );
+    expect(() => validateReviewBatchSavePayload(payload)).toThrow();
     const envelope = {
       ...atmTransferEnvelope,
       accountGuards: [
@@ -456,9 +460,9 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
       ],
       payload,
     };
-    expect(
-      canonicalizeFinancialActionEnvelope(envelope, registry).payload
-    ).toEqual(payload);
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(envelope, registry)
+    ).toThrow();
   });
 
   it("RED: disallows SMS ordinary transaction using newly created ATM-destination Cash", () => {
