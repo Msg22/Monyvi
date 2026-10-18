@@ -2,6 +2,16 @@
 description: Plan instructions to guide the agent the right way
 ---
 
+## First-release scope and delivery policy
+
+Follow [delivery policy](../../docs/development-workflow.md). For a rare case,
+would shipping without handling it cause a major problem? Yes: the smallest
+necessary protection is required. Uncertain: ask Mohamed before dependent work.
+No: defer it for first release. An audit finding or possible test case is not
+automatically an implementation task or release blocker. Preserve approved core
+behavior, money/data/privacy and safe sync. Do not add speculative frameworks,
+new protocols or recovery systems merely to satisfy a checklist.
+
 Review this plan thoroughly before making any code changes. For every issue or
 recommendation, explain the concrete trade-offs, provide an opinionated
 recommendation, and solicit my input before assuming a direction. My engineering

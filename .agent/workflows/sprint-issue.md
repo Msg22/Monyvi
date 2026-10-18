@@ -1,5 +1,12 @@
 # Sprint Issue Agent Workflow
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 This workflow applies when working GitHub sprint issues for Monyvi. GitHub
 issues may be AI-generated and not yet reviewed by Mohamed, so issue text is an
 input to verify, not an automatic product decision.
@@ -147,8 +154,9 @@ When creating a secondary or isolated worktree:
 
 ## 5. Implementation Rules
 
-1. Follow TDD for production changes: write a focused failing test first, prove
-   the failure, implement the minimum fix, then make the test pass.
+1. Follow [the delivery workflow](../../docs/development-workflow.md): implement
+   directly, batch existing checks, hand manual testing to Mohamed, then add
+   regression coverage after feedback. Required safety tests precede merge.
 2. Keep fixes simple, SOLID, DRY, and scoped to the issue.
 3. Do not patch from a hypothesis. Confirm the root cause before editing
    production code.

@@ -225,11 +225,14 @@ chore, perf, ci.
 
 ## Testing
 
-- TDD mandatory: Write test first (RED) → Run (FAIL) → Implement (GREEN) →
-  Refactor → Verify coverage (80%+).
-- Unit tests (Jest + React Native Testing Library), integration tests, E2E tests
-  (Detox/Maestro).
-- Fix implementation, not tests (unless tests are wrong).
+Follow [the delivery workflow](docs/development-workflow.md) and `AGENTS.md`.
+Implement directly, run existing checks in a batch, hand manual testing to
+Mohamed, then add regression coverage after feedback and behavior stabilization.
+TDD is optional only on an explicit scoped request. Focused financial/sync/data
+safety tests and independent review remain required before merge; tests may
+follow implementation. Preserve existing tests, hooks and CI thresholds. No
+emulator/device testing unless Mohamed explicitly requests it. Report pending
+manual acceptance separately from automated results.
 
 ## Auto-Detect Rules
 
@@ -301,8 +304,9 @@ The test: Every changed line should trace directly to the user's request.
 
 Transform tasks into verifiable goals:
 
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Add validation" → "Implement approved validation; verify invalid-input
+  behavior"
+- "Fix the bug" → "Confirm root cause, fix it, then retain regression coverage"
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:

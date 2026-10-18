@@ -1,10 +1,25 @@
 # Implementation Plan: [FEATURE]
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
 **Note**: This template is filled in by the `/speckit-plan` command. See
 `.specify/templates/plan-template.md` for the execution workflow.
+
+## Delivery policy
+
+Follow `docs/development-workflow.md`: direct implementation, batched existing
+checks, Mohamed's manual testing/feedback, regression coverage after behavior
+stabilization, final validation. Keep pre-merge safety tests for financial/sync/
+ownership/data-loss changes; they may follow implementation. Do not recreate a
+mandatory TDD gate. Record owner manual status and no-emulator restrictions.
 
 ## Summary
 

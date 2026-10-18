@@ -2,6 +2,13 @@
 description: Perform a comprehensive code review on a branch/PR, add comments
 ---
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 # Code Review & Fix Workflow
 
 This workflow guides the agent to perform an expert-level code review on the

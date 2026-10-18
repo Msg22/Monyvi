@@ -3,7 +3,8 @@
 ## Outcome
 
 Integrate approved delivery slices through declared shared surfaces while
-preserving each slice's contract and producing cross-slice verification evidence.
+preserving each slice's contract and producing cross-slice verification
+evidence.
 
 ## Authority Order
 
@@ -49,9 +50,9 @@ write boundary for the current wave.
 ## Stop And Escalate
 
 Stop for overlapping ownership, incompatible public APIs, missing migration or
-generation output, incomplete Red/Green evidence, failing integration checks,
-or a product/schema/sync conflict. Do not patch feature code to force a merge;
-return the conflict to its owner and the lead.
+generation output, missing stage-required safety evidence, failing integration
+checks, or a product/schema/sync conflict. Do not patch feature code to force a
+merge; return the conflict to its owner and the lead.
 
 ## Required Handoff
 

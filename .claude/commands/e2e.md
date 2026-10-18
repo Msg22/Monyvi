@@ -56,6 +56,8 @@ Use `/e2e` when:
 
 ## Integration with Other Commands
 
-- Use `/tdd` for unit tests (faster, more granular)
+- Follow [delivery policy](../../docs/development-workflow.md) for unit/E2E
+  sequencing; reserve `/tdd` for an explicit scoped request. No emulator/device
+  execution unless Mohamed requests it.
 - Use `/e2e` for integration and user journey tests
 - Use `/test-coverage` to verify coverage

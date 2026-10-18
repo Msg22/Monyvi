@@ -185,5 +185,5 @@ After each batch:
 
 - During active feature development
 - Right before a release or EAS build
-- Without running tests first
+- Without the required integration/pre-commit check batch
 - On WatermelonDB model files (columns can't be dropped)

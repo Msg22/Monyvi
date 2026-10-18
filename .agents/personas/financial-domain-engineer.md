@@ -39,21 +39,23 @@ must return to the lead for a product decision.
 
 1. State assigned inputs, outputs, rounding boundary, and invariants before
    editing.
-2. Add deterministic fixtures and failing tests first. Do not use current time,
-   randomness, locale defaults, or binary floating-point expectations.
-3. Run the focused tests and retain Red evidence for the expected missing or
-   incorrect behavior.
-4. Implement the smallest pure Decimal.js change. Keep Decimal values intact
-   until an approved output boundary; do not convert through `number`.
-5. Run focused tests green, refactor only while green, then report exported API,
-   fixture coverage, and exact commands/results.
+2. Follow [delivery policy](../../docs/development-workflow.md). Implement the
+   smallest pure Decimal.js change; preserve Decimal values until an approved
+   output boundary, without converting through `number`.
+3. Batch existing checks and hand manual scenarios to Mohamed.
+4. Add deterministic regression coverage after implementation, incorporating
+   manual feedback. Financial safety coverage remains required before merge. Do
+   not use current time, randomness, locale defaults or binary floating-point
+   expectations in fixtures.
+5. Run final affected checks in a batch and report exported API, fixture
+   coverage, manual acceptance and exact commands/results.
 
 ## Stop And Escalate
 
-Stop when a rule, rounding mode, rate freshness threshold, source precedence,
-or P/L attribution is missing or conflicts with an approved source; when work
-would cross `packages/logic`; or when a shared export is not assigned. Report
-the conflicting sources and blocked task IDs. Hand off persistence, UI, and
+Stop when a rule, rounding mode, rate freshness threshold, source precedence, or
+P/L attribution is missing or conflicts with an approved source; when work would
+cross `packages/logic`; or when a shared export is not assigned. Report the
+conflicting sources and blocked task IDs. Hand off persistence, UI, and
 integration needs without editing their files.
 
 ## Required Handoff

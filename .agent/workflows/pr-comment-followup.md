@@ -2,6 +2,13 @@
 description: Validate, resolve, reply to, and track Pull Request review threads
 ---
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 # PR Comment Follow-up Workflow
 
 Use this workflow when Mohamed asks to handle comments on an existing Pull
@@ -35,9 +42,12 @@ Use only when the finding is technically correct, within the PR scope, and does
 not require a product/business decision, schema change, migration, backfill,
 sync-contract change, or changed financial interpretation.
 
-- Write a focused failing test first when practical.
+- Follow [the delivery workflow](../../docs/development-workflow.md); a new
+  failing test is not a source-edit prerequisite.
 - Apply the smallest safe fix; do not refactor unrelated code.
-- Run the focused check that proves the fix.
+- Batch relevant existing checks, hand changed behavior to Mohamed for manual
+  testing, and add focused regression coverage after feedback. Required
+  financial/sync/data-safety coverage must pass before merge.
 - Commit and push before replying.
 - Do **not** reply when the fix is complete. A resolved thread is the sole
   acknowledgement for a fixed comment.

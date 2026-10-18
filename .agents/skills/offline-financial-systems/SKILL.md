@@ -1,6 +1,9 @@
 ---
 name: offline-financial-systems
-description: Build or assess an approved offline-first financial action, account-revision, migration, or sync-safety slice. Do not use for dashboard/UI work, direct database mutations, or unapproved schema and product decisions.
+description:
+  Build or assess an approved offline-first financial action, account-revision,
+  migration, or sync-safety slice. Do not use for dashboard/UI work, direct
+  database mutations, or unapproved schema and product decisions.
 ---
 
 # Offline Financial Systems
@@ -12,11 +15,13 @@ revisions, migrations, synchronization, or reconciliation. Read
 - Map current balance writers, authenticated ownership scope, and sync failure
   propagation before changing the protocol.
 - Preserve action-id/payload-hash idempotency, expected-revision protection,
-  immutable account-effect evidence, protected financial fields, and restart-safe
-  reconciliation. A failed pull or push must remain a failed sync.
-- Write focused tests first and show Red evidence for duplicate retries,
-  mismatched payloads, revision conflicts, recovery after restart, and failed
-  synchronization.
+  immutable account-effect evidence, protected financial fields, and
+  restart-safe reconciliation. A failed pull or push must remain a failed sync.
+- Follow [delivery policy](../../../docs/development-workflow.md): direct
+  implementation with batched checks and owner manual testing. Preserve focused
+  pre-merge tests for duplicate retries, mismatched payloads, revision
+  conflicts, restart recovery and failed sync; these tests may follow
+  implementation.
 - Make DDL only in sequential `supabase/migrations` files; update required
   WatermelonDB migration/schema and generated artifacts through the approved
   local workflow. Never execute schema changes through the dashboard or MCP.

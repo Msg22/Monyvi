@@ -109,14 +109,15 @@ Issues to Fix:
 2. ...
 ```
 
-## Continuous Mode
+## Batched validation and owner manual testing
 
-For long sessions, run verification every 15 minutes or after major changes:
+Follow `docs/development-workflow.md`. Run the relevant existing checks together
+at integration/pre-commit and final affected checks after code/test changes. Do
+not run verification every 15 minutes, after every function or after each file
+edit. Re-run affected checks only for new changes, failures or unresolved risks.
+Keep hooks and CI enabled.
 
-```markdown
-Set a mental checkpoint:
-
-- After completing each function
-- After finishing a component
-- Before moving to next task
-```
+Report implementation/manual-ready status separately from Mohamed's actual
+manual acceptance. No emulator/device execution unless explicitly requested.
+Regression coverage follows behavior stabilization; focused financial/sync/data
+safety tests remain required before merge and may follow implementation.
