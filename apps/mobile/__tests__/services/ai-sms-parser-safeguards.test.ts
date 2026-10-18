@@ -4,7 +4,9 @@ import {
   initializeSmsAiScanSession,
   parseSmsWithAi,
   type SmsCandidate,
+  type ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
+import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
 
 interface MockFunctionResponse {
@@ -119,6 +121,57 @@ const context = {
   supportedCurrencies: ["EGP", "USD"],
 };
 
+/** Private owner/default stay on the device; only the closed provider context
+ * is eligible for an authenticated parse-sms request.
+ */
+function scopedReviewContext(ownerId: string): ParseSmsContext {
+  const providerAccount = {
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "Owned bank",
+    type: "BANK" as const,
+    currency: "EGP" as const,
+    institutionId: null,
+    providerDisplayName: null,
+    cardLast4: "0123",
+    senderNames: ["QNB EGYPT"],
+  };
+  return {
+    ...context,
+    reviewAccountSnapshots: {
+      ownerId,
+      preferredCurrency: "EGP",
+      accounts: [{ ...providerAccount, isDefault: true }],
+      providerContext: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: "EGP",
+        accounts: [providerAccount],
+      },
+    },
+  };
+}
+
+/** The active auth session and the owner probe both represent user B. */
+function switchActiveScanOwnerToB(): void {
+  mockGetStableAuthSession.mockResolvedValue({
+    data: {
+      session: {
+        ...mockStableSession,
+        access_token: "stable-user-b-token",
+        user: { ...mockStableSession.user, id: "user-b" },
+      },
+    },
+    error: null,
+  });
+  mockAssertExpectedCurrentUser.mockImplementation(
+    (expectedUserId: string): Promise<void> =>
+      expectedUserId === "user-b"
+        ? Promise.resolve()
+        : Promise.reject(
+            new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
+          )
+  );
+}
+
 function candidate(fixtureId: string): SmsCandidate {
   const fixture = getFixtureById(fixtureId);
   if (!fixture) throw new Error(`Missing fixture ${fixtureId}`);
@@ -138,6 +191,12 @@ describe("AI SMS client safeguards", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGeneratedId = 0;
+    mockGetStableAuthSession.mockImplementation(() =>
+      Promise.resolve({
+        data: { session: mockStableSession },
+        error: null,
+      })
+    );
     mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
     mockSignOut.mockResolvedValue({ error: null });
     process.env = { ...originalEnv };
@@ -225,6 +284,94 @@ describe("AI SMS client safeguards", () => {
         }) as Record<string, unknown>,
       })
     );
+  });
+
+  it("rejects an A-owned snapshot against the current B scan before the initial Edge request", async () => {
+    switchActiveScanOwnerToB();
+    mockInvoke.mockResolvedValue({
+      data: { transactions: [] },
+      error: null,
+    });
+
+    await expect(
+      initializeSmsAiScanSession(
+        scopedReviewContext("user-a"),
+        {
+          scanSessionId: "scan-switch-owner",
+          scanKind: "incremental",
+          scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+        },
+        undefined,
+        "user-b"
+      )
+    ).rejects.toThrow(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+
+    // Active auth is B. A snapshot from A must independently refuse
+    // before any account context reaches the authenticated Edge.
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(mockRefreshSession).not.toHaveBeenCalled();
+  });
+
+  it("pins a supplied snapshot owner when the scan-session caller omits expectedUserId", async () => {
+    switchActiveScanOwnerToB();
+
+    await expect(
+      initializeSmsAiScanSession(scopedReviewContext("user-a"), {
+        scanSessionId: "scan-owner-from-snapshot",
+        scanKind: "incremental",
+        scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+      })
+    ).rejects.toThrow(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-a");
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(mockRefreshSession).not.toHaveBeenCalled();
+  });
+
+  it("initializes normally for a B-owned snapshot and sends only provider-safe account context", async () => {
+    switchActiveScanOwnerToB();
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [],
+        completionStatus: "complete",
+        negativeFingerprints: [],
+        terminalFingerprints: [],
+        unresolvedFingerprints: [],
+      },
+      error: null,
+    });
+    const ownerContext = scopedReviewContext("user-b");
+
+    await expect(
+      initializeSmsAiScanSession(
+        ownerContext,
+        {
+          scanSessionId: "scan-matching-owner",
+          scanKind: "incremental",
+          scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+        },
+        undefined,
+        "user-b"
+      )
+    ).resolves.toBeUndefined();
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-b");
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "parse-sms",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          scanSessionId: "scan-matching-owner",
+          messages: [],
+          supportedCurrencies: context.supportedCurrencies,
+          reviewContractVersion: "account-review/v2",
+          reviewContext: ownerContext.reviewAccountSnapshots?.providerContext,
+        }) as Record<string, unknown>,
+      })
+    );
+    const sentBody: unknown = mockInvoke.mock.calls[0]?.[1].body;
+    expect(JSON.stringify(sentBody)).not.toContain('"ownerId"');
+    expect(JSON.stringify(sentBody)).not.toContain('"isDefault"');
   });
 
   it("revalidates user scope before retrying an authenticated 401", async () => {

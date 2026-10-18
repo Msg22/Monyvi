@@ -470,43 +470,28 @@ chore, perf, ci.
 
 ## Testing
 
-- TDD is mandatory and strict: before writing production code for a task, write
-  the unit tests and E2E tests that describe the expected behavior. Run them and
-  confirm they fail for the right reason, then implement the minimum production
-  logic needed to make them pass. Refactor only after the tests are green.
-- Unit tests (Jest + React Native Testing Library), integration tests, and E2E
-  tests (Detox/Maestro) are the safety net for every feature. Cover every
-  possible flow, journey, scenario, and edge case that belongs to the task,
-  including unhappy paths, denied/blocked permissions, cancellations, retries,
-  duplicate/idempotency behavior, app restart/resume, revoked permissions, and
-  any native/background/headless path touched by the change.
-- E2E tests must validate the complete user-visible path of a feature. They
-  should answer: "Does the feature actually work as expected in every realistic
-  way the user can use it?" E2E tests should not depend on implementation
-  details, private function calls, or internal state unless there is no honest
-  user-level signal available.
-- Pull requests MUST include a complete manual test plan for the changed
-  behavior before final handoff. Treat the manual plan as the source list of
-  scenarios to automate.
-- Convert the manual test plan into automated coverage: unit/integration tests
-  for every deterministic branch and Maestro E2E flows for every complete user
-  journey that can be reliably driven on an emulator. Do not claim E2E coverage
-  for behavior the runner cannot honestly control; document those cases as
-  manual-only or blocked by a missing test harness, with the reason.
-- For high-risk mobile flows, use the available testing specialists and skills
-  during implementation: `tdd-guide` or `source-command-tdd` for unit coverage,
-  `qa-auditor` for test-plan/coverage audits, `source-command-e2e`,
-  `source-command-e2e-runner`, or `source-command-maestro` for Maestro flows,
-  and `test-android-apps:android-emulator-qa` for emulator validation. If none
-  of the available agents or skills fits a recurring testing need, propose a new
-  specialized agent or skill before proceeding.
-- PR descriptions should include a coverage matrix that maps each manual test
-  scenario to its unit/integration test, E2E test, or manual-only validation.
-  Missing automation must be explicit, not implied.
-- For hook tests, use `@testing-library/react-native`'s `renderHook`. Do not add
-  new `react-test-renderer` shims; replace deprecated `react-test-renderer`
-  usage when touching affected tests.
-- Fix implementation, not tests (unless tests are wrong).
+- Follow [the delivery workflow](docs/development-workflow.md): direct
+  implementation, batched existing checks, Mohamed's manual testing, then
+  regression coverage after behavior settles. TDD/Red before production is
+  optional only for an explicit scoped owner request.
+- Required financial-write, balance, sync, retry, ownership and data-loss
+  protection tests and independent review precede merge, even without a manual
+  defect. Tests may follow implementation. Preserve existing tests and CI gates.
+- Prepare a concise manual plan from approved requirements. Mohamed owns manual
+  execution; no emulator/device testing unless explicitly requested. Record
+  pending manual acceptance separately from implementation and passing checks.
+- After manual feedback and fixes, add meaningful unit/integration and honest
+  controllable E2E coverage for reported defects, core paths and relevant edge
+  cases. Do not test every cosmetic detail or mirror implementation internals.
+- Run TypeScript, lint, relevant existing tests and required safety checks in a
+  consolidated integration/pre-commit batch, then final affected checks after
+  code/test changes. Do not run checks after each file edit. Keep hooks enabled.
+- PRs state manual scenarios/feedback, automated coverage/results and
+  manual-only or blocked cases. Never claim device, visual or E2E runs not done.
+- Use `@testing-library/react-native`'s `renderHook`; do not add new deprecated
+  `react-test-renderer` shims.
+- Fix implementation, not correct tests. Change assertions only for approved
+  behavior changes or demonstrably incorrect tests.
 
 ## Tooling Guardrails
 
@@ -685,6 +670,16 @@ For bug fixes and regressions:
 - Regression tests must describe the user-visible failure or invariant being
   protected, not incidental implementation details.
 
+## First-release scope decision
+
+Apply docs/development-workflow.md to rare edge cases: would shipping without
+handling the case cause a major problem? Yes: add the smallest necessary
+protection. Uncertain: explain the concrete impact and ask Mohamed before the
+dependent implementation. No: do not work on it for the first release. Rarity
+alone does not excuse financial/data/privacy/sync harm. Do not turn every review
+possibility into a new feature, recovery framework or release blocker. Preserve
+approved core behavior and basic protections; document deferrals honestly.
+
 ## 2. Simplicity First
 
 **Minimum code that solves the problem. Nothing speculative.**
@@ -722,8 +717,9 @@ The test: Every changed line should trace directly to the user's request.
 
 Transform tasks into verifiable goals:
 
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Add validation" → "Implement approved validation; verify invalid-input
+  behavior"
+- "Fix the bug" → "Confirm root cause, fix it, then retain regression coverage"
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:

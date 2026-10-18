@@ -73,6 +73,19 @@ jest.mock("expo-router", () => ({
   router: { push: jest.fn() },
 }));
 
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn().mockResolvedValue({
+    ownerId: "user-1",
+    preferredCurrency: "EGP",
+    accounts: [],
+    providerContext: {
+      reviewContractVersion: "account-review/v2",
+      preferredCurrency: "EGP",
+      accounts: [],
+    },
+  }),
+}));
+
 jest.mock("@/utils/logger", () => ({
   logger: {
     info: (event: string, payload: Readonly<Record<string, unknown>>): void => {

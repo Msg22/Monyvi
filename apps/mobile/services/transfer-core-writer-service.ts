@@ -156,10 +156,10 @@ function assertTransferAvailable(transfer: Transfer): void {
 function projectionOf(transfer: Transfer): TransferProjection {
   return {
     amount: transfer.amount,
-    convertedAmount: transfer.convertedAmount,
+    convertedAmount: transfer.convertedAmount ?? undefined,
     currency: transfer.currency,
     date: transfer.date,
-    exchangeRate: transfer.exchangeRate,
+    exchangeRate: transfer.exchangeRate ?? undefined,
     fromAccountId: transfer.fromAccountId,
     notes: transfer.notes,
     smsFingerprint: transfer.smsFingerprint,

@@ -201,8 +201,19 @@ export function createUnexpectedChunkOutcome(
 
 async function retryGuard(input: InvokeParseChunkInput): Promise<void> {
   throwIfAborted(input.abortSignal);
-  if (input.expectedUserId !== undefined) {
-    await assertExpectedCurrentUser(input.expectedUserId);
+  const snapshotOwnerId = input.context.reviewAccountSnapshots?.ownerId;
+  if (
+    snapshotOwnerId !== undefined &&
+    input.expectedUserId !== undefined &&
+    snapshotOwnerId !== input.expectedUserId
+  ) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+  }
+  // Initial session calls may omit expectedUserId; an owned snapshot must
+  // still be bound to the current authenticated actor, including on retry.
+  const ownerId = input.expectedUserId ?? snapshotOwnerId;
+  if (ownerId !== undefined) {
+    await assertExpectedCurrentUser(ownerId);
     throwIfAborted(input.abortSignal);
   }
 }
@@ -215,11 +226,7 @@ async function retryGuard(input: InvokeParseChunkInput): Promise<void> {
 export async function invokeParseChunk(
   input: InvokeParseChunkInput
 ): Promise<ChunkAiResult> {
-  throwIfAborted(input.abortSignal);
-  if (input.expectedUserId !== undefined) {
-    await assertExpectedCurrentUser(input.expectedUserId);
-    throwIfAborted(input.abortSignal);
-  }
+  await retryGuard(input);
   const response = await invokeAuthenticatedEdgeFunction<unknown>(
     input.transport.functionName,
     {

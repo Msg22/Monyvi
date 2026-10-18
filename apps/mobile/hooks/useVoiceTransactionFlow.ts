@@ -17,7 +17,7 @@ import {
 import {
   buildConfigContext,
   buildParserPayload,
-  buildSubmission,
+  buildSubmissionWithAccountSnapshots,
   checkAiConsentStatus,
   createRequestKey,
   isActorChanged,
@@ -25,14 +25,18 @@ import {
   isModeSwitchActive,
   resolveRetriedSubmission,
   resolveStaleStartResult,
-  serializeAiReviewParams,
   shouldRetainParserError,
+  validateAndSerializeVoiceReviewRoute,
 } from "./voice-flow-submission";
 import {
   isVoiceParserError,
   isVoiceQuotaParserError,
   parseVoiceWithAi,
 } from "@/services/ai-voice-parser-service";
+import {
+  loadAccountReviewAccountSnapshots,
+  type AccountReviewAccountSnapshots,
+} from "@/services/account-review-read-model-service";
 import { getDeviceTimeZone } from "@/utils/device-time-zone";
 import { logger } from "@/utils/logger";
 import {
@@ -268,20 +272,11 @@ export function useVoiceTransactionFlow(
   );
   const stopForConsentLoss = useCallback(
     async (operation: Flow.FlowOperation): Promise<boolean> => {
-      if (!cfgEnsureAiProcessingConsent) {
-        return false;
-      }
+      if (!cfgEnsureAiProcessingConsent) return false;
       const canUseAi = await hasFreshAiProcessingConsent();
-      if (!isOperationCurrent(operation)) {
-        return true;
-      }
-      if (canUseAi) {
-        return false;
-      }
-      if (!(await discardForOperation(operation))) {
-        return true;
-      }
-      resetToIdle();
+      if (!isOperationCurrent(operation)) return true;
+      if (canUseAi) return false;
+      if (await discardForOperation(operation)) resetToIdle();
       return true;
     },
     [
@@ -568,22 +563,13 @@ export function useVoiceTransactionFlow(
       }
       setIsFinalizing(false);
       updateFlowStatus("analyzing");
-      if (await stopForConsentLoss(operation)) {
-        return;
-      }
-      if (!isOperationCurrent(operation)) {
-        return;
-      }
+      if (await stopForConsentLoss(operation)) return;
+      if (!isOperationCurrent(operation)) return;
       if (!isRetainedRetry) {
         const mayStartProvider = await refreshBeforeProvider(operation);
-        if (!isOperationCurrent(operation)) {
-          return;
-        }
+        if (!isOperationCurrent(operation)) return;
         if (!mayStartProvider) {
-          if (!(await discardForOperation(operation))) {
-            return;
-          }
-          resetToIdle();
+          if (await discardForOperation(operation)) resetToIdle();
           return;
         }
       }
@@ -595,25 +581,21 @@ export function useVoiceTransactionFlow(
       }
       if (isVoiceQuotaParserError(aiResult)) {
         reconcileVoiceAvailability(aiResult.availability);
-        if (!isOperationCurrent(operation)) {
-          return;
-        }
+        if (!isOperationCurrent(operation)) return;
         setRefusalReason(aiResult.kind);
         setErrorMessage(quotaRefusalMessage(aiResult.kind));
         setErrorKind("generic");
         setCanRetrySubmission(false);
-      }
-      await refreshVoiceAvailability();
-      if (!isOperationCurrent(operation)) {
-        return;
-      }
-      if (isVoiceQuotaParserError(aiResult)) {
-        if (!(await discardForOperation(operation))) {
-          return;
-        }
+        await refreshVoiceAvailability();
+        if (!isOperationCurrent(operation)) return;
+        if (!(await discardForOperation(operation))) return;
         clearSubmissionIdentity();
         setIsOverlayVisible(false);
         updateFlowStatus("idle");
+        return;
+      }
+      await refreshVoiceAvailability();
+      if (!isOperationCurrent(operation)) {
         return;
       }
       if (await stopForConsentLoss(operation)) {
@@ -623,33 +605,28 @@ export function useVoiceTransactionFlow(
         return;
       }
       if (isVoiceParserError(aiResult)) {
-        if (
+        const canRetry =
           shouldRetainParserError(aiResult.kind) &&
-          aiResult.retryableSameRequest === true
-        ) {
+          aiResult.retryableSameRequest === true;
+        if (canRetry) {
           retainedSubmissionRef.current = {
             ...submission,
             isConfigRetry: isConfigParserError(aiResult.kind),
           };
           setCanRetrySubmission(true);
-          setErrorMessage(aiResult.message);
-          setErrorKind("generic");
-          updateFlowStatus("error");
-          return;
-        }
-        if (!(await discardForOperation(operation))) {
-          return;
-        }
-        clearSubmissionIdentity();
-        if (aiResult.kind === "consent_required") {
-          setErrorMessage(null);
-          setErrorKind(null);
-          setIsOverlayVisible(false);
-          updateFlowStatus("idle");
-          if (isOperationCurrent(operation)) {
-            await cfgOnAiProcessingConsentRequired?.();
+        } else {
+          if (!(await discardForOperation(operation))) return;
+          clearSubmissionIdentity();
+          if (aiResult.kind === "consent_required") {
+            setErrorMessage(null);
+            setErrorKind(null);
+            setIsOverlayVisible(false);
+            updateFlowStatus("idle");
+            if (isOperationCurrent(operation)) {
+              await cfgOnAiProcessingConsentRequired?.();
+            }
+            return;
           }
-          return;
         }
         setErrorMessage(aiResult.message);
         setErrorKind("generic");
@@ -660,13 +637,25 @@ export function useVoiceTransactionFlow(
         return;
       }
       clearSubmissionIdentity();
-      if (aiResult.transactions.length === 0) {
+      const failClosedWithError = (message: string): void => {
         setRefusalReason(null);
-        setErrorMessage(emptyVoiceResultError());
+        setErrorMessage(message);
         setErrorKind("generic");
         setCanRetrySubmission(false);
         setIsOverlayVisible(true);
         updateFlowStatus("error");
+      };
+      if (aiResult.transactions.length === 0) {
+        failClosedWithError(emptyVoiceResultError());
+        return;
+      }
+      const routeParams = validateAndSerializeVoiceReviewRoute(
+        aiResult,
+        operation.userId,
+        originTabIndexRef.current
+      );
+      if (!routeParams) {
+        failClosedWithError(recordingFinalizeError());
         return;
       }
       setRefusalReason(null);
@@ -677,7 +666,7 @@ export function useVoiceTransactionFlow(
       updateFlowStatus("success");
       router.push({
         pathname: "/voice-review",
-        params: serializeAiReviewParams(aiResult, originTabIndexRef.current),
+        params: routeParams,
       });
       if (isOperationCurrent(operation)) {
         updateFlowStatus("idle");
@@ -715,14 +704,17 @@ export function useVoiceTransactionFlow(
     updateFlowStatus("completed");
     setCanRetrySubmission(false);
     try {
-      if (recorder.durationMs < 1500) {
-        if (!(await discardForOperation(operation))) {
-          return;
-        }
+      const failSubmission = async (
+        message: string = recordingFinalizeError()
+      ): Promise<void> => {
+        if (!(await discardForOperation(operation))) return;
         clearSubmissionIdentity();
-        setErrorMessage(recordingTooShortError());
+        setErrorMessage(message);
         setErrorKind("generic");
         updateFlowStatus("error");
+      };
+      if (recorder.durationMs < 1500) {
+        await failSubmission(recordingTooShortError());
         return;
       }
       let audioUri: string;
@@ -735,10 +727,7 @@ export function useVoiceTransactionFlow(
           return;
         }
         if (finalized === null) {
-          clearSubmissionIdentity();
-          setErrorMessage(recordingFinalizeError());
-          setErrorKind("generic");
-          updateFlowStatus("error");
+          await failSubmission();
           return;
         }
         audioUri = finalized.uri;
@@ -755,21 +744,31 @@ export function useVoiceTransactionFlow(
         requestOwnerUserId !== operation.userId ||
         callerTimeZone === null
       ) {
-        if (!(await discardForOperation(operation))) {
-          return;
-        }
-        clearSubmissionIdentity();
-        setErrorMessage(recordingFinalizeError());
-        setErrorKind("generic");
-        updateFlowStatus("error");
+        await failSubmission();
         return;
       }
-      const submission = buildSubmission(
+      let reviewAccountSnapshots: AccountReviewAccountSnapshots;
+      try {
+        reviewAccountSnapshots = await loadAccountReviewAccountSnapshots();
+      } catch {
+        await failSubmission();
+        return;
+      }
+      if (!isOperationCurrent(operation)) {
+        await discardForOperation(operation);
+        return;
+      }
+      if (reviewAccountSnapshots.ownerId !== operation.userId) {
+        await failSubmission();
+        return;
+      }
+      const submission = buildSubmissionWithAccountSnapshots(
         operation.userId,
         audioUri,
         requestKey,
         callerTimeZone,
-        buildConfigContext(config)
+        config,
+        reviewAccountSnapshots
       );
       retainedSubmissionRef.current = submission;
       await processSubmission(operation, submission);

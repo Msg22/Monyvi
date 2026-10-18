@@ -22,11 +22,11 @@
 
 ### [PRINCIPLE_3_NAME]
 
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
+<!-- Example: III. Implementation and validation order -->
 
 [PRINCIPLE_3_DESCRIPTION]
 
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+<!-- Monyvi: follow docs/development-workflow.md: implementation, batched existing checks, owner manual feedback, regression tests, final validation. Safety tests precede merge; TDD only by explicit scoped request. -->
 
 ### [PRINCIPLE_4_NAME]
 

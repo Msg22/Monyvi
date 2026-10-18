@@ -79,9 +79,10 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 1: Setup tasks (project initialization)
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
    - Phase 3+: One phase per user story (in priority order from spec.md)
-   - Each phase includes: story goal, independent test criteria, tests (if
-     requested), implementation tasks, required mockup visual-evidence tasks
-     when that story changes UI governed by an approved mockup, and separate
+   - Each phase includes: story goal, independent acceptance criteria, direct
+     implementation, batched checks, owner manual feedback, required regression
+     coverage, final validation, required mockup visual-evidence tasks when that
+     story changes UI governed by an approved mockup, and separate
      accessibility-evidence tasks when governed labels/semantics are in scope
    - Final Phase: Polish & cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation
@@ -121,8 +122,13 @@ enough that an LLM can complete it without additional context.
 **CRITICAL**: Tasks MUST be organized by user story to enable independent
 implementation and testing.
 
-**Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the
-feature specification or if user requests TDD approach.
+**Delivery order**: Follow `docs/development-workflow.md`. Generate direct
+implementation, batched existing checks, Mohamed's manual feedback, regression
+coverage after behavior stabilization, and final validation tasks. Include
+required core/feedback coverage and pre-merge financial/sync/data-safety tests;
+TDD is optional only on an explicit scoped request. Preserve existing task IDs
+and completed receipts when reconciling an existing plan. Do not generate an
+exhaustive test task for every cosmetic detail.
 
 **Mockup evidence is NOT optional testing**: When a user story changes UI
 governed by an approved mockup, generate required visual-evidence task(s)

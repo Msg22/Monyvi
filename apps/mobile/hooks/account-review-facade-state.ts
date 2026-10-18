@@ -84,6 +84,10 @@ export interface AccountReviewFacadeView {
   readonly isBusy: boolean;
   readonly error: Error | null;
   readonly undoToken: string | null;
+  /** Only the group of the current transient Undo lease may expose Undo. */
+  readonly undoGroupId?:
+    | AccountReviewSession["groups"][number]["groupId"]
+    | null;
 }
 
 export const EMPTY_ACCOUNT_REVIEW_FACADE: AccountReviewFacadeView = {
@@ -93,6 +97,7 @@ export const EMPTY_ACCOUNT_REVIEW_FACADE: AccountReviewFacadeView = {
   isBusy: false,
   error: null,
   undoToken: null,
+  undoGroupId: null,
 };
 
 interface QueuedReviewCommand {
@@ -261,6 +266,37 @@ export class AccountReviewFacadeController {
     }
   }
 
+  /** Tie the one-use lease to its real removed group, never every tombstone. */
+  private currentUndoGroupId():
+    | AccountReviewSession["groups"][number]["groupId"]
+    | null {
+    const current = this.session;
+    const lease = this.undo;
+    if (
+      !current ||
+      !lease ||
+      current.operationGeneration !== lease.afterRemovalGeneration ||
+      current.ownerId !== lease.previousState.ownerId ||
+      current.sessionId !== lease.previousState.sessionId ||
+      current.source !== lease.previousState.source
+    )
+      return null;
+    const previous = lease.previousState;
+    const removed = previous.groups.filter(
+      (group) =>
+        group.status !== "removed" &&
+        !previous.removedEvidenceKeys.includes(group.evidenceKey) &&
+        current.removedEvidenceKeys.includes(group.evidenceKey) &&
+        current.groups.some(
+          (now) =>
+            now.groupId === group.groupId &&
+            now.status === "removed" &&
+            now.evidenceKey === group.evidenceKey
+        )
+    );
+    return removed.length === 1 ? (removed[0]?.groupId ?? null) : null;
+  }
+
   private publish(): void {
     if (!this.mounted) return;
     const scopedAccounts =
@@ -279,6 +315,7 @@ export class AccountReviewFacadeController {
       isBusy: this.loading || this.running || this.queue.length > 0,
       error: this.error,
       undoToken: this.undo?.token ?? null,
+      undoGroupId: this.currentUndoGroupId(),
     });
   }
 
@@ -649,11 +686,17 @@ export class AccountReviewFacadeController {
 
   undoRemoval(
     expectedInput: UseAccountReviewInput | null = this.input,
-    expectedGeneration = this.generation
+    expectedGeneration = this.generation,
+    expectedUndoToken: string | null = this.undo?.token ?? null
   ): Promise<AccountReviewCommandResult> {
     const session = this.session;
     const undo = this.undo;
-    if (!session || !undo) {
+    if (
+      !session ||
+      !undo ||
+      expectedUndoToken === null ||
+      undo.token !== expectedUndoToken
+    ) {
       return Promise.reject(
         new Error("account_review_facade_undo_unavailable")
       );
@@ -664,7 +707,7 @@ export class AccountReviewFacadeController {
       sessionId: session.sessionId,
       expectedReviewRevision: session.revision,
       expectedOperationGeneration: session.operationGeneration,
-      undoToken: undo.token,
+      undoToken: expectedUndoToken,
     });
     return this.dispatch(command, expectedInput, expectedGeneration);
   }

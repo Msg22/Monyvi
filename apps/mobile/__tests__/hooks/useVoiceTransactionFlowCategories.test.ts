@@ -1,8 +1,14 @@
 import { act, renderHook } from "@testing-library/react-native";
+import type { Category } from "@monyvi/db";
 import type { VoiceAvailabilitySnapshot } from "@monyvi/logic";
 import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
-import type { Category } from "@monyvi/db";
+import {
+  createCanonicalVoiceSessionFixture,
+  TEST_VOICE_OWNER_ID,
+} from "./voice-review-production-wiring-fixtures";
+
+const TEST_CATEGORY_ID = "00000000-0000-4000-8000-000000000301";
 
 const mockPush = jest.fn();
 const mockRecorderStart = jest.fn<Promise<void>, [unknown?]>();
@@ -17,7 +23,7 @@ const mockAvailabilityRefresh = jest.fn<
 >();
 const mockParseVoiceWithAi = jest.fn<Promise<unknown>, [unknown]>();
 const mockRandomUUID = jest.fn<string, []>();
-let mockUserId: string | null = "user-1";
+let mockUserId: string | null = TEST_VOICE_OWNER_ID;
 
 const allowedSnapshot: VoiceAvailabilitySnapshot = {
   serverNow: "2026-10-12T00:00:00.000Z",
@@ -87,7 +93,7 @@ jest.mock("@/services/profile-service", () => ({
       version: "2026-07-ai-processing-v1",
     },
     isConsented: true,
-    userId: "user-1",
+    userId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
   }),
 }));
 
@@ -101,6 +107,21 @@ jest.mock("@/services/ai-voice-parser-service", () => ({
     !("transactions" in value),
   isVoiceQuotaParserError: (value: unknown): boolean =>
     typeof value === "object" && value !== null && "availability" in value,
+}));
+
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn(() =>
+    Promise.resolve({
+      ownerId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
+      preferredCurrency: "EGP",
+      accounts: [],
+      providerContext: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: "EGP",
+        accounts: [],
+      },
+    })
+  ),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -164,7 +185,7 @@ function createMockCategory(
 describe("useVoiceTransactionFlow categories configuration retention and retry", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserId = "user-1";
+    mockUserId = TEST_VOICE_OWNER_ID;
     mockRecorderState.status = "completed";
     mockRecorderState.durationMs = 3000;
     mockRecorderState.isRecording = false;
@@ -232,7 +253,11 @@ describe("useVoiceTransactionFlow categories configuration retention and retry",
     );
 
     // 2. Now caller supplies fresh categories (e.g. database loaded categories)
-    const freshCategory = createMockCategory("cat-1", "groceries", "Groceries");
+    const freshCategory = createMockCategory(
+      TEST_CATEGORY_ID,
+      "groceries",
+      "Groceries"
+    );
     currentCategoryRecords = [freshCategory];
     currentCategories = "L1: food\n  L2: groceries";
     rerender(undefined);
@@ -245,7 +270,7 @@ describe("useVoiceTransactionFlow categories configuration retention and retry",
           currency: "EGP",
           type: "EXPENSE",
           date: new Date("2026-10-12T00:00:00.000Z"),
-          categoryId: "cat-1",
+          categoryId: TEST_CATEGORY_ID,
           categoryDisplayName: "Groceries",
           confidence: 0.9,
           originLabel: "Voice",
@@ -255,6 +280,22 @@ describe("useVoiceTransactionFlow categories configuration retention and retry",
       transcript: "spent 100 on groceries",
       originalTranscript: "spent 100 on groceries",
       detectedLanguage: "en",
+      reviewSession: createCanonicalVoiceSessionFixture({
+        ownerId: mockUserId ?? TEST_VOICE_OWNER_ID,
+        transactions: [
+          {
+            amount: 100,
+            currency: "EGP",
+            type: "EXPENSE",
+            date: new Date("2026-10-12T00:00:00.000Z"),
+            categoryId: TEST_CATEGORY_ID,
+            categoryDisplayName: "Groceries",
+            confidence: 0.9,
+            originLabel: "Voice",
+            source: "VOICE",
+          },
+        ],
+      }),
     });
 
     // Retry submission with fresh category context
@@ -320,6 +361,10 @@ describe("useVoiceTransactionFlow categories configuration retention and retry",
       transcript: "",
       originalTranscript: "",
       detectedLanguage: "en",
+      reviewSession: createCanonicalVoiceSessionFixture({
+        ownerId: mockUserId ?? TEST_VOICE_OWNER_ID,
+        transactions: [],
+      }),
     });
 
     await act(async () => {

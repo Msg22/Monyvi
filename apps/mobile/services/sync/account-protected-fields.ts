@@ -52,6 +52,10 @@ interface AccountBalanceEnvelope {
   }>;
   /** Only a fully inspected, zero-opening Add tuple can omit financial guards. */
   readonly verifiedZeroOpeningAdd?: boolean;
+  /** Strictly inspected Add's new account, never inferred from generic refs. */
+  readonly createdAccountId?: string;
+  /** Immutable Add snapshot account IDs that may have pending creator roots. */
+  readonly defaultSnapshotAccountIds?: readonly string[];
 }
 
 function readAccountBalanceEnvelope(
@@ -60,25 +64,63 @@ function readAccountBalanceEnvelope(
 ): AccountBalanceEnvelope | null {
   if (!isObject(record) || typeof record.payload_json !== "string") return null;
   const strict = inspectNewFinancialActionPushRoot(record, changes);
-  if (strict)
+  if (strict) {
+    const isValidatedAdd =
+      record.domain === "accounts" &&
+      record.kind === "create_with_default" &&
+      strict.payload.schemaVersion === "account.create-default/v1" &&
+      strict.payload.operationCode === "account.create-default";
+    let createdAccountId: string | null = null;
+    let defaultSnapshotAccountIds: readonly string[] = [];
+    if (isValidatedAdd) {
+      // The strict inspector checked the canonical Add payload and physical
+      // owned create. Generic refs also contain default-account updates, so
+      // only the actual account/create mutation can establish this edge.
+      const mutation = strict.payload.domainMutation;
+      const created =
+        isObject(mutation) && Array.isArray(mutation.records)
+          ? mutation.records.filter(
+              (item) =>
+                isObject(item) &&
+                item.entity === "account" &&
+                item.mode === "create"
+            )
+          : [];
+      if (created.length !== 1 || !isObject(created[0])) {
+        throw new Error(MALFORMED_ROOT_ERROR);
+      }
+      createdAccountId = readChangeId(created[0].after);
+      const snapshot = strict.payload.expectedDefaultSnapshot;
+      if (
+        !createdAccountId ||
+        !isObject(snapshot) ||
+        !Array.isArray(snapshot.activeAccountIds)
+      ) {
+        throw new Error(MALFORMED_ROOT_ERROR);
+      }
+      // Local dependencyActionIds are derived from this frozen snapshot.
+      // Match those identities against pending Add creators in this batch,
+      // without adding a transport field or prechecking remote bank rows.
+      defaultSnapshotAccountIds = snapshot.activeAccountIds.filter(
+        (id): id is string => typeof id === "string"
+      );
+    }
     return {
       accountGuards: strict.accountGuards,
       payload: strict.payload,
       references: strict.references,
-      // inspectNewFinancialActionPushRoot has already validated the exact
-      // feature registry tuple, canonical payload and all dirty owned members.
-      // No legacy envelope can set this exemption. The pure Add validator
-      // requires zero opening to have zero effects/guards and a created account.
+      createdAccountId: createdAccountId ?? undefined,
+      defaultSnapshotAccountIds,
+      // No legacy envelope can claim this exemption. Zero-opening Add must
+      // have zero guards/effects and a strictly validated created account.
       verifiedZeroOpeningAdd:
-        record.domain === "accounts" &&
-        record.kind === "create_with_default" &&
-        strict.payload.schemaVersion === "account.create-default/v1" &&
-        strict.payload.operationCode === "account.create-default" &&
+        isValidatedAdd &&
         strict.accountGuards.length === 0 &&
         Array.isArray(strict.payload.accountEffects) &&
         strict.payload.accountEffects.length === 0 &&
-        strict.references.some((ref) => ref.table === "accounts"),
+        createdAccountId !== null,
     };
+  }
   let envelope: unknown;
   try {
     envelope = JSON.parse(record.payload_json);
@@ -372,11 +414,19 @@ function compareRevision(left: string, right: string): number {
 
 function orderBundlesByAccountRevision(
   bundles: readonly AccountFinancialActionPushBundle[],
-  revisionsByAction: ReadonlyMap<string, ReadonlyMap<string, string>>
+  revisionsByAction: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  createdAccountsByAction: ReadonlyMap<string, string>,
+  snapshotAccountsByAction: ReadonlyMap<string, readonly string[]>
 ): readonly AccountFinancialActionPushBundle[] {
   if (bundles.length < 2) return bundles;
   const edges = bundles.map(() => new Set<number>());
   const indegrees = bundles.map(() => 0);
+  const addEdge = (from: number, to: number): void => {
+    if (from !== to && !edges[from].has(to)) {
+      edges[from].add(to);
+      indegrees[to] += 1;
+    }
+  };
 
   for (let leftIndex = 0; leftIndex < bundles.length; leftIndex += 1) {
     for (
@@ -397,13 +447,36 @@ function orderBundlesByAccountRevision(
         if (comparison === 0) return;
         const from = comparison < 0 ? leftIndex : rightIndex;
         const to = comparison < 0 ? rightIndex : leftIndex;
-        if (!edges[from].has(to)) {
-          edges[from].add(to);
-          indegrees[to] += 1;
-        }
+        addEdge(from, to);
       });
     }
   }
+
+  // A validated Add creates its account remotely before any guarded action
+  // can spend into it. A later Add may also capture an earlier pending Bank
+  // creator in its original default snapshot despite both having zero guards.
+  const creators = new Map<string, number>();
+  bundles.forEach((bundle, index) => {
+    const id = createdAccountsByAction.get(bundle.candidate.actionId);
+    if (!id) return;
+    if (creators.has(id)) throw new Error(MALFORMED_ROOT_ERROR);
+    creators.set(id, index);
+  });
+  let hasCreatorOrderingEdge = false;
+  bundles.forEach((bundle, index) => {
+    const actionId = bundle.candidate.actionId;
+    const guards = revisionsByAction.get(actionId);
+    const touchedAccounts = new Set([
+      ...(guards ? guards.keys() : []),
+      ...(snapshotAccountsByAction.get(actionId) ?? []),
+    ]);
+    touchedAccounts.forEach((accountId) => {
+      const creatorIndex = creators.get(accountId);
+      if (creatorIndex === undefined || creatorIndex === index) return;
+      if (!edges[creatorIndex].has(index)) hasCreatorOrderingEdge = true;
+      addEdge(creatorIndex, index);
+    });
+  });
 
   const byActionId = (left: number, right: number): number =>
     bundles[left].candidate.actionId.localeCompare(
@@ -427,6 +500,8 @@ function orderBundlesByAccountRevision(
     });
   }
   if (orderedIndexes.length < bundles.length) {
+    // Never fall back to action-ID order if a creator prerequisite cycles.
+    if (hasCreatorOrderingEdge) throw new Error(MALFORMED_ROOT_ERROR);
     const emitted = new Set(orderedIndexes);
     orderedIndexes.push(
       ...bundles
@@ -451,6 +526,8 @@ export function collectAccountFinancialActionPushBundles(
   if (!roots) return [];
   const effectIdsByAction = collectEffectIdsByAction(changes);
   const revisionsByAction = new Map<string, ReadonlyMap<string, string>>();
+  const createdAccountsByAction = new Map<string, string>();
+  const snapshotAccountsByAction = new Map<string, readonly string[]>();
   const bundles = [...roots.created, ...roots.updated].flatMap((candidate) => {
     if (!isObject(candidate)) return [];
     if (isCataloguedNonDispatchRoot(candidate, catalog)) return [];
@@ -473,6 +550,13 @@ export function collectAccountFinancialActionPushBundles(
       throw new Error(MALFORMED_ROOT_ERROR);
     }
     revisionsByAction.set(actionId, readGuardRevisions(candidate, changes));
+    if (envelope.createdAccountId) {
+      createdAccountsByAction.set(actionId, envelope.createdAccountId);
+      snapshotAccountsByAction.set(
+        actionId,
+        envelope.defaultSnapshotAccountIds ?? []
+      );
+    }
     return [
       Object.freeze({
         candidate: Object.freeze({
@@ -489,7 +573,12 @@ export function collectAccountFinancialActionPushBundles(
       }),
     ];
   });
-  return orderBundlesByAccountRevision(bundles, revisionsByAction);
+  return orderBundlesByAccountRevision(
+    bundles,
+    revisionsByAction,
+    createdAccountsByAction,
+    snapshotAccountsByAction
+  );
 }
 
 export function collectProtectedFinancialActionRowIds(

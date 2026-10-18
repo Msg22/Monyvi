@@ -10,6 +10,7 @@ import type {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { logger } from "@/utils/logger";
 import type {
+  AccountReviewAccountSnapshots,
   FlowConfig,
   ParserContextSnapshot,
   RetainedSubmission,
@@ -115,7 +116,24 @@ export function buildSubmission(
     categories: context.categories,
     accounts: [...context.accounts],
     categoryRecords: [...context.categoryRecords],
+    ...(context.reviewAccountSnapshots
+      ? { reviewAccountSnapshots: context.reviewAccountSnapshots }
+      : {}),
   };
+}
+
+export function buildSubmissionWithAccountSnapshots(
+  userId: string,
+  audioUri: string,
+  requestKey: string,
+  callerTimeZone: string,
+  config: FlowConfig,
+  reviewAccountSnapshots: AccountReviewAccountSnapshots
+): RetainedSubmission {
+  return buildSubmission(userId, audioUri, requestKey, callerTimeZone, {
+    ...buildConfigContext(config),
+    reviewAccountSnapshots,
+  });
 }
 
 export function serializeAiReviewParams(
@@ -144,6 +162,27 @@ export function serializeAiReviewParams(
   return { ...base, reviewSession: JSON.stringify(session) };
 }
 
+export function validateAndSerializeVoiceReviewRoute(
+  aiResult: AiVoiceParserSuccess,
+  expectedOwnerId: string,
+  originTabIndex: number
+): Record<string, string> | null {
+  if (
+    aiResult.reviewSession === undefined ||
+    aiResult.transactions.length === 0 ||
+    aiResult.reviewSession.ownerId !== expectedOwnerId ||
+    aiResult.reviewSession.source !== "VOICE"
+  ) {
+    return null;
+  }
+  try {
+    const routeParams = serializeAiReviewParams(aiResult, originTabIndex);
+    return routeParams.reviewSession ? routeParams : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildParserPayload(
   submission: RetainedSubmission,
   signal: AbortSignal
@@ -157,5 +196,8 @@ export function buildParserPayload(
     accounts: submission.accounts,
     categoryRecords: submission.categoryRecords,
     signal,
+    ...(submission.reviewAccountSnapshots
+      ? { reviewAccountSnapshots: submission.reviewAccountSnapshots }
+      : {}),
   };
 }

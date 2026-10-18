@@ -27,8 +27,15 @@ import { AccountChoiceSheet } from "./AccountChoiceSheet";
 import { CurrencyConfirmationSheet } from "./CurrencyConfirmationSheet";
 import { EditSuggestedAccountSheet } from "./EditSuggestedAccountSheet";
 import { choiceCopy } from "./account-review-choice-presentation";
-import { reviewCopy } from "./shared-account-presentation";
-import React, { useEffect, useState } from "react";
+import {
+  presentReviewAccountChoices,
+  presentReviewCurrencyOptions,
+  presentReviewDefaultAccountName,
+  presentReviewIssueKeys,
+  reviewCopy,
+  ReviewActionButton,
+} from "./shared-account-presentation";
+import React, { useEffect, useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/navigation/PageHeader";
@@ -109,6 +116,58 @@ export function CanonicalAccountReview(
   useEffect(() => {
     props.boundary.onSessionChange?.(session);
   }, [props.boundary.onSessionChange, session]);
+
+  // The retry producer finishes its owned SQLite merge before isRetrying
+  // falls. Refresh the same queue only after that transition, never when the
+  // button is first pressed or on a failed/foreign-owner response.
+  const retryInput = props.boundary.input;
+  const retryMode = retryInput.mode;
+  const retryOwnerId = retryInput.ownerId;
+  const retrySessionId = retryInput.sessionId;
+  const retrySignal = retryInput.signal;
+  const retryQueueId = retryMode === "SMS" ? retryInput.queueId : null;
+  const retrying = props.partialResults?.isRetrying === true;
+  const priorRetry = useRef<{
+    readonly ownerId: string;
+    readonly sessionId: string;
+    readonly queueId: string;
+    readonly retrying: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (
+      retryMode !== "SMS" ||
+      !retryOwnerId ||
+      !retryQueueId ||
+      retrySignal?.aborted
+    ) {
+      priorRetry.current = null;
+      return;
+    }
+    const previous = priorRetry.current;
+    const sameQueue =
+      previous !== null &&
+      previous.ownerId === retryOwnerId &&
+      previous.sessionId === retrySessionId &&
+      previous.queueId === retryQueueId;
+    priorRetry.current = {
+      ownerId: retryOwnerId,
+      sessionId: retrySessionId,
+      queueId: retryQueueId,
+      retrying,
+    };
+    // A partial retry can merge some rows before reporting other failures.
+    // Rehydrate the owned queue after every completed attempt; unchanged
+    // failures simply reload the same persisted choices.
+    if (sameQueue && previous.retrying && !retrying) view.reload();
+  }, [
+    retryMode,
+    retryOwnerId,
+    retrySessionId,
+    retrySignal,
+    retryQueueId,
+    retrying,
+    view.reload,
+  ]);
 
   const scope = session
     ? {
@@ -264,16 +323,12 @@ export function CanonicalAccountReview(
       return false;
     }
   };
-  const openRowChoice = (rowId: string): void => {
+  const openRowChoice = (
+    rowId: string,
+    role: "source" | "destination" = "source"
+  ): void => {
     const row = rows.get(rowId);
     if (!row || busy) return;
-    const role =
-      row.source === "SMS" &&
-      row.transaction.isAtmWithdrawal === true &&
-      row.assignment.state !== "unresolved" &&
-      row.toAssignment?.state === "unresolved"
-        ? "destination"
-        : "source";
     setCandidateId(null);
     setChoice({ kind: "row", rowId, role });
   };
@@ -415,7 +470,8 @@ export function CanonicalAccountReview(
       canEdit: !removed,
       canReplace: !removed && linkedCount > 0,
       canRemove: !removed,
-      canUndo: removed && view.undoToken !== null,
+      canUndo:
+        removed && view.undoToken !== null && view.undoGroupId === g.groupId,
     };
   };
 
@@ -452,40 +508,25 @@ export function CanonicalAccountReview(
     const row = rows.get(id);
     return row ? [row] : [];
   });
-  const defaultAccount = session.rows.find(
-    (row) =>
-      row.assignment.state === "existing" && row.assignment.origin === "default"
+  const defaultAccountName = presentReviewDefaultAccountName(
+    session.rows,
+    view.choiceAccounts
   );
-  const defaultAccountId =
-    defaultAccount?.assignment.state === "existing"
-      ? defaultAccount.assignment.accountId
-      : null;
-  const defaultAccountName = defaultAccountId
-    ? (view.choiceAccounts.find((a) => a.id === defaultAccountId)?.name ?? null)
-    : null;
-  const summary = {
-    ...model.summary,
-    issueLabels: [],
-  };
-  const choiceAccountOptions = eligibleCandidates.map((account) => ({
-    id: account.id,
-    displayName: account.name,
-    identityDetails: [
-      account.providerDisplayName,
-      account.cardLast4,
-      account.currency,
-    ]
-      .filter((text) => text !== null && text.length > 0)
-      .join(" · "),
-    accessibilityLabel: account.name + " " + account.currency,
-    isEligible: true,
-  }));
-  const currencyOptions =
-    currentRow?.currency.state === "unconfirmed"
-      ? currentRow.currency.candidateCodes
-      : currentRow?.currency.state === "known"
-        ? [currentRow.currency.code]
-        : [];
+  const issueLabels = presentReviewIssueKeys(
+    visibleRows,
+    model.summary.distinctNeedsReviewCount
+  ).map((key) =>
+    key === "account_review_group_needs_review"
+      ? reviewCopy(key, language)
+      : tTransactions(key)
+  );
+  const summary = { ...model.summary, issueLabels };
+  const choiceAccountOptions = presentReviewAccountChoices(eligibleCandidates);
+  const checkedCurrency = currencyCode.safeParse(currencySelection);
+  const currencyOptions = presentReviewCurrencyOptions(
+    currentRow?.currency,
+    checkedCurrency.success ? checkedCurrency.data : null
+  );
   const renderRow = ({
     item: row,
     index,
@@ -504,53 +545,86 @@ export function CanonicalAccountReview(
           )?.name ?? null)
         : (linked?.name ?? null);
     const content = getExpandedContent(row.transaction);
+    const isSmsAtm =
+      row.source === "SMS" && row.transaction.isAtmWithdrawal === true;
+    const destinationName =
+      row.toAssignment?.state === "existing"
+        ? (view.choiceAccounts.find(
+            (account) => account.id === row.toAssignment?.accountId
+          )?.name ?? null)
+        : null;
     return (
-      <TransactionItem
-        transaction={row.transaction}
-        index={index}
-        isSelected={row.selected}
-        accountName={assignedName}
-        expandedContentTitle={content?.title}
-        expandedContentBody={content?.body}
-        onToggleSelect={() => toggleRow(row.rowId)}
-        onPress={() => openTransactionEdit(row.rowId)}
-        hasMissingInfo={
-          row.reviewReasons.length > 0 ||
-          row.currency.state === "unconfirmed" ||
-          row.assignment.state === "unresolved"
-        }
-        isSmsWorkspace={props.workspaceVariant === "sms"}
-        accountReview={{
-          rowId: row.rowId,
-          accountActionLabel: choiceCopy(
-            "account_review_choice_use_account",
-            language
-          ),
-          accountStatusLabel: assignedName,
-          sharedSelectionDisclosure: linked
-            ? String(linked.linkedRowIds.length) +
-              " " +
-              reviewCopy("account_review_group_linked", language)
-            : null,
-          currencyActionLabel:
-            row.currency.state === "unconfirmed"
-              ? choiceCopy("account_review_choice_use_currency", language)
+      <View>
+        <TransactionItem
+          transaction={row.transaction}
+          index={index}
+          isSelected={row.selected}
+          accountName={assignedName}
+          expandedContentTitle={content?.title}
+          expandedContentBody={content?.body}
+          onToggleSelect={() => toggleRow(row.rowId)}
+          onPress={() => openTransactionEdit(row.rowId)}
+          hasMissingInfo={
+            row.reviewReasons.length > 0 ||
+            row.currency.state === "unconfirmed" ||
+            row.assignment.state === "unresolved"
+          }
+          isSmsWorkspace={props.workspaceVariant === "sms"}
+          accountReview={{
+            rowId: row.rowId,
+            accountActionLabel: isSmsAtm
+              ? tTransactions("from_account")
+              : choiceCopy("account_review_choice_use_account", language),
+            accountStatusLabel: assignedName,
+            sharedSelectionDisclosure: linked
+              ? String(linked.linkedRowIds.length) +
+                " " +
+                reviewCopy("account_review_group_linked", language)
               : null,
-          currencyContextLabel: reviewCopy(
-            "account_review_group_locked_currency",
-            language
-          ),
-          accountStatusTone:
-            linked?.status === "confirmed"
-              ? "confirmed"
-              : linked?.status === "removed"
-                ? "removed"
-                : "pending",
-          isBusy: busy,
-          onChooseAccount: openRowChoice,
-          onChooseCurrency: openCurrency,
-        }}
-      />
+            currencyActionLabel:
+              row.currency.state === "unconfirmed"
+                ? choiceCopy("account_review_choice_use_currency", language)
+                : null,
+            currencyContextLabel: reviewCopy(
+              "account_review_group_locked_currency",
+              language
+            ),
+            accountStatusTone:
+              row.assignment.state === "existing"
+                ? undefined
+                : linked?.status === "confirmed"
+                  ? "confirmed"
+                  : linked?.status === "removed"
+                    ? "removed"
+                    : "pending",
+            isBusy: busy,
+            onChooseAccount: openRowChoice,
+            onChooseCurrency: openCurrency,
+          }}
+        />
+        {isSmsAtm ? (
+          <View
+            testID="account-review-atm-destination"
+            className="gap-2 px-4 pb-3"
+          >
+            <Text
+              testID="account-review-atm-destination-status"
+              className="text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+            >
+              {tTransactions("to_account")}:{" "}
+              {destinationName ??
+                tTransactions("please_select_destination_account")}
+            </Text>
+            <ReviewActionButton
+              testID="account-review-atm-destination-action"
+              label={tTransactions("to_account")}
+              iconName="pencil-outline"
+              disabled={busy}
+              onPress={() => openRowChoice(row.rowId, "destination")}
+            />
+          </View>
+        ) : null}
+      </View>
     );
   };
 
@@ -628,8 +702,9 @@ export function CanonicalAccountReview(
                 setChoice({ kind: "replace", groupId });
               }}
               onRemove={(groupId) => sendGroup(groupId, "remove_group")}
-              onUndo={() => {
-                if (busy || !view.undoToken) return;
+              onUndo={(groupId) => {
+                if (busy || !view.undoToken || view.undoGroupId !== groupId)
+                  return;
                 void view.undoRemoval().catch(() => {
                   if (props.boundary.input.signal?.aborted) return;
                   showToast({
@@ -672,7 +747,15 @@ export function CanonicalAccountReview(
       />
       <AccountChoiceSheet
         visible={choice?.kind === "row" || choice?.kind === "replace"}
-        title={choiceCopy("account_review_choice_use_account", language)}
+        title={
+          choice?.kind === "row" &&
+          currentRow?.source === "SMS" &&
+          currentRow.transaction.isAtmWithdrawal === true
+            ? tTransactions(
+                choice.role === "destination" ? "to_account" : "from_account"
+              )
+            : choiceCopy("account_review_choice_use_account", language)
+        }
         contextSubtitle={
           currentGroup?.name ?? currentRow?.transaction.counterparty
         }

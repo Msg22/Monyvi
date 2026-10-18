@@ -15,6 +15,11 @@ import { act, renderHook } from "@testing-library/react-native";
 import type { VoiceAvailabilitySnapshot } from "@monyvi/logic";
 import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
+import {
+  createCanonicalVoiceSessionFixture,
+  TEST_VOICE_OWNER_ID,
+  TEST_VOICE_TRANSACTION_FIXTURE,
+} from "./voice-review-production-wiring-fixtures";
 
 type PermissionStatus = "granted" | "denied" | "blocked" | "unknown";
 
@@ -33,7 +38,7 @@ const mockAvailabilityRefresh = jest.fn<
 const mockProvider = jest.fn<Promise<unknown>, unknown[]>();
 const mockPush = jest.fn();
 const mockUUID = jest.fn<string, []>();
-let mockUserId: string | null = "user-1";
+let mockUserId: string | null = TEST_VOICE_OWNER_ID;
 let mockIsResolvingUser = false;
 
 const recorderState = {
@@ -107,6 +112,20 @@ jest.mock("@/services/ai-voice-parser-service", () => ({
   isVoiceParserError: () => false,
   isVoiceQuotaParserError: () => false,
 }));
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn(() =>
+    Promise.resolve({
+      ownerId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
+      preferredCurrency: "EGP",
+      accounts: [],
+      providerContext: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: "EGP",
+        accounts: [],
+      },
+    })
+  ),
+}));
 jest.mock("i18next", () => ({
   t: (key: string): string => key,
 }));
@@ -141,7 +160,7 @@ function renderFlow(
 
 beforeEach((): void => {
   jest.clearAllMocks();
-  mockUserId = "user-1";
+  mockUserId = TEST_VOICE_OWNER_ID;
   mockIsResolvingUser = false;
   recorderState.status = "idle";
   recorderState.durationMs = 0;
@@ -520,7 +539,11 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
           detectedLanguage: "en",
           originalTranscript: "paid 20",
           transcript: "paid 20",
-          transactions: [{ amount: 20, currency: "EGP", type: "EXPENSE" }],
+          transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
+          reviewSession: createCanonicalVoiceSessionFixture({
+            ownerId: mockUserId ?? TEST_VOICE_OWNER_ID,
+            transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
+          }),
         });
         await Promise.all([first, second]);
       });

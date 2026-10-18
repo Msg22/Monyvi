@@ -59,6 +59,7 @@ export function useAccountReview(
   const proposedInput = useStableReviewInput(input);
   const stableInput = facade.stableVoiceInput(proposedInput);
   const generation = facade.currentGeneration();
+  const scopedView = facade.scopedView(stableInput, view);
 
   useEffect(() => {
     facade.mount();
@@ -79,9 +80,11 @@ export function useAccountReview(
     () => facade.reload(stableInput, generation),
     [facade, stableInput, generation]
   );
+  // Each rendered action can consume only its own transient Undo lease.
+  const expectedUndoToken = scopedView.undoToken;
   const undoRemoval = useCallback(
-    () => facade.undoRemoval(stableInput, generation),
-    [facade, stableInput, generation]
+    () => facade.undoRemoval(stableInput, generation, expectedUndoToken),
+    [facade, stableInput, generation, expectedUndoToken]
   );
   const getAccountCandidates = useCallback(
     (rowId: AccountReviewRow["rowId"], role: "source" | "destination") =>
@@ -89,7 +92,7 @@ export function useAccountReview(
     [facade, stableInput, generation]
   );
   return {
-    ...facade.scopedView(stableInput, view),
+    ...scopedView,
     dispatch,
     reload,
     undoRemoval,

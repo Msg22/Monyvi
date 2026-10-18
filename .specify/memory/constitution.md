@@ -1,30 +1,24 @@
 <!--
-Sync Impact Report — 2026-10-16
-- Version change: 1.7.0 -> 1.8.0 (MINOR, new narrowly scoped device-only
-  migration exception; not a cosmetic PATCH).
-- Modified principle: VII. Local-First Migrations. Supabase-owned/syncable DDL
-  still requires sequential local SQL, while strictly private Watermelon-only
-  fields/tables require versioned local migration and durable local generation.
-- Added sections/principles: None outside the expanded VII exception.
-- Removed principles: None.
-- Agent guidance updated in the same policy artifact:
-  .agent/rules/database-migrations.md,
-  .agent/rules/specify-rules.md,
-  .agents/skills/offline-financial-systems/SKILL.md.
-- Added detailed policy: docs/architecture/device-local-migration-policy.md.
-- Speckit plan/spec/tasks templates inspected; unchanged in this workflow-only
-  scope. AGENTS.md and all other workflows remain unchanged per exclusive
-  ownership; the Constitution is authoritative when older blanket migration
-  wording is encountered.
-- No business logic changed; docs/business/business-decisions.md unchanged.
-  Feature-specific #395 local recovery storage and any schema/generator edits
-  remain exclusively owned by the separate feature implementation.
-- No Supabase, Watermelon, code, SQL, generated type, or hosted deployment
-  changes in this amendment. No checks/formatters run here; Root must review
-  impact, independently validate generator and migration parity before
-  feature adoption, and publish this as a separate workflow-only PR.
+Sync Impact Report — 2026-10-18
+- Version 2.0.0 -> 2.1.0: narrowly expand VII for versioned device-only
+  WatermelonDB storage without a dummy Supabase field.
+- Preserve PR #403 delivery policy and first-release scope rules unchanged.
+- Reconcile migration guidance and the offline-financial-systems skill with
+  direct implementation, batched checks and focused pre-merge safety evidence.
+- No application, SQL, generated type, feature-spec or deployment changes.
 -->
 
+<!--
+Sync Impact Report — 2026-10-18
+- Version 1.7.0 -> 2.0.0: owner-approved replacement of mandatory TDD delivery
+  rules with implementation-first, owner manual testing and later regressions.
+- Added first-release rare-case rule: major impact requires minimal protection;
+  uncertain impact returns to Mohamed; nonessential low-impact cases defer.
+- Existing financial/data/sync/privacy protection, approval and worker-order
+  boundaries preserved. No product/schema/SQL/runtime changes.
+- AGENTS/CLAUDE, relevant rules, workflows, skills, adapters and Speckit templates
+  synchronized. Historical evidence retained; no feature plan regeneration.
+-->
 <!--
 Sync Impact Report
 - Version change: 1.6.0 -> 1.7.0
@@ -294,20 +288,20 @@ genuinely device-only WatermelonDB storage.
   `supabase-types.ts` as the authority.
 - Commit the local migration, local override/generator, required non-generated
   model declarations, generated Watermelon schema/exports and tests
-  **together**. Prove repeatable local regeneration/parity, fresh install,
-  upgrade from an existing database, restart, ownership scope, atomic
-  failure/rollback, non-destructive recovery and pull/upsert preservation. A
-  device-only column on a syncable parent MUST be excluded from remote
+  **together**. Verify repeatable local regeneration/parity, fresh install and
+  existing database upgrade. Add focused checks for the affected ownership,
+  restart, failure and pull/upsert paths needed to prevent data loss or privacy
+  leaks. A device-only column on a syncable parent MUST be excluded from remote
   serialization and retained through owned cloud refreshes; never copy remote
   data into the private field. Private recovery preimages MUST remain on-device
   with explicit retention and cleanup. No schema reset, remote backfill or
   server deployment is authorized by this exception.
 - This exception changes only technical migration routing, not business behavior
   or financial/sync semantics. Specific feature storage declarations, migration
-  numbers and sync exclusions require their own scoped implementation,
-  tests-first evidence and independent DB/security review. Stop for unproven
-  local-only classification, missing generator parity, privacy leakage or
-  owner/CAS/RLS uncertainty. See
+  numbers and sync exclusions require their own scoped implementation, focused
+  pre-merge safety evidence and independent DB/security review. Stop for
+  unproven local-only classification, missing generator parity, privacy leakage
+  or owner/CAS/RLS uncertainty. See
   `docs/architecture/device-local-migration-policy.md` for the verification
   checklist and command boundaries.
 
@@ -322,6 +316,15 @@ genuinely device-only WatermelonDB storage.
 - WatermelonDB has no `dropColumn` migration primitive. A removed synced column
   can remain in local SQLite while Watermelon ignores it; do not treat physical
   remnants as live schema authority or silently discard a device-only field.
+
+Follow the approved delivery and first-release scope policy below and in
+`docs/development-workflow.md`. Implement directly, batch affected checks and
+retain necessary pre-merge safety tests; tests may follow implementation.
+Require only protection relevant to the approved field and actual data paths.
+Preserving unresolved local data and surfacing a safe error may be sufficient;
+this exception does not require an automatic recovery framework or exhaustive
+edge-case coverage. For a rare case, include the smallest protection if omission
+would cause major harm, ask Mohamed if impact is uncertain, and otherwise defer.
 
 ### VIII. Authenticated User Scope & Sync Correctness
 
@@ -398,6 +401,22 @@ staged reuse for new or changed financial calculations, not a big-bang
 migration.
 
 ## Development Workflow
+
+### Delivery order and first-release scope
+
+Follow [delivery policy](../../docs/development-workflow.md): implement approved
+behavior directly, batch existing checks, let Mohamed perform manual testing,
+then add regression coverage after feedback and run final affected validation.
+TDD is optional only for an explicit scoped request. Preserve existing tests,
+hooks, CI thresholds and focused financial/sync/data-safety tests before merge;
+tests may follow implementation. No emulator/device execution unless requested.
+
+For a rare edge case, would shipping without handling it cause a major problem?
+Yes: implement the smallest needed protection. Uncertain: ask Mohamed before the
+dependent work. No: defer it for first release. Protect approved core behavior,
+financial correctness, data/owner/privacy integrity and safe sync. Considering a
+possible case does not authorize a new feature or recovery system. Historical
+execution evidence and immutable approvals remain intact.
 
 ### Code Quality Gates
 
@@ -481,4 +500,4 @@ migration.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.8.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-16
+**Version**: 2.1.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-18

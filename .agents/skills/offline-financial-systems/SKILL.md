@@ -17,10 +17,12 @@ revisions, migrations, synchronization, or reconciliation. Read
 - Preserve action-id/payload-hash idempotency, expected-revision protection,
   immutable account-effect evidence, protected financial fields, and
   restart-safe reconciliation. A failed pull or push must remain a failed sync.
-- Write focused tests first and show Red evidence for duplicate retries,
-  mismatched payloads, revision conflicts, recovery after restart, and failed
-  synchronization.
-- Classify every schema change under Constitution VII 1.8.0 BEFORE
+- Follow [delivery policy](../../../docs/development-workflow.md): direct
+  implementation with batched checks and owner manual testing. Preserve focused
+  pre-merge tests for duplicate retries, mismatched payloads, revision
+  conflicts, restart recovery and failed sync; these tests may follow
+  implementation.
+- Classify every schema change under Constitution VII 2.1.0 BEFORE
   implementation: Supabase-owned/syncable DDL still requires sequential local
   `supabase/migrations` SQL and regenerated public types/local schema. A
   genuinely device-only Watermelon field/table, including a private column on a
@@ -29,11 +31,13 @@ revisions, migrations, synchronization, or reconciliation. Read
   absent from all Supabase schema/types/push/pull/RPC/outbox/logs.
 - Preserve authenticated ownership, RLS/CAS/revisions and full financial action
   evidence. For a private local field on a syncable model, verify cloud pull
-  preserves it and push never serializes it. Test fresh/upgrade/restart,
-  rollback, retention and repeated local code-generation parity; commit the
-  versioned migration, generator source, necessary model, generated schema and
-  tests together. Never add a dummy Supabase field or manually patch a generated
-  base model/schema to make local storage appear supported.
+  preserves it and push never serializes it. Verify fresh install, existing
+  database upgrade and repeated local code-generation parity. Cover affected
+  restart, failure and retention paths with focused checks required for data
+  safety; commit the versioned migration, generator source, necessary model,
+  generated schema and tests together. Never add a dummy Supabase field or
+  manually patch a generated base model/schema to make local storage appear
+  supported.
 - Follow `docs/architecture/device-local-migration-policy.md` and
   `.agent/rules/database-migrations.md`. `npm run db:migrate` currently performs
   a remote `db:push` first; local generation is separate from separately
@@ -43,3 +47,8 @@ revisions, migrations, synchronization, or reconciliation. Read
   path, unknown writer, missing authenticated user scope/RLS/CAS guarantee,
   invalid generator parity, private-data leakage or unapproved remote mutation.
   Hand off evidence for independent database and security review.
+
+Apply the delivery policy's first-release impact rule: include the smallest
+protection for major harm, ask Mohamed for uncertain impact, otherwise defer.
+Preserve pending data on safe failure; do not require an automatic recovery
+framework or exhaustive scenarios solely because local storage is involved.

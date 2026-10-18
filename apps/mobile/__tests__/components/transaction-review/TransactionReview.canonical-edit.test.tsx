@@ -4,8 +4,13 @@
  */
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import {
+  accountReviewSessionSchema,
+  accountReviewCommandSchema,
+  type ReviewableTransaction,
+} from "@monyvi/logic";
+import { reduceAccountReviewCommand } from "../../../../../packages/logic/src/account-review/reducer";
 
-import type { ReviewableTransaction } from "@monyvi/logic";
 import type { ControlledReviewTransactionEditModalProps } from "@/components/transaction-review/edit-modal/ControlledReviewTransactionEditModal";
 import type { AccountReviewSession } from "../../../../../packages/logic/src/account-review/review-schemas";
 import { projectAccountReviewSession } from "../../../../../packages/logic/src/account-review/read-model";
@@ -22,10 +27,18 @@ import {
   makeT025ReviewSession,
   T025_IDS,
 } from "../../../../../packages/logic/src/sms-review-drafts/__tests__/account-review-v2-t025-fixtures";
+import {
+  SECOND_GROUP_ID,
+  SECOND_UNDO_ID,
+  twoGroupSession,
+  removeActualGroup,
+} from "./TransactionReview.canonical-edit-fixtures";
 
 const mockDispatch = jest.fn();
 const mockModal = jest.fn<void, [ControlledReviewTransactionEditModalProps]>();
 const mockToast = jest.fn();
+const mockCandidates = jest.fn();
+const mockUndoRemoval = jest.fn();
 
 jest.mock("@/hooks/useAccountReview", () => ({
   useAccountReview: jest.fn(),
@@ -41,6 +54,9 @@ jest.mock("@/hooks/useAccountDisplayNames", () => ({
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: (): { readonly language: string } => ({ language: "en" }),
+}));
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: mockToast }),
 }));
@@ -54,20 +70,113 @@ jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: () => null,
 }));
 jest.mock("@/components/transaction-review/AccountReviewPanel", () => ({
-  AccountReviewPanel: () => {
+  // Only the presentation boundary is replaced. All group eligibility,
+  // undo leases, issue labels and callbacks are shaped by the real container.
+  AccountReviewPanel: (props: {
+    groups: ReadonlyArray<{
+      groupId: string;
+      isRemoved: boolean;
+      canUndo: boolean;
+      canRemove: boolean;
+    }>;
+    summary: {
+      readonly issueLabels: readonly string[];
+      readonly distinctNeedsReviewCount: number;
+    };
+    onUndo: (groupId: string) => void;
+    onRemove: (groupId: string) => void;
+  }) => {
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const RN =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return ReactActual.createElement(RN.View, {
-      testID: "canonical-review-panel",
-    });
+    return ReactActual.createElement(
+      RN.View,
+      { testID: "canonical-review-panel" },
+      ...props.summary.issueLabels.map((label) =>
+        ReactActual.createElement(
+          RN.Text,
+          {
+            key: label,
+            testID: "pr-localized-row-issue",
+          },
+          label
+        )
+      ),
+      ...props.groups.flatMap((group) => [
+        group.canRemove
+          ? ReactActual.createElement(
+              RN.TouchableOpacity,
+              {
+                key: "remove-" + group.groupId,
+                testID: "pr-remove-" + group.groupId,
+                onPress: () => props.onRemove(group.groupId),
+              },
+              ReactActual.createElement(RN.Text, null, "Remove")
+            )
+          : null,
+        group.canUndo
+          ? ReactActual.createElement(
+              RN.TouchableOpacity,
+              {
+                key: "undo-" + group.groupId,
+                testID: "pr-undo-" + group.groupId,
+                onPress: () => props.onUndo(group.groupId),
+              },
+              ReactActual.createElement(RN.Text, null, "Undo")
+            )
+          : null,
+      ])
+    );
   },
 }));
 jest.mock("@/components/transaction-review/AccountChoiceSheet", () => ({
   AccountChoiceSheet: () => null,
 }));
 jest.mock("@/components/transaction-review/CurrencyConfirmationSheet", () => ({
-  CurrencyConfirmationSheet: () => null,
+  CurrencyConfirmationSheet: (props: {
+    visible: boolean;
+    candidateOptions: ReadonlyArray<{ code: string }>;
+    selectedCandidateCode: string | null;
+    canUseSelection: boolean;
+    onChooseAnother: () => void;
+    onUseSelected: () => void;
+  }) => {
+    if (!props.visible) return null;
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    const canSubmit =
+      props.canUseSelection &&
+      props.candidateOptions.some(
+        (c) => c.code === props.selectedCandidateCode
+      );
+    return ReactActual.createElement(
+      RN.View,
+      { testID: "pr-currency-sheet" },
+      ReactActual.createElement(
+        RN.Text,
+        { testID: "pr-currency-options" },
+        props.candidateOptions.map((c) => c.code).join(",")
+      ),
+      ReactActual.createElement(
+        RN.TouchableOpacity,
+        {
+          testID: "pr-currency-another",
+          onPress: props.onChooseAnother,
+        },
+        ReactActual.createElement(RN.Text, null, "Choose another")
+      ),
+      ReactActual.createElement(
+        RN.TouchableOpacity,
+        {
+          testID: "pr-currency-use",
+          disabled: !canSubmit,
+          onPress: props.onUseSelected,
+        },
+        ReactActual.createElement(RN.Text, null, "Use")
+      )
+    );
+  },
 }));
 jest.mock("@/components/transaction-review/EditSuggestedAccountSheet", () => ({
   EditSuggestedAccountSheet: () => null,
@@ -79,13 +188,24 @@ jest.mock("@/components/transaction-review/ReviewFiltersSheet", () => ({
   ReviewFiltersSheet: () => null,
 }));
 jest.mock("@/components/transaction-review/PartialSmsResultsNotice", () => ({
-  PartialSmsResultsNotice: () => {
+  PartialSmsResultsNotice: (props: { onRetry: () => void }) => {
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const RN =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return ReactActual.createElement(RN.View, {
-      testID: "canonical-partial-results",
-    });
+    return ReactActual.createElement(
+      RN.View,
+      {
+        testID: "canonical-partial-results",
+      },
+      ReactActual.createElement(
+        RN.TouchableOpacity,
+        {
+          testID: "pr-sms-retry",
+          onPress: props.onRetry,
+        },
+        ReactActual.createElement(RN.Text, null, "Retry")
+      )
+    );
   },
 }));
 jest.mock("@/components/sms-sync/SafeguardQaDiagnosticsPanel", () => ({
@@ -102,7 +222,36 @@ jest.mock("@/components/transaction-review/SmsReviewUndoBanner", () => ({
   SmsReviewUndoBanner: () => null,
 }));
 jest.mock("@/components/currency/CurrencyPicker", () => ({
-  CurrencyPicker: () => null,
+  CurrencyPicker: (props: {
+    visible: boolean;
+    onSelect: (code: "EUR") => void;
+    onClose: () => void;
+  }) => {
+    if (!props.visible) return null;
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return ReactActual.createElement(
+      RN.View,
+      { testID: "pr-full-currency-picker" },
+      ReactActual.createElement(
+        RN.TouchableOpacity,
+        {
+          testID: "pr-pick-EUR",
+          onPress: () => props.onSelect("EUR"),
+        },
+        ReactActual.createElement(RN.Text, null, "EUR")
+      ),
+      ReactActual.createElement(
+        RN.TouchableOpacity,
+        {
+          testID: "pr-close-picker",
+          onPress: props.onClose,
+        },
+        ReactActual.createElement(RN.Text, null, "Close")
+      )
+    );
+  },
 }));
 jest.mock(
   "@/components/transaction-review/edit-modal/TransactionEditModal",
@@ -151,6 +300,8 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
       onChooseAccount: (rowId: string) => void;
       onChooseCurrency: (rowId: string, context: string) => void;
       rowId: string;
+      accountStatusTone?: string;
+      accountStatusLabel?: string | null;
     };
   }) => {
     const ReactActual = jest.requireActual<typeof import("react")>("react");
@@ -159,6 +310,20 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
     return ReactActual.createElement(
       RN.View,
       null,
+      ReactActual.createElement(
+        RN.Text,
+        {
+          testID: "pr-account-tone-" + index,
+        },
+        accountReview.accountStatusTone ?? "neutral"
+      ),
+      ReactActual.createElement(
+        RN.Text,
+        {
+          testID: "pr-source-account-" + index,
+        },
+        accountReview.accountStatusLabel ?? ""
+      ),
       ReactActual.createElement(
         RN.TouchableOpacity,
         { testID: "canonical-edit-row", onPress: () => onPress(index) },
@@ -212,8 +377,8 @@ function fakeHook(
     error: null,
     dispatch: mockDispatch,
     reload: jest.fn(),
-    undoRemoval: jest.fn(),
-    getAccountCandidates: () => [],
+    undoRemoval: mockUndoRemoval,
+    getAccountCandidates: mockCandidates,
   };
 }
 const mockHook = useAccountReview as jest.MockedFunction<
@@ -238,7 +403,11 @@ function reviewableTransactions(
 
 function review(
   overrides?: { ownerId?: string; sessionId?: string },
-  withPartialResults = false
+  withPartialResults = false,
+  retryState?: {
+    readonly isRetrying: boolean;
+    readonly onRetry: () => void;
+  }
 ): React.JSX.Element {
   const input = {
     mode: "SMS" as const,
@@ -260,9 +429,9 @@ function review(
               safeguardSummary: safePartialSummary,
               retryableCount: 1,
               canRetry: true,
-              isRetrying: false,
+              isRetrying: retryState?.isRetrying ?? false,
               hasRetryError: false,
-              onRetry: jest.fn(),
+              onRetry: retryState?.onRetry ?? jest.fn(),
             }
           : undefined
       }
@@ -273,6 +442,8 @@ function review(
 beforeEach(() => {
   jest.clearAllMocks();
   mockHook.mockImplementation(() => fakeHook());
+  mockCandidates.mockReturnValue([]);
+  mockUndoRemoval.mockReset();
   mockDispatch.mockImplementation(() =>
     Promise.resolve({
       reasonCodes: [],
@@ -376,5 +547,324 @@ describe("#395 T054 canonical transaction edit route", () => {
     const screen = render(review());
     expect(screen.queryByTestId("canonical-partial-results")).toBeNull();
     expect(screen.getByTestId("canonical-qa-diagnostics")).toBeTruthy();
+  });
+});
+
+describe("#395 PR396 review comment regressions — canonical actual-container bindings", () => {
+  it("picker EUR outside original EGP/USD conflict becomes a confirmable Use action", async () => {
+    const row = sourceSession.rows[0];
+    if (!row) throw new Error("missing_real_currency_row");
+    const conflicting = accountReviewSessionSchema.parse({
+      ...sourceSession,
+      // Unconfirmed currency cannot authorize an active suggested group.
+      // Keep the original transaction/evidence, but require an explicit
+      // currency confirmation and an independent later account choice.
+      groups: [],
+      rows: [
+        {
+          ...row,
+          selected: false,
+          assignment: {
+            state: "unresolved",
+            accountId: null,
+            reasonCode: "account_needed",
+            candidateAccountIds: [],
+          },
+          currency: {
+            state: "unconfirmed",
+            reason: "conflicting",
+            candidateCodes: ["EGP", "USD"],
+            statedCode: "EGP",
+            evidenceSpans: [],
+          },
+          reviewReasons: ["account_needed", "currency_confirmation_needed"],
+        },
+      ],
+    });
+    mockHook.mockImplementation(() => fakeHook(conflicting));
+    const screen = render(review());
+    fireEvent.press(screen.getByTestId("canonical-choose-currency"));
+    expect(screen.getByTestId("pr-currency-options")).toHaveTextContent(
+      "EGP,USD"
+    );
+    fireEvent.press(screen.getByTestId("pr-currency-another"));
+    fireEvent.press(screen.getByTestId("pr-pick-EUR"));
+    fireEvent.press(screen.getByTestId("pr-close-picker"));
+    expect(screen.getByTestId("pr-currency-options")).toHaveTextContent(
+      /(?:^|,)EUR(?:,|$)/
+    );
+    expect(screen.getByTestId("pr-currency-use")).toBeEnabled();
+    fireEvent.press(screen.getByTestId("pr-currency-use"));
+    await waitFor(() =>
+      expect(mockDispatch).toHaveBeenCalledWith({
+        kind: "confirm_row_currency",
+        ownerId: conflicting.ownerId,
+        sessionId: conflicting.sessionId,
+        expectedReviewRevision: conflicting.revision,
+        expectedOperationGeneration: conflicting.operationGeneration,
+        rowId: row.rowId,
+        expectedRowRevision: row.revision,
+        currency: "EUR",
+      })
+    );
+  });
+
+  it("real removals A then B expose Undo only on B; B restoration never restores A", async () => {
+    const before = twoGroupSession();
+    const first = removeActualGroup(
+      before,
+      T025_IDS.group,
+      T025_IDS.undoToken,
+      null
+    );
+    expect(first.reasonCodes).toEqual([]);
+    const firstLease = {
+      token: T025_IDS.undoToken,
+      previousState: before,
+      afterRemovalGeneration: first.state.operationGeneration,
+    };
+    const second = removeActualGroup(
+      first.state,
+      SECOND_GROUP_ID,
+      SECOND_UNDO_ID,
+      firstLease
+    );
+    expect(second.reasonCodes).toEqual([]);
+    expect(second.state.groups.map((g) => g.status)).toEqual([
+      "removed",
+      "removed",
+    ]);
+    const latestLease = {
+      token: SECOND_UNDO_ID,
+      previousState: first.state,
+      afterRemovalGeneration: second.state.operationGeneration,
+    };
+    // Match the facade's actual transient lease identity: only the group
+    // newly removed between this lease's previous/current canonical states.
+    const latestRemovedIds = latestLease.previousState.groups
+      .filter(
+        (prior) =>
+          prior.status !== "removed" &&
+          !latestLease.previousState.removedEvidenceKeys.includes(
+            prior.evidenceKey
+          ) &&
+          second.state.removedEvidenceKeys.includes(prior.evidenceKey) &&
+          second.state.groups.some(
+            (current) =>
+              current.groupId === prior.groupId &&
+              current.status === "removed" &&
+              current.evidenceKey === prior.evidenceKey
+          )
+      )
+      .map((group) => group.groupId);
+    expect(latestRemovedIds).toEqual([SECOND_GROUP_ID]);
+    const undoB = reduceAccountReviewCommand({
+      state: second.state,
+      command: accountReviewCommandSchema.parse({
+        kind: "undo_removal",
+        ownerId: second.state.ownerId,
+        sessionId: second.state.sessionId,
+        expectedReviewRevision: second.state.revision,
+        expectedOperationGeneration: second.state.operationGeneration,
+        undoToken: SECOND_UNDO_ID,
+      }),
+      accountSnapshots: makeOwnedContext(),
+      nextUndoToken: null,
+      undo: latestLease,
+    });
+    expect(undoB.reasonCodes).toEqual([]);
+    expect(
+      undoB.state.groups.find((g) => g.groupId === T025_IDS.group)?.status
+    ).toBe("removed");
+    expect(
+      undoB.state.groups.find((g) => g.groupId === SECOND_GROUP_ID)?.status
+    ).not.toBe("removed");
+    mockUndoRemoval.mockResolvedValue(undoB);
+    mockHook.mockImplementation(() => ({
+      ...fakeHook(second.state),
+      undoToken: latestLease.token,
+      undoGroupId: latestRemovedIds[0] ?? null,
+    }));
+    const screen = render(review());
+    expect(screen.queryByTestId("pr-undo-" + T025_IDS.group)).toBeNull();
+    fireEvent.press(screen.getByTestId("pr-undo-" + SECOND_GROUP_ID));
+    await waitFor(() => expect(mockUndoRemoval).toHaveBeenCalledTimes(1));
+    expect(undoB.affectedGroupIds).toContain(SECOND_GROUP_ID);
+    expect(undoB.affectedGroupIds).not.toContain(T025_IDS.group);
+  });
+
+  it("resolved SMS ATM Cash destination remains visible and editable after the first choice", () => {
+    const row = sourceSession.rows[0];
+    const owned = makeOwnedContext().accounts;
+    const bank = owned.find((a) => a.type === "BANK");
+    const cash = owned.find((a) => a.type === "CASH");
+    if (!row || !bank || !cash)
+      throw new Error("missing_real_owned_atm_endpoints");
+    const resolved = accountReviewSessionSchema.parse({
+      ...sourceSession,
+      groups: [],
+      rows: [
+        {
+          ...row,
+          assignment: {
+            state: "existing",
+            accountId: bank.id,
+            origin: "user",
+            currency: "EGP",
+            identityRevision: "0",
+          },
+          toAssignment: {
+            state: "existing",
+            accountId: cash.id,
+            origin: "user",
+            currency: "EGP",
+            identityRevision: "0",
+          },
+          transaction: {
+            ...row.transaction,
+            isAtmWithdrawal: true,
+            toAccountId: cash.id,
+          },
+          reviewReasons: [],
+        },
+      ],
+    });
+    mockCandidates.mockImplementation((_id: string, role: string) =>
+      role === "destination" ? [cash] : [bank]
+    );
+    mockHook.mockImplementation(() => ({
+      ...fakeHook(resolved),
+      choiceAccounts: owned,
+    }));
+    const screen = render(review());
+    expect(
+      screen.getByTestId("account-review-atm-destination-status")
+    ).toHaveTextContent(/Cash/);
+    // Exercise the real, localized destination button (not the source action).
+    fireEvent.press(
+      screen.getByTestId("account-review-atm-destination-action")
+    );
+    expect(mockCandidates).toHaveBeenCalledWith(row.rowId, "destination");
+  });
+
+  it("compact details preserve localized row blockers even with zero suggestions", () => {
+    const row = sourceSession.rows[0];
+    if (!row) throw new Error("missing_row_for_compact_blockers");
+    const blocked = accountReviewSessionSchema.parse({
+      ...sourceSession,
+      groups: [],
+      rows: [
+        {
+          ...row,
+          selected: false,
+          assignment: {
+            state: "unresolved",
+            accountId: null,
+            reasonCode: "account_unavailable",
+            candidateAccountIds: [],
+          },
+          reviewReasons: [
+            "account_unavailable",
+            "currency_confirmation_needed",
+          ],
+          currency: {
+            state: "unconfirmed",
+            reason: "conflicting",
+            candidateCodes: ["EGP", "USD"],
+            statedCode: "EGP",
+            evidenceSpans: [],
+          },
+        },
+      ],
+    });
+    mockHook.mockImplementation(() => fakeHook(blocked));
+    const screen = render(review());
+    const labels = screen
+      .getAllByTestId("pr-localized-row-issue")
+      .map((node) => String(node.props.children));
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.some((label) => /account|currency/i.test(label))).toBe(true);
+    expect(
+      labels.every(
+        (label) =>
+          !label.includes("account_unavailable") &&
+          !label.includes("currency_confirmation_needed")
+      )
+    ).toBe(true);
+  });
+
+  it.each(["exact", "default", "user"] as const)(
+    "an existing %s assignment is neutral, not an amber pending group",
+    (origin) => {
+      const row = sourceSession.rows[0];
+      const bank = makeOwnedContext().accounts.find((a) => a.type === "BANK");
+      if (!row || !bank) throw new Error("missing_owned_existing_account");
+      const ready = accountReviewSessionSchema.parse({
+        ...sourceSession,
+        groups: [],
+        rows: [
+          {
+            ...row,
+            selected: true,
+            assignment: {
+              state: "existing",
+              accountId: bank.id,
+              origin,
+              currency: bank.currency,
+              identityRevision: "0",
+            },
+            reviewReasons: [],
+          },
+        ],
+      });
+      mockHook.mockImplementation(() => ({
+        ...fakeHook(ready),
+        choiceAccounts: makeOwnedContext().accounts,
+      }));
+      const screen = render(review());
+      const tone = screen.getByTestId("pr-account-tone-0");
+      expect(tone).toHaveTextContent("neutral");
+      expect(tone).not.toHaveTextContent("pending");
+      expect(tone).not.toHaveTextContent("removed");
+      expect(screen.getByTestId("pr-source-account-0")).toHaveTextContent(
+        bank.name
+      );
+    }
+  );
+
+  it("SMS retry reloads only after the same queue's durable retry completion transition", async () => {
+    const reload = jest.fn();
+    mockHook.mockImplementation(() => ({ ...fakeHook(), reload }));
+    const retry = jest.fn(() => Promise.resolve());
+    const idle = { isRetrying: false, onRetry: retry };
+    const active = { isRetrying: true, onRetry: retry };
+    const rendered = render(review(undefined, true, idle));
+
+    fireEvent.press(rendered.getByTestId("pr-sms-retry"));
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+
+    // The producer exposes isRetrying=true while awaiting its real queue
+    // merge. The canonical container must not reload incomplete work.
+    rendered.rerender(review(undefined, true, active));
+    expect(reload).not.toHaveBeenCalled();
+
+    // The existing producer sets false after its durable merge settles.
+    rendered.rerender(review(undefined, true, idle));
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    rendered.rerender(review(undefined, true, idle));
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    expect(
+      mockHook.mock.calls.every(
+        ([input]) =>
+          input.mode === "SMS" &&
+          input.ownerId === sourceSession.ownerId &&
+          input.sessionId === sourceSession.sessionId &&
+          input.queueId === sourceSession.sessionId
+      )
+    ).toBe(true);
+    expect(mockDispatch).not.toHaveBeenCalled();
   });
 });

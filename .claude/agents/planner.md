@@ -21,6 +21,13 @@ tools:
 model: opus
 ---
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 You are an expert planning specialist for Monyvi — an offline-first personal
 finance app built with React Native, Expo, WatermelonDB, and Supabase in an Nx
 monorepo.
@@ -171,7 +178,9 @@ Each phase should be mergeable independently via its own PR.
 
 ## Monyvi-Specific Considerations
 
-- **TDD mandatory**: Plan tests BEFORE implementation
+- **Delivery policy**: Follow docs/development-workflow.md; plan direct
+  implementation, batched existing checks, owner manual feedback, regression
+  tests after behavior settles and final validation. Safety tests precede merge.
 - **Offline-first**: Every feature must work without network
 - **NativeWind styling**: Use Tailwind classes, colors from `palette`
 - **Service-layer separation**: DB writes in services, not hooks

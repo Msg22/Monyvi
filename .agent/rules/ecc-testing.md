@@ -2,30 +2,24 @@
 alwaysApply: true
 ---
 
-# ECC Testing Requirements
+# Testing and delivery requirements
 
-## Minimum Test Coverage: 80%
+Follow
+[the owner-approved delivery workflow](../../docs/development-workflow.md).
 
-Test Types (ALL required):
+1. Implement approved behavior directly; no mandatory tests-before-code gate.
+2. Batch TypeScript, lint and relevant existing checks at
+   integration/pre-commit.
+3. Mohamed performs manual testing; fix feedback before stabilizing behavior.
+4. Add unit/integration and controllable E2E regression coverage for feedback,
+   core paths and relevant edge cases; run final affected checks in a batch.
 
-1. **Unit Tests** - Individual functions, utilities, components
-2. **Integration Tests** - API endpoints, database operations
-3. **E2E Tests** - Critical user flows
+Financial writes, balances, sync, retries, ownership and data-loss changes
+require focused deterministic tests and independent review before merge, even
+without manual defects. These tests may follow implementation. Preserve existing
+CI thresholds, tests and hooks. No emulator/device execution unless explicitly
+requested. Report pending manual acceptance and unexecuted checks honestly.
 
-## Test-Driven Development
-
-MANDATORY workflow:
-
-1. Write test first (RED)
-2. Run test - it should FAIL
-3. Write minimal implementation (GREEN)
-4. Run test - it should PASS
-5. Refactor (IMPROVE)
-6. Verify coverage (80%+)
-
-## Troubleshooting Test Failures
-
-1. Use **tdd-guide** skill
-2. Check test isolation
-3. Verify mocks are correct
-4. Fix implementation, not tests (unless tests are wrong)
+Use `tdd-guide` for assigned regression-test authorship after implementation or
+for TDD only when Mohamed explicitly requests that scoped approach. Diagnose
+failed assertions, fixture isolation and mocks before changing correct tests.

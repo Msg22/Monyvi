@@ -56,6 +56,28 @@ function isBlockedResult(
   return "transition" in value;
 }
 
+type EditedGroupIdentity = Extract<
+  GroupCommand,
+  { kind: "edit_group" }
+>["identity"];
+
+/** A known account-type switch cannot carry identifiers of the old type.
+ * Unknown -> known is unchanged: the user may have supplied fresh identity. */
+function identityForEditedType(
+  group: AccountReviewGroup,
+  identity: EditedGroupIdentity
+): EditedGroupIdentity {
+  return group.type === null || group.type === identity.type
+    ? identity
+    : {
+        ...identity,
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        senderNames: [],
+      };
+}
+
 /** Never regenerate identity hashes on edits to a persisted temporary group. */
 function confirmedGroup(
   group: AccountReviewGroup,
@@ -72,7 +94,7 @@ function confirmedGroup(
   }
   return {
     ...group,
-    ...command.identity,
+    ...identityForEditedType(group, command.identity),
     revision,
     status: "confirmed",
     confirmedIdentityRevision: revision,
@@ -183,13 +205,14 @@ function editedNameConflicts(
   edited: AccountReviewGroup,
   command: Extract<GroupCommand, { kind: "edit_group" }>
 ): boolean {
-  const wanted = normalizeGroundedIdentity(command.identity.name);
+  const identity = identityForEditedType(edited, command.identity);
+  const wanted = normalizeGroundedIdentity(identity.name);
   return state.groups.some(
     (group) =>
       group.groupId !== edited.groupId &&
       group.status !== "removed" &&
       group.currency === edited.currency &&
-      group.institutionId === command.identity.institutionId &&
+      group.institutionId === identity.institutionId &&
       normalizeGroundedIdentity(group.name) === wanted
   );
 }

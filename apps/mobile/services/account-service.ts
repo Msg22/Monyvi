@@ -40,6 +40,7 @@ import {
 import * as Crypto from "expo-crypto";
 import { productionFinancialActionHashProvider } from "./account-balance-command-production";
 import { createAccountDefaultIntentService } from "./account-default-intent-service";
+import { ACCOUNT_DEFAULT_WRITER_ERRORS } from "./account-default-intent-plan";
 import {
   createAccountSmsSendersWithinWriter,
   prepareCreateAccountSmsSenders,
@@ -436,9 +437,8 @@ export function assertNoDuplicateAddAccountIdentity(
 }
 
 /**
- * Only explicitly submitted new defaultIntent values use the new tuple.
- * Unadopted legacy callers remain on their existing path until T070 UI cutover.
- * This production factory is intentionally scoped to Add, not Edit/ensureCash.
+ * Explicit Add/defaultIntent and new Cash from live ensureCash use this tuple.
+ * Unadopted legacy callers and within-writer onboarding remain unchanged.
  */
 const defaultIntentCommandService = createAccountDefaultIntentService({
   database,
@@ -714,6 +714,21 @@ export async function createAccountForUser(
  *               Only used during creation — existing accounts are returned as-is.
  * @returns Result with created flag and account ID
  */
+async function findActiveCashAccountByCurrency(
+  userId: string,
+  currency: CurrencyType
+): Promise<Account | null> {
+  const owned = await queryOwned(
+    database.get<Account>("accounts"),
+    userId,
+    Q.where("type", CASH_ACCOUNT_TYPE),
+    Q.where("currency", currency),
+    Q.where("deleted", Q.notEq(true)),
+    Q.sortBy("created_at", Q.asc)
+  ).fetch();
+  return owned[0] ?? null;
+}
+
 export async function ensureCashAccount(
   userId: string,
   currency?: CurrencyType | null,
@@ -726,36 +741,82 @@ export async function ensureCashAccount(
       return { created: false, accountId: null, error: "USER_ID_REQUIRED" };
     }
 
-    // Resolve currency: explicit param > timezone detection
+    // Resolve currency: explicit param > timezone detection.
     const resolvedCurrency = currency ?? detectCurrencyFromTimezone();
     if (!resolvedCurrency) {
-      return {
-        created: false,
-        accountId: null,
-        error: CURRENCY_UNKNOWN_ERROR,
-      };
+      return { created: false, accountId: null, error: CURRENCY_UNKNOWN_ERROR };
     }
+    if (expectedUserId !== undefined && expectedUserId !== normalizedUserId) {
+      throw new Error(ACCOUNT_DEFAULT_WRITER_ERRORS.AUTH);
+    }
+    await assertExpectedCurrentUser(normalizedUserId);
+
+    const existing = await findActiveCashAccountByCurrency(
+      normalizedUserId,
+      resolvedCurrency
+    );
+    if (existing) return { created: false, accountId: existing.id };
 
     const accountName = name?.trim()
       ? name.trim()
       : await resolveDefaultCashAccountName(normalizedUserId);
-    let accountId: string | null = null;
-    let created = false;
 
-    await database.write(async () => {
-      const accountsCollection = database.get<Account>("accounts");
-      const result = await createCashAccountWithinWriter(
+    // No outer database.write(): Add owns its single protected writer,
+    // immutable zero-opening creator, local snapshot and SDK ACK exclusion.
+    for (let attempt = 0; attempt < ACCOUNT_CREATE_MAX_ATTEMPTS; attempt += 1) {
+      await assertExpectedCurrentUser(normalizedUserId);
+      const alreadyCreated = await findActiveCashAccountByCurrency(
         normalizedUserId,
-        resolvedCurrency,
-        accountsCollection,
-        accountName,
-        expectedUserId
+        resolvedCurrency
       );
-      accountId = result.accountId;
-      created = result.created;
-    });
+      if (alreadyCreated) {
+        return { created: false, accountId: alreadyCreated.id };
+      }
 
-    return { created, accountId };
+      try {
+        const prepared = await defaultIntentCommandService.prepare(
+          normalizedUserId,
+          {
+            name: accountName,
+            accountType: CASH_ACCOUNT_TYPE,
+            currency: resolvedCurrency,
+            balance: "0",
+            defaultIntent: false,
+          }
+        );
+        // Another local writer may have created this currency with a
+        // different name during preparation. Keep type+currency idempotence.
+        await assertExpectedCurrentUser(normalizedUserId);
+        const raced = await findActiveCashAccountByCurrency(
+          normalizedUserId,
+          resolvedCurrency
+        );
+        if (raced) return { created: false, accountId: raced.id };
+
+        const committed =
+          await defaultIntentCommandService.commitPrepared(prepared);
+        await assertExpectedCurrentUser(normalizedUserId);
+        return {
+          created: committed.kind === "committed",
+          accountId: committed.accountId,
+        };
+      } catch (error) {
+        await assertExpectedCurrentUser(normalizedUserId);
+        const winner = await findActiveCashAccountByCurrency(
+          normalizedUserId,
+          resolvedCurrency
+        );
+        if (winner) return { created: false, accountId: winner.id };
+        if (
+          !(error instanceof Error) ||
+          error.message !== ACCOUNT_DEFAULT_WRITER_ERRORS.STALE ||
+          attempt + 1 >= ACCOUNT_CREATE_MAX_ATTEMPTS
+        ) {
+          throw error;
+        }
+      }
+    }
+    throw new Error(ACCOUNT_DEFAULT_WRITER_ERRORS.STALE);
   } catch (error) {
     const message =
       error instanceof Error

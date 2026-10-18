@@ -1,5 +1,6 @@
 import { getCurrentUserId } from "./supabase";
 import {
+  type Account,
   CurrencyType,
   database,
   Transfer,
@@ -7,10 +8,18 @@ import {
 } from "@monyvi/db";
 import { ensureCashAccount } from "./account-service";
 import {
+  assertExpectedCurrentUser,
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
-import { isValidTransactionAmount } from "@monyvi/logic";
+import {
+  CURRENCY_PRECISION,
+  DEFAULT_PRECISION,
+  fromMinorUnits,
+  isValidTransactionAmount,
+  toMinorUnits,
+} from "@monyvi/logic";
+import { TRANSFER_CORE_WRITER_ERROR_CODES } from "./transfer-core-writer-service";
 import {
   convertGuardedTransferToTransaction,
   createGuardedTransfer,
@@ -110,6 +119,42 @@ export async function createSmsAtmTransfer(
   const userId = await getCurrentUserId();
   if (!userId || userId !== input.expectedUserId) {
     return { success: false, error: "User not authenticated" };
+  }
+
+  // Reject an invalid ATM source before creating the protected zero-opening
+  // Cash Add. The guarded writer still revalidates at commit (TOCTOU fence).
+  try {
+    assertValidTransferAmount(input.amount);
+    const amount = Math.abs(input.amount);
+    const precision = CURRENCY_PRECISION[input.currency] ?? DEFAULT_PRECISION;
+    const minorUnits = toMinorUnits(String(amount), precision);
+    if (Number(fromMinorUnits(minorUnits, precision)) !== amount) {
+      throw new Error(TRANSFER_CORE_WRITER_ERROR_CODES.INVALID_AMOUNT);
+    }
+
+    const scope = await getCurrentUserDataScope();
+    if (scope.userId !== input.expectedUserId) {
+      throw new Error(TRANSFER_CORE_WRITER_ERROR_CODES.AUTH_SCOPE_CHANGED);
+    }
+    const bank = await scope.findOwned(
+      database.get<Account>("accounts"),
+      input.bankAccountId
+    );
+    if (bank.deleted || bank.type !== "BANK") {
+      throw new Error(TRANSFER_CORE_WRITER_ERROR_CODES.ACCOUNT_UNAVAILABLE);
+    }
+    if (bank.currency !== input.currency) {
+      throw new Error(
+        TRANSFER_CORE_WRITER_ERROR_CODES.ACCOUNT_CURRENCY_MISMATCH
+      );
+    }
+    await assertExpectedCurrentUser(input.expectedUserId);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      error: `Failed to create ATM transfer: ${errorMessage}`,
+    };
   }
 
   const cashResult = await ensureCashAccount(

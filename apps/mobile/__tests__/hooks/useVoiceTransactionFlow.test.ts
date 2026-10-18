@@ -4,6 +4,11 @@ import type { VoiceAvailabilitySnapshot } from "@monyvi/logic";
 import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
+import {
+  createCanonicalVoiceSessionFixture,
+  TEST_VOICE_OWNER_ID,
+  TEST_VOICE_TRANSACTION_FIXTURE,
+} from "./voice-review-production-wiring-fixtures";
 
 const mockPush = jest.fn();
 const mockRecorderStart = jest.fn();
@@ -27,7 +32,7 @@ const mockOpenSettings = jest.fn();
 const mockRefresh = jest.fn<Promise<VoiceAvailabilitySnapshot>, []>();
 const mockRandomUUID = jest.fn<string, []>();
 let mockRecorderDiscardCallback = mockRecorderDiscard;
-let mockUserId: string | null = "user-1";
+let mockUserId: string | null = TEST_VOICE_OWNER_ID;
 
 const alwaysAvailableSnapshot: VoiceAvailabilitySnapshot = {
   serverNow: "2026-07-07T12:00:00.000Z",
@@ -131,6 +136,21 @@ jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: jest.fn(),
 }));
 
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn(() =>
+    Promise.resolve({
+      ownerId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
+      preferredCurrency: "EGP",
+      accounts: [],
+      providerContext: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: "EGP",
+        accounts: [],
+      },
+    })
+  ),
+}));
+
 const mockGetAiProcessingConsentStatus =
   getAiProcessingConsentStatus as jest.MockedFunction<
     typeof getAiProcessingConsentStatus
@@ -165,7 +185,7 @@ function mockActiveAiConsent(): void {
       version: "2026-07-ai-processing-v1",
     },
     isConsented: true,
-    userId: "user-1",
+    userId: mockUserId ?? TEST_VOICE_OWNER_ID,
   });
 }
 
@@ -177,7 +197,7 @@ beforeEach(() => {
     .mockReset()
     .mockReturnValue("11111111-1111-4111-8111-111111111111");
   mockRecorderDiscardCallback = mockRecorderDiscard;
-  mockUserId = "user-1";
+  mockUserId = TEST_VOICE_OWNER_ID;
   jest.spyOn(Linking, "openSettings").mockImplementation(mockOpenSettings);
   recorderState.status = "idle";
   recorderState.durationMs = 0;
@@ -205,19 +225,11 @@ beforeEach(() => {
     detectedLanguage: "en",
     originalTranscript: "paid 20",
     transcript: "paid 20",
-    transactions: [
-      {
-        amount: 20,
-        currency: "EGP",
-        type: "EXPENSE",
-        date: new Date("2026-07-07T12:00:00.000Z"),
-        categoryId: "category-1",
-        categoryDisplayName: "Shopping",
-        confidence: 0.9,
-        originLabel: "Voice",
-        source: "VOICE",
-      },
-    ],
+    transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
+    reviewSession: createCanonicalVoiceSessionFixture({
+      ownerId: mockUserId ?? TEST_VOICE_OWNER_ID,
+      transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
+    }),
   });
 });
 

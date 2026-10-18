@@ -4,6 +4,8 @@
  * Localized approved fallbacks keep this view-only slice usable until then.
  */
 import { Ionicons } from "@expo/vector-icons";
+import type { AccountReviewRow } from "@monyvi/logic";
+import type { AccountChoiceCandidateView } from "./AccountChoiceSheet";
 import { t } from "i18next";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -71,6 +73,113 @@ export function reviewCopy(
     lng: language,
     defaultValue: approvedCopy[language][key],
   });
+}
+
+/** Show only the actual existing default from the scoped account choices. */
+export function presentReviewDefaultAccountName(
+  rows: readonly AccountReviewRow[],
+  accounts: ReadonlyArray<{ readonly id: string; readonly name: string }>
+): string | null {
+  const assigned = rows.find(
+    (row) =>
+      row.assignment.state === "existing" && row.assignment.origin === "default"
+  );
+  if (!assigned || assigned.assignment.state !== "existing") return null;
+  return (
+    accounts.find((account) => account.id === assigned.assignment.accountId)
+      ?.name ?? null
+  );
+}
+
+/** Keep compact blocker keys distinct, preserving the caller's locale function. */
+type ReviewIssueKey =
+  | "account_review_issue_amount"
+  | "account_review_issue_category"
+  | "account_review_issue_currency"
+  | "account_review_issue_account"
+  | "account_review_group_needs_review";
+
+export function presentReviewIssueKeys(
+  visibleRows: readonly AccountReviewRow[],
+  distinctNeedsReviewCount: number
+): readonly ReviewIssueKey[] {
+  const reasons = new Set(visibleRows.flatMap((row) => row.reviewReasons));
+  const issueKeys: ReviewIssueKey[] = [];
+  if (reasons.has("ambiguous_amount") || reasons.has("low_confidence"))
+    issueKeys.push("account_review_issue_amount");
+  if (reasons.has("category_needed"))
+    issueKeys.push("account_review_issue_category");
+  if (
+    visibleRows.some((row) => row.currency.state === "unconfirmed") ||
+    reasons.has("currency_confirmation_needed")
+  )
+    issueKeys.push("account_review_issue_currency");
+  if (
+    visibleRows.some(
+      (row) =>
+        row.assignment.state === "unresolved" ||
+        (row.source === "SMS" &&
+          row.transaction.isAtmWithdrawal === true &&
+          row.toAssignment?.state !== "existing")
+    ) ||
+    [...reasons].some((reason) =>
+      [
+        "account_needed",
+        "account_match_ambiguous",
+        "account_identity_uncertain",
+        "account_unavailable",
+        "account_group_removed",
+        "account_group_unconfirmed",
+        "cash_transfer_review",
+        "account_evidence_invalid",
+      ].includes(reason)
+    )
+  )
+    issueKeys.push("account_review_issue_account");
+  if (issueKeys.length === 0 && distinctNeedsReviewCount > 0)
+    issueKeys.push("account_review_group_needs_review");
+  return issueKeys;
+}
+
+/** Present only the eligible accounts supplied by the guarded facade. */
+export function presentReviewAccountChoices(
+  candidates: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly providerDisplayName: string | null;
+    readonly cardLast4: string | null;
+    readonly currency: string;
+  }>
+): readonly AccountChoiceCandidateView[] {
+  return candidates.map((account) => ({
+    id: account.id,
+    displayName: account.name,
+    identityDetails: [
+      account.providerDisplayName,
+      account.cardLast4,
+      account.currency,
+    ]
+      .filter((text) => text !== null && text.length > 0)
+      .join(" · "),
+    accessibilityLabel: account.name + " " + account.currency,
+    isEligible: true,
+  }));
+}
+
+/** Preserve original alternatives and show a separately validated picker choice. */
+export function presentReviewCurrencyOptions(
+  currency: AccountReviewRow["currency"] | null | undefined,
+  selected: AccountReviewRow["transaction"]["currency"] | null
+): readonly string[] {
+  const originals =
+    currency?.state === "unconfirmed"
+      ? currency.candidateCodes
+      : currency?.state === "known"
+        ? [currency.code]
+        : [];
+  return selected !== null && !originals.includes(selected)
+    ? [...originals, selected]
+    : originals;
 }
 
 /** Isolate foreign-script codes without ever mutating an account identity. */
