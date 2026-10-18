@@ -13,6 +13,7 @@ import {
   type FinancialActionEnvelopeV1,
 } from "../../../../packages/logic/src/financial-actions/action-contracts";
 import { schema } from "../../../../packages/db/src/schema";
+import { calendarDateForTimestamp } from "../../../../packages/logic/src/metals/historical-rate";
 import {
   MAX_CANONICAL_ACTION_UTF8_BYTES,
   getFinancialActionUtf8ByteLength,
@@ -142,9 +143,17 @@ function checkedEnvelope(
   readonly envelope: FinancialActionEnvelopeV1;
 } {
   const registry = createAccountReviewFinancialRegistry();
+  // Metals date validation requires a trusted Cairo calendar ceiling even
+  // when re-reading immutable, previously valid cloud action envelopes.
+  // Freeze it once for BOTH parse and serialize, never from network payload.
+  const latestAllowedCalendarDate = calendarDateForTimestamp(Date.now());
+  if (latestAllowedCalendarDate === null)
+    return invalid("calendar_date_unavailable");
+  const validationInput = { latestAllowedCalendarDate };
   const envelope = parseFinancialActionEnvelopeJson(
     stringField(row, "payload_json"),
-    registry
+    registry,
+    validationInput
   );
   if (
     envelope.userId !== expectedOwnerId ||
@@ -155,7 +164,11 @@ function checkedEnvelope(
   )
     return invalid("immutable_identity_changed");
   return {
-    payloadJson: serializeFinancialActionEnvelope(envelope, registry),
+    payloadJson: serializeFinancialActionEnvelope(
+      envelope,
+      registry,
+      validationInput
+    ),
     envelope,
     guards: canonicalGuardText(
       stringField(row, "account_guards_json"),
