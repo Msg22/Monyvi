@@ -12,6 +12,16 @@ handoffs:
     prompt: Create a checklist for the following domain...
 ---
 
+## First-release scope and delivery policy
+
+Follow [delivery policy](../../docs/development-workflow.md). For a rare case,
+would shipping without handling it cause a major problem? Yes: the smallest
+necessary protection is required. Uncertain: ask Mohamed before dependent work.
+No: defer it for first release. An audit finding or possible test case is not
+automatically an implementation task or release blocker. Preserve approved core
+behavior, money/data/privacy and safe sync. Do not add speculative frameworks,
+new protocols or recovery systems merely to satisfy a checklist.
+
 ## User Input
 
 ```text
@@ -57,8 +67,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 1. **Extract unknowns from Technical Context** above:
    - For each NEEDS CLARIFICATION → research task
-   - For each dependency → best practices task
-   - For each integration → patterns task
+   - Research dependencies only for unresolved material decisions in scope
+   - Research integration patterns only for a concrete approved boundary
 
 2. **Generate and dispatch research agents**:
 
@@ -86,9 +96,10 @@ You **MUST** consider the user input before proceeding (if not empty).
    - State transitions if applicable
 
 2. **Generate API contracts** from functional requirements:
-   - For each user action → endpoint
-   - Use standard REST/GraphQL patterns
-   - Output OpenAPI/GraphQL schema to `/contracts/`
+   - Define contracts only for approved external interface changes
+   - Reuse existing local service/hook contracts for local user actions
+   - A user action does not imply a new API endpoint or protocol
+   - Produce OpenAPI/GraphQL only when the approved interface needs it
 
 3. **Agent context update**:
    - Run `.specify/scripts/bash/update-agent-context.sh agy`

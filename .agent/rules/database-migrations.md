@@ -4,7 +4,7 @@ trigger: always_on
 
 # Database Migration Rules
 
-## Constitution VII 1.8.0 — Classify Before Migrating
+## Constitution VII 2.1.0 — Classify Before Migrating
 
 All schema changes MUST be local-first, versioned and source-controlled.
 Classify each proposed field/table as **Supabase-owned or syncable** versus
@@ -52,12 +52,12 @@ financial action. The feature owner MUST:
    `models/base/*`, or `supabase-types.ts` to fake support, and NEVER create a
    dummy Supabase column or public type.
 3. Verify local code generation can be run repeatedly with parity, preserving
-   all public generated fields and the new private extension. Test fresh
-   installs, existing installations upgrading to the new version, app restart,
-   owned queries, rollback/failure recovery, sync pull preservation,
-   push/privacy exclusion and retention cleanup. Commit the versioned local
-   migration, durable schema override/generator, needed non-generated models,
-   regenerated outputs and focused tests together.
+   all public generated fields and the new private extension. Verify fresh
+   installs and upgrades, ownership, sync pull preservation and push/privacy
+   exclusion. Cover relevant restart, failure and cleanup paths with focused
+   checks where omission could lose, corrupt or expose data. Commit the
+   versioned local migration, durable schema override/generator, needed
+   non-generated models, regenerated outputs and focused tests together.
 4. Preserve existing server CAS, financial-effect/revision/idempotency,
    owner/RLS and failed-sync semantics. Stop when the field cannot honestly be
    device-only, ownership is not proven, data would leak to cloud/logs,
@@ -65,8 +65,13 @@ financial action. The feature owner MUST:
 
 This does not authorize adding the actual local field, migration version,
 feature-specific sync exclusion, or database code in a workflow-policy PR. Those
-implementation artifacts belong to the feature's separately owned tests-first PR
-and independent database/security review.
+implementation artifacts belong to the feature's separately owned PR and
+independent database/security review. Follow
+[delivery policy](../../docs/development-workflow.md): direct implementation,
+batched checks and focused safety tests before merge; no tests-before-code gate.
+Apply the first-release impact rule to rare cases. Preserve pending data and
+surface a safe error when sufficient; do not add speculative recovery frameworks
+or an exhaustive test matrix.
 
 ### Migration / Generation Commands (Do Not Conflate With Deployment)
 

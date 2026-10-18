@@ -32,9 +32,9 @@ Start by stating:
   time/worker checkpoint.
 
 This skill routes orchestration only. Do not duplicate or replace
-`sprint-issue.md`, Speckit, `$source-command-module-audit`, TDD, design,
-database, security, E2E, or review instructions. Compose only workflows relevant
-to current task.
+`sprint-issue.md`, Speckit, `$source-command-module-audit`, delivery policy,
+design, database, security, E2E, or review instructions. Compose only workflows
+relevant to current task.
 
 For verified free OpenCode and Gemini/Claude Antigravity, follow their execution
 pool sections in the authoritative workflow. Do not restore retired OpenCode

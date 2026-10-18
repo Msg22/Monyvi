@@ -1,5 +1,9 @@
 # Monyvi Development Guidelines
 
+Delivery order follows `docs/development-workflow.md`; generated historical plan
+notes do not reinstate mandatory TDD. Preserve tests and basic pre-merge
+data/sync safety coverage; Mohamed owns manual testing.
+
 Auto-generated from all feature plans. Last updated: 2026-10-07
 
 ## Active Technologies
@@ -72,7 +76,7 @@ conventions
   mutation as authorized unless the delivery topology or explicit approval
   grants that exact operation.
 
-## Database Ownership Classification (Constitution VII 1.8.0)
+## Database Ownership Classification (Constitution VII 2.1.0)
 
 - In every spec/plan/tasks involving a database change, classify each field and
   table as **Supabase-owned/syncable** or strictly **device-only WatermelonDB**.
@@ -86,10 +90,13 @@ conventions
   `db:push` and MUST NOT be described as a local-only generation command.
 - For genuinely device-only state, plan a numbered Watermelon migration, durable
   generator-consumed local schema override, non-generated model declaration,
-  reproducible local generation and committed outputs. Include fresh/upgraded
-  database tests, strict owner scoping, sync pull preservation, push/RPC/outbox/
-  outcome/log exclusion, retention, atomic rollback and restart recovery. No
-  dummy Supabase column, manual generated-base edit or public type deletion.
+  reproducible local generation and committed outputs. Include focused
+  fresh/upgrade, ownership, pull preservation and privacy exclusion checks, plus
+  affected retention/failure/restart checks needed for data safety. Follow the
+  delivery policy: source first, batched checks and necessary safety evidence
+  before merge. Apply the first-release impact rule; a migration does not
+  mandate speculative recovery features or exhaustive scenarios. No dummy
+  Supabase column, manual generated-base edit or public type deletion.
 - Device-only storage cannot conceal server-owned financial/CAS/revision or
   cross-device business state. Material product/financial behavior still follows
   approved business-decisions/spec gates; this migration-routing policy alone

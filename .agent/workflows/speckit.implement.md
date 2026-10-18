@@ -163,16 +163,19 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P]
      can run together
-   - **Follow TDD approach**: Execute test tasks before their corresponding
-     implementation tasks
+   - **Delivery sequence**: Follow `docs/development-workflow.md`: direct
+     implementation, batched existing checks, owner manual feedback, then
+     regression coverage and final validation. Preserve existing task IDs and
+     completed evidence; reconcile unfinished dependencies instead of
+     reinstating legacy tests-first gates.
    - **File-based coordination**: Tasks affecting the same files must run
      sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding
 
 7. Implementation execution rules:
    - **Setup first**: Initialize project structure, dependencies, configuration
-   - **Tests before code**: If you need to write tests for contracts, entities,
-     and integration scenarios
+   - **Regression coverage**: Write tests after implementation/manual feedback;
+     financial/sync/data-safety tests and review remain required before merge.
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external
      services

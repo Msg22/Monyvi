@@ -628,7 +628,7 @@ describe("pullMetalHoldingStates", () => {
     expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 
-  it("maps a server root to the optimistic local root by owner and action ID", async () => {
+  it("maps a server root to the settled local root by owner and action ID", async () => {
     mockFrom.mockReturnValue(
       makeSelectChain({
         data: [
@@ -650,7 +650,14 @@ describe("pullMetalHoldingStates", () => {
       get: jest.fn(() => ({
         query: jest.fn(() => ({
           fetch: jest.fn(() =>
-            Promise.resolve([{ actionId: "action-1", id: "local-root-1" }])
+            Promise.resolve([
+              {
+                actionId: "action-1",
+                id: "local-root-1",
+                userId: "current-user",
+                state: "accepted",
+              },
+            ])
           ),
         })),
       })),

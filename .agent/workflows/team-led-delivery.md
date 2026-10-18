@@ -1,5 +1,12 @@
 # Team-Led Delivery Workflow
 
+Apply the
+[first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
@@ -33,8 +40,8 @@ conflicts.
 Compose relevant workflows:
 
 - GitHub sprint issue: use [`sprint-issue.md`](./sprint-issue.md) for live
-  validation, approval gates, branch-base selection, TDD, PR, and manual QA.
-  Worktree/junction rules remain in `AGENTS.md`.
+  validation, approval gates, branch-base selection, implementation, PR, and
+  manual QA. Worktree/junction rules remain in `AGENTS.md`.
 - PR comment follow-up: use [`pr-comment-followup.md`](./pr-comment-followup.md)
   for thread discovery, classification, fix/reply/resolve behavior, and
   completion reporting. Keep that review behavior canonical there; Normal
@@ -50,9 +57,11 @@ Compose relevant workflows:
 - In team-led mode, lead remains sole orchestrator. It maps Speckit task IDs
   into team DAG and dispatches agents. Do not run bundled Speckit full-cycle or
   monolithic `speckit-implement`; either would create second orchestrator.
-- Defects: compose systematic root-cause and TDD workflows. Do not assign
-  implementation owners until lead consolidates one evidence-backed root-cause
-  map.
+- Delivery sequence: follow
+  [the owner-approved workflow](../../docs/development-workflow.md).
+- Defects: compose systematic root-cause and implementation workflows. Do not
+  assign implementation owners until lead consolidates one evidence-backed
+  root-cause map.
 
 ## 2. Authorization Boundary
 
@@ -189,7 +198,7 @@ roles; independent high-risk reviewer must differ from implementer.
 | Data/sync/security specialist     | Schema, ownership, offline and sync integrity       |
 | Logic/service engineer            | Pure rules, services, read models, commands         |
 | Frontend engineer                 | Screens, components, hooks, navigation              |
-| QA/TDD/E2E specialist             | Test plan, automation, coverage and device evidence |
+| QA/regression/E2E specialist      | Test plan, automation, coverage and device evidence |
 | Documentation specialist          | Business decisions, README, codemaps                |
 | Independent reviewers             | TypeScript, logic, style, DB/security, QA, visual   |
 
@@ -227,7 +236,7 @@ adapter before depending on it across checkouts.
 
 | Lane                             | Portable role contract                                   | Relevant workflow/skill                                |
 | -------------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
-| Frontend implementation          | `.agents/personas/frontend-developer.md`                 | Approved spec/mockup, TDD, and UI workflow             |
+| Frontend implementation          | `.agents/personas/frontend-developer.md`                 | Approved spec/mockup, delivery policy, and UI workflow |
 | Product/graphic design           | `.agents/personas/product-designer.md`                   | Sprint visual gate and applicable design skill         |
 | Independent database review      | `.agents/personas/database-reviewer.md`                  | Migration/sync rules and review workflow               |
 | Exact Metals logic               | `.agents/personas/financial-domain-engineer.md`          | `.agents/skills/financial-domain-engineering/SKILL.md` |
@@ -459,8 +468,8 @@ explicit prior permission, never via an in-chat handoff prompt.
 Maintain actual worker acknowledgments, latest status/checkpoint, remote
 branch/head/diff evidence, and next contact time. Browser fallback and chat
 replacement do not change the primary-pool order, native-task permission gate,
-provider/source boundaries, time gates, TDD, Speckit, design, financial, or
-device-owner rules.
+provider/source boundaries, time gates, delivery policy, Speckit, design,
+financial, or device-owner rules.
 
 Antigravity (`agy`) remains the third preferred primary execution pool after
 Normal ChatGPT and verified free OpenCode, for available Gemini and Claude
@@ -652,7 +661,8 @@ restarting on every miss:
 
 1. The worker reports its plan, assumptions, and intended scope before
    substantial implementation.
-2. TDD and debugging work reports Red evidence before production implementation.
+2. Report confirmed root cause for debugging and the current delivery stage; Red
+   evidence is required only for an explicitly requested TDD task.
 3. When the task brief requires an interim diff or risk checkpoint, the worker
    pauses there for lead acceptance.
 4. Verification evidence is inspected before acceptance.
@@ -767,7 +777,8 @@ Every task brief states:
 - concrete writable file/directory allowlist/fingerprint derived from owned
   artifacts and contained within the readable boundary;
 - inputs, dependencies, and applicable workflows;
-- acceptance criteria, evidence, and verification;
+- acceptance criteria, current delivery stage, manual scenarios/feedback status,
+  required pre-merge safety coverage, evidence, and batched verification;
 - external-provider data-sharing boundary when applicable;
 - explicit checkpoint pause gates;
 - escalation/stop conditions and expected completion report.
@@ -845,9 +856,14 @@ Dependency waves:
 5. **Plan/tasks:** Speckit plan then tasks produce canonical implementation DAG.
 6. **Analyze:** run Speckit analyze; resolve spec/plan/task inconsistencies
    before lead maps task IDs, assigns owners, or starts implementation.
-7. **Implementation:** lead dispatches TDD slices with bounded ownership.
-8. **Review/handoff:** independent review, QA, documentation, integration, and
-   traceability reconciliation.
+7. **Implementation:** lead dispatches direct implementation with bounded
+   ownership.
+8. **Manual-ready handoff:** independent review and one consolidated
+   existing-check batch; hand manual testing to Mohamed. No emulator/device
+   execution by default.
+9. **Feedback and coverage:** fix manual findings, confirm stabilized behavior,
+   add regression tests, then run final affected checks and reconcile docs.
+   Required financial/sync/data-safety coverage precedes merge.
 
 For redesigns, prepare epic reconciliation during discovery but do not mutate
 epic scope until approved requirements and mockups clarify dispositions.
@@ -943,16 +959,14 @@ Before production edits, requirements, task graph, ownership, branch topology,
 and manual test plan agree. Every scenario maps to automation or named
 manual-only/blocked reason.
 
-Monyvi mandatory TDD overrides any generic Speckit tests-optional default.
-
-Before production code, author and show failing:
-
-- required deterministic unit and integration tests; and
-- every affected E2E flow runner can honestly control.
-
-Then implement minimum green change and refactor while green. QA owns
-plan/coverage audit; implementer owns production code; lead verifies red/green
-evidence only.
+Use [the delivery workflow](../../docs/development-workflow.md): production
+implementation may precede new tests. QA owns manual planning/coverage audit;
+implementer owns source and assigned regression coverage; lead verifies
+evidence. Run existing checks in a batch before owner manual testing, then add
+regression tests after feedback and behavior stabilization. Preserve completed
+tests and evidence. Financial/sync/data-safety tests and independent review
+remain required before merge, even without a manual defect. No automatic
+tests-first or per-edit execution gate; honor explicit scoped TDD requests.
 
 A task-required interim diff or risk checkpoint requires explicit lead
 acceptance before work continues.

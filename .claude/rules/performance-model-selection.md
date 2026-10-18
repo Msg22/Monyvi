@@ -52,5 +52,7 @@ Use specialized agents proactively:
 - `typescript-reviewer` → after completing a feature, before PR
 - `security-reviewer` → after writing auth, API, or financial code
 - `build-error-resolver` → when build/type errors occur
-- `tdd-guide` → when starting new feature development
+- `tdd-guide` → assigned regression coverage after implementation/manual
+  feedback, or explicitly requested scoped TDD; follow
+  docs/development-workflow.md
 - `performance-optimizer` → when adding lists, observers, or heavy screens

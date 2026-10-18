@@ -1,6 +1,6 @@
 # Device-only WatermelonDB migration policy
 
-**Authority:** Monyvi Constitution VII, version 1.8.0 (2026-10-16). This
+**Authority:** Monyvi Constitution VII, version 2.1.0 (2026-10-18). This
 document describes a narrow implementation route, **not** approval to add a
 particular field/table or to deploy Supabase changes. A feature's approved
 technical contract and owned implementation wave still determine exact fields,
@@ -60,10 +60,11 @@ value.
    scope, and atomic rollback. For a private field on a syncable parent,
    explicitly test pull/upsert and push mapping: an owned cloud refresh must
    preserve the local field, and neither new nor changed private values may leak
-   to any remote request. Prove expiry/logout/retention cleanup and
-   rejection/retry behavior for private recovery evidence, alongside
-   financial-action idempotency, expected-revision CAS, RLS, and canonical
-   reconciliation where relevant. Fail closed for missing/incomplete evidence.
+   to any remote request. Verify the affected retention, rejection/retry and
+   restart paths where needed to prevent data loss or disclosure, preserving
+   relevant financial idempotency, expected-revision CAS and RLS checks. Do not
+   silently discard unresolved private evidence or report a failed sync as
+   successful.
 
 A Watermelon-only table still requires authenticated owner scoping or an
 approved immutable owned-parent chain. Device-only state is not an authority to
@@ -92,14 +93,28 @@ Supabase SQL, public type or remote push. Never use Supabase MCP
 
 ## Review and authorization
 
-The existing feature/business approval, TDD Red, exclusive file ownership,
-strict TypeScript, source parity, independent database/security review, and
-Root's final integration gates all remain mandatory. A technical policy
-exception does not approve a specific feature's local storage layout, sync
-boundary, data retention, or deployment. Feature-specific declarations and tests
-belong in that feature's separately owned implementation PR; this policy change
-itself modifies **no** application/schema/financial behavior.
+Follow [delivery policy](../development-workflow.md): direct implementation,
+batched checks, owner manual testing and meaningful regression coverage. Focused
+data/privacy/sync safety tests and independent review remain required before
+merge and may follow implementation. Existing feature/business approval,
+exclusive file ownership, strict TypeScript, source parity and final integration
+gates still apply; TDD Red is not a prerequisite. A technical policy exception
+does not approve a specific feature's local storage layout, sync boundary, data
+retention, or deployment. Feature-specific declarations and tests belong in that
+feature's separately owned implementation PR; this policy change itself modifies
+**no** application/schema/financial behavior.
 
 If classification or generator safety is uncertain, **stop and surface the
 concrete conflict** rather than adding a cloud placeholder, editing generated
 output, dropping a protected field, or silently waiving a migration gate.
+
+## First-release scope
+
+Apply the owner's impact rule to rare cases: include the smallest protection
+when omission would cause major harm, ask Mohamed when impact is uncertain, and
+otherwise defer. Scope checks to the field and data paths actually changed. A
+safe error with preserved pending data may be enough. This policy does not
+require automatic recovery/compensation, multi-device feature work or a new
+framework merely because the feature uses local storage. Preserve existing
+safeguards; do not weaken ownership, privacy, migration safety or sync failure
+semantics to reduce scope.

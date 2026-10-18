@@ -1,11 +1,14 @@
 import type { Database } from "@nozbe/watermelondb";
-import type {
-  SyncPullResult,
-  SyncTableChangeSet,
-} from "@nozbe/watermelondb/sync";
+import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 
 import { getCurrentUserId } from "../supabase";
 import { SYNCABLE_TABLES } from "./config";
+import {
+  createHistoricalSnapshotPullStrategy,
+  type HistoricalRecoveryPullResult,
+  createSnapshotRetentionCutoffIso,
+  isHistoricalRecoveryRequired,
+} from "./historical-recovery";
 import { pullMarketRateSnapshots } from "./market-rate-snapshot-pull";
 import { sealSyncPull } from "./pull-fence";
 import { pullSnapshotDeletions } from "./snapshot-deletion-pull";
@@ -32,6 +35,7 @@ import type {
 const UUID_MAX = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 const METAL_DEDICATED_PULL_TABLES = [
   "financial_action_groups",
+  "account_financial_effects",
   "metal_action_evidence",
   "metal_lifecycle_events",
   "metal_rate_references",
@@ -56,8 +60,15 @@ export async function pullChanges(
   lastPulledAt: number | null,
   expectedUserId: string,
   database?: Database
-): Promise<SyncPullResult> {
+): Promise<HistoricalRecoveryPullResult> {
   await assertExpectedPullUser(expectedUserId);
+  const historicalRecoveryRequired =
+    database !== undefined &&
+    lastPulledAt === null &&
+    (await isHistoricalRecoveryRequired(database, expectedUserId));
+  const snapshotRetentionCutoffIso = historicalRecoveryRequired
+    ? createSnapshotRetentionCutoffIso()
+    : null;
 
   const lastSyncDate =
     lastPulledAt === null ? null : new Date(lastPulledAt).toISOString();
@@ -81,12 +92,21 @@ export async function pullChanges(
     }
 
     if (isSnapshotTable(table)) {
-      const activeChanges = await pullSnapshotTable(
-        table,
-        expectedUserId,
-        lastSyncDate,
-        upperWatermark
-      );
+      const activeChanges =
+        snapshotRetentionCutoffIso === null
+          ? await pullSnapshotTable(
+              table,
+              expectedUserId,
+              lastSyncDate,
+              upperWatermark
+            )
+          : await pullSnapshotTable(
+              table,
+              expectedUserId,
+              lastSyncDate,
+              upperWatermark,
+              snapshotRetentionCutoffIso
+            );
       changes[table] = {
         ...activeChanges,
         deleted: [...snapshotDeletions[table]],
@@ -170,6 +190,15 @@ export async function pullChanges(
   return {
     changes,
     timestamp: Date.parse(upperWatermark),
+    ...(snapshotRetentionCutoffIso === null
+      ? {}
+      : {
+          experimentalStrategy: createHistoricalSnapshotPullStrategy(
+            expectedUserId,
+            snapshotRetentionCutoffIso,
+            upperWatermark
+          ),
+        }),
   };
 }
 

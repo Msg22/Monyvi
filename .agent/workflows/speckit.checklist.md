@@ -4,6 +4,16 @@ description:
   requirements.
 ---
 
+## First-release scope and delivery policy
+
+Follow [delivery policy](../../docs/development-workflow.md). For a rare case,
+would shipping without handling it cause a major problem? Yes: the smallest
+necessary protection is required. Uncertain: ask Mohamed before dependent work.
+No: defer it for first release. An audit finding or possible test case is not
+automatically an implementation task or release blocker. Preserve approved core
+behavior, money/data/privacy and safe sync. Do not add speculative frameworks,
+new protocols or recovery systems merely to satisfy a checklist.
+
 ## Checklist Purpose: "Unit Tests for English"
 
 **CRITICAL CONCEPT**: Checklists are **UNIT TESTS FOR REQUIREMENTS WRITING** -
@@ -138,7 +148,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Clarity**: Are requirements unambiguous and specific?
    - **Consistency**: Do requirements align with each other?
    - **Measurability**: Can requirements be objectively verified?
-   - **Coverage**: Are all scenarios/edge cases addressed?
+   - **Coverage**: Are approved core scenarios and material-risk cases
+     addressed, with uncertain-impact cases returned to Mohamed and low-impact
+     rare cases deferred?
 
    **Category Structure** - Group items by requirement quality dimensions:
    - **Requirement Completeness** (Are all necessary requirements documented?)
