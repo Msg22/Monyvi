@@ -8,6 +8,13 @@ description:
   implement fixes on a follow-up branch or PR.
 ---
 
+Apply the
+[first-release scope filter](../../../docs/development-workflow.md#first-release-scope-and-rare-cases)
+before turning a rare edge case or review suggestion into implementation work.
+Major impact requires minimal protection; uncertain impact returns to Mohamed;
+no major impact means defer. Preserve approved core behavior and existing
+safeguards.
+
 # source-command-code-review
 
 Use this skill when the user asks to run the migrated source command

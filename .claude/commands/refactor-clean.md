@@ -1,11 +1,13 @@
 ---
 description:
-  Safely identify and remove dead code with test verification at every step.
+  Safely identify and remove dead code with batched verification under the
+  delivery policy.
 ---
 
 # Refactor Clean
 
-Safely identify and remove dead code with test verification at every step.
+Safely identify and remove dead code with batched verification under the
+delivery policy.
 
 ## Step 1: Detect Dead Code
 
@@ -29,11 +31,13 @@ If no tool is available, use Grep to find exports with zero imports.
 
 For each SAFE item:
 
-1. **Run full test suite** — Establish baseline (all green)
-2. **Delete the dead code** — Surgical removal
-3. **Re-run test suite** — Verify nothing broke
-4. **If tests fail** — Immediately revert and skip this item
-5. **If tests pass** — Move to next item
+1. Confirm dead-code evidence and dependencies before surgical removal.
+2. Keep one cohesive owned cleanup scope; preserve existing tests.
+3. Batch relevant existing tests, type and lint checks at
+   integration/pre-commit.
+4. Investigate actual failures and revert only the unsafe owned change.
+5. Follow [delivery policy](../../docs/development-workflow.md) for owner manual
+   feedback and regression coverage; no full-suite rerun per deletion.
 
 ## Step 4: Handle CAUTION Items
 
@@ -68,7 +72,7 @@ All tests passing ✅
 
 ## Rules
 
-- **Never delete without running tests first**
+- **Confirm unused behavior before deletion; verify the cohesive batch**
 - **One deletion at a time** — Atomic changes make rollback easy
 - **Skip if uncertain** — Better to keep dead code than break production
 - **Don't refactor while cleaning** — Separate concerns

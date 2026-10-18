@@ -4,6 +4,16 @@ description:
   across spec.md, plan.md, and tasks.md after task generation.
 ---
 
+## First-release scope and delivery policy
+
+Follow [delivery policy](../../docs/development-workflow.md). For a rare case,
+would shipping without handling it cause a major problem? Yes: the smallest
+necessary protection is required. Uncertain: ask Mohamed before dependent work.
+No: defer it for first release. An audit finding or possible test case is not
+automatically an implementation task or release blocker. Preserve approved core
+behavior, money/data/privacy and safe sync. Do not add speculative frameworks,
+new protocols or recovery systems merely to satisfy a checklist.
+
 ## User Input
 
 ```text

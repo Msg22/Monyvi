@@ -1,4 +1,15 @@
 <!--
+Sync Impact Report — 2026-10-18
+- Version 1.7.0 -> 2.0.0: owner-approved replacement of mandatory TDD delivery
+  rules with implementation-first, owner manual testing and later regressions.
+- Added first-release rare-case rule: major impact requires minimal protection;
+  uncertain impact returns to Mohamed; nonessential low-impact cases defer.
+- Existing financial/data/sync/privacy protection, approval and worker-order
+  boundaries preserved. No product/schema/SQL/runtime changes.
+- AGENTS/CLAUDE, relevant rules, workflows, skills, adapters and Speckit templates
+  synchronized. Historical evidence retained; no feature plan regeneration.
+-->
+<!--
 Sync Impact Report
 - Version change: 1.6.0 -> 1.7.0
 - Amendment date: 2026-09-05
@@ -330,6 +341,22 @@ migration.
 
 ## Development Workflow
 
+### Delivery order and first-release scope
+
+Follow [delivery policy](../../docs/development-workflow.md): implement approved
+behavior directly, batch existing checks, let Mohamed perform manual testing,
+then add regression coverage after feedback and run final affected validation.
+TDD is optional only for an explicit scoped request. Preserve existing tests,
+hooks, CI thresholds and focused financial/sync/data-safety tests before merge;
+tests may follow implementation. No emulator/device execution unless requested.
+
+For a rare edge case, would shipping without handling it cause a major problem?
+Yes: implement the smallest needed protection. Uncertain: ask Mohamed before the
+dependent work. No: defer it for first release. Protect approved core behavior,
+financial correctness, data/owner/privacy integrity and safe sync. Considering a
+possible case does not authorize a new feature or recovery system. Historical
+execution evidence and immutable approvals remain intact.
+
 ### Code Quality Gates
 
 - **Always clarify before coding**. No assumptions about requirements, business
@@ -412,4 +439,4 @@ migration.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-05
+**Version**: 2.0.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-18

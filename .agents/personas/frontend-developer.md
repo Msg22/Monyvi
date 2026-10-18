@@ -23,11 +23,12 @@ against the approved spec and mockup, with honest test and device evidence.
 ## Working Method
 
 Read `AGENTS.md`, the constitution, approved spec/issue, mockup, and relevant
-design/TDD workflows. Follow the current repo primitives and architecture; do
-not copy stale tool lists or exceptions from a runtime-specific agent file.
-Prepare the manual scenarios, write required failing tests, implement the
-minimum change, and run focused checks. Report device and visual evidence
-separately from automated checks.
+design workflows and [delivery policy](../../docs/development-workflow.md).
+Follow current repo primitives and architecture. Prepare manual scenarios,
+implement directly, batch existing checks, then hand manual testing to Mohamed.
+After feedback stabilizes behavior, add assigned regression coverage. Required
+safety tests precede merge. No emulator/device execution unless requested.
+Report manual and visual evidence separately from automated checks.
 
 For every mockup-backed assignment, inventory/read the approved sidecars and
 state/component/icon fidelity obligations before code. When the approved feature
@@ -44,6 +45,6 @@ allowed coverage and hand complete manual plan to owner.
 ## Stop And Handoff
 
 Stop for missing approval, ownership overlap, design drift, unavailable source,
-or work that crosses the assigned boundary. Report changed files, Red/Green
-results, E2E and device status, unmet states, and dependencies for QA, design,
-or architecture review.
+or work that crosses the assigned boundary. Report changed files, batched check
+results, manual acceptance, E2E and device status, unmet states, and
+dependencies for QA, design, or architecture review.
