@@ -73,6 +73,37 @@ conventions
   dated result; it never silently rewrites historical commands, counts, or
   source hashes.
 - Do not treat a local branch, commit, worktree, push, pull request, or GitHub
-mutation as authorized unless the delivery topology or explicit approval grants
-that exact operation.
+  mutation as authorized unless the delivery topology or explicit approval
+  grants that exact operation.
+
+## Database Ownership Classification (Constitution VII 2.1.0)
+
+- In every spec/plan/tasks involving a database change, classify each field and
+  table as **Supabase-owned/syncable** or strictly **device-only WatermelonDB**.
+  Record the reason and source of truth; do not treat an existing cloud-backed
+  parent table as automatic permission to sync its private recovery fields. See
+  `docs/architecture/device-local-migration-policy.md`.
+- For server-owned or syncable changes, require next-prefix local
+  `supabase/migrations` SQL, generated public types/schema, local parity,
+  CAS/RLS/ownership and independent review. A feature's implementation grant
+  does not authorize remote `db:push`. `npm run db:migrate` currently performs
+  `db:push` and MUST NOT be described as a local-only generation command.
+- For genuinely device-only state, plan a numbered Watermelon migration, durable
+  generator-consumed local schema override, non-generated model declaration,
+  reproducible local generation and committed outputs. Include focused
+  fresh/upgrade, ownership, pull preservation and privacy exclusion checks, plus
+  affected retention/failure/restart checks needed for data safety. Follow the
+  delivery policy: source first, batched checks and necessary safety evidence
+  before merge. Apply the first-release impact rule; a migration does not
+  mandate speculative recovery features or exhaustive scenarios. No dummy
+  Supabase column, manual generated-base edit or public type deletion.
+- Device-only storage cannot conceal server-owned financial/CAS/revision or
+  cross-device business state. Material product/financial behavior still follows
+  approved business-decisions/spec gates; this migration-routing policy alone
+  adds no business decision and grants no feature-specific schema or hosted
+  deployment approval.
+- Scope migration source and generator ownership to the feature's separate PR.
+  Workflow-only constitutional amendments do not alter the feature's frozen
+  spec/plan/tasks, tests, products, SQL or approved mockup bindings.
+
 <!-- MANUAL ADDITIONS END -->
