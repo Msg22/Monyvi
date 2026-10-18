@@ -4,7 +4,14 @@
  * Localized approved fallbacks keep this view-only slice usable until then.
  */
 import { Ionicons } from "@expo/vector-icons";
-import type { AccountReviewRow } from "@monyvi/logic";
+import type {
+  AccountReviewRow,
+  AccountReviewSession,
+  ReviewableTransaction,
+} from "@monyvi/logic";
+import type { SharedSuggestedGroupView } from "./SharedAccountSuggestions";
+import { getCurrencyName } from "@/utils/currency-localization";
+import { currencyCode } from "../../../../packages/logic/src/account-review/schema-primitives";
 import type { AccountChoiceCandidateView } from "./AccountChoiceSheet";
 import { t } from "i18next";
 import React from "react";
@@ -18,6 +25,9 @@ const approvedCopy = {
   en: {
     account_review_details_title: "Review details",
     account_review_group_confirm: "Confirm",
+    account_review_group_new_account: "New account",
+    account_review_group_saved_on_save:
+      "This account is created when you save selected transactions.",
     account_review_group_confirmed: "Confirmed",
     account_review_group_view_all: "View all",
     account_review_group_edit: "Edit",
@@ -41,6 +51,9 @@ const approvedCopy = {
   ar: {
     account_review_details_title: "تفاصيل للمراجعة",
     account_review_group_confirm: "تأكيد",
+    account_review_group_new_account: "حساب جديد",
+    account_review_group_saved_on_save:
+      "سيُنشأ هذا الحساب عند حفظ المعاملات المحددة.",
     account_review_group_confirmed: "تم التأكيد",
     account_review_group_view_all: "عرض الكل",
     account_review_group_edit: "تعديل",
@@ -76,6 +89,56 @@ export function reviewCopy(
 }
 
 /** Show only the actual existing default from the scoped account choices. */
+export function presentReviewGroup(
+  group: AccountReviewSession["groups"][number],
+  linkedCount: number,
+  busy: boolean,
+  canUndo: boolean,
+  language: ReviewDisplayLanguage
+): SharedSuggestedGroupView {
+  const removed = group.status === "removed";
+  return {
+    groupId: group.groupId,
+    displayName: group.name,
+    identitySummary: [
+      group.providerDisplayName,
+      group.institutionId,
+      group.cardLast4,
+      ...group.senderNames,
+    ]
+      .filter((part) => part !== null && part.length > 0)
+      .join(" · "),
+    currencyLabel: group.currency,
+    typeIconName:
+      group.type === "CASH"
+        ? "cash-outline"
+        : group.type === "DIGITAL_WALLET"
+          ? "wallet-outline"
+          : group.type === "BANK"
+            ? "business-outline"
+            : "help-circle-outline",
+    linkedCount,
+    statusLabel: removed
+      ? ""
+      : group.status === "confirmed"
+        ? reviewCopy("account_review_group_confirmed", language)
+        : reviewCopy("account_review_group_new_account", language),
+    disclosureText: removed
+      ? ""
+      : group.status === "confirmed"
+        ? reviewCopy("account_review_group_saved_on_save", language)
+        : presentReviewSharedDisclosure(group.name, linkedCount, language),
+    isConfirmed: group.status === "confirmed",
+    isRemoved: removed,
+    isBusy: busy,
+    canConfirm: !removed && group.status === "pending" && group.type !== null,
+    canEdit: !removed,
+    canReplace: !removed && linkedCount > 0,
+    canRemove: !removed,
+    canUndo,
+  };
+}
+
 export function presentReviewDefaultAccountName(
   rows: readonly AccountReviewRow[],
   accounts: ReadonlyArray<{ readonly id: string; readonly name: string }>
@@ -92,53 +155,354 @@ export function presentReviewDefaultAccountName(
 }
 
 /** Keep compact blocker keys distinct, preserving the caller's locale function. */
-type ReviewIssueKey =
+export type ReviewIssueKey =
   | "account_review_issue_amount"
   | "account_review_issue_category"
   | "account_review_issue_currency"
   | "account_review_issue_account"
   | "account_review_group_needs_review";
 
-export function presentReviewIssueKeys(
-  visibleRows: readonly AccountReviewRow[],
-  distinctNeedsReviewCount: number
+export function presentReviewRowIssueKeys(
+  row: AccountReviewRow
 ): readonly ReviewIssueKey[] {
-  const reasons = new Set(visibleRows.flatMap((row) => row.reviewReasons));
-  const issueKeys: ReviewIssueKey[] = [];
+  const reasons = new Set(row.reviewReasons);
+  const result: ReviewIssueKey[] = [];
   if (reasons.has("ambiguous_amount") || reasons.has("low_confidence"))
-    issueKeys.push("account_review_issue_amount");
+    result.push("account_review_issue_amount");
   if (reasons.has("category_needed"))
-    issueKeys.push("account_review_issue_category");
+    result.push("account_review_issue_category");
   if (
-    visibleRows.some((row) => row.currency.state === "unconfirmed") ||
+    row.currency.state === "unconfirmed" ||
     reasons.has("currency_confirmation_needed")
   )
-    issueKeys.push("account_review_issue_currency");
+    result.push("account_review_issue_currency");
+  const accountProblemReasons: ReadonlyArray<
+    AccountReviewRow["reviewReasons"][number]
+  > = [
+    "account_needed",
+    "account_match_ambiguous",
+    "account_identity_uncertain",
+    "account_unavailable",
+    "account_group_removed",
+    "cash_transfer_review",
+    "account_evidence_invalid",
+    "account_group_unconfirmed",
+  ];
+  const actualAccountProblem =
+    row.assignment.state !== "suggested" &&
+    accountProblemReasons.some((reason) => reasons.has(reason));
+  // Currency must be confirmed before account eligibility has meaning.
+  // Preserve overlapping actual account issues once that prerequisite is met.
   if (
-    visibleRows.some(
+    row.currency.state !== "unconfirmed" &&
+    (row.assignment.state === "unresolved" ||
+      (row.source === "SMS" &&
+        row.transaction.isAtmWithdrawal === true &&
+        row.toAssignment?.state !== "existing") ||
+      actualAccountProblem)
+  )
+    result.push("account_review_issue_account");
+  return result;
+}
+
+export function presentReviewIssueKeys(
+  rows: readonly AccountReviewRow[],
+  distinctNeedsReviewCount: number
+): readonly ReviewIssueKey[] {
+  const found = new Set(rows.flatMap(presentReviewRowIssueKeys));
+  const ordered: ReviewIssueKey[] = [
+    "account_review_issue_amount",
+    "account_review_issue_category",
+    "account_review_issue_currency",
+    "account_review_issue_account",
+  ];
+  const issues = ordered.filter((key) => found.has(key));
+  // Pending shared groups have their own Confirm action, not a duplicate
+  // row-level Choose account issue or generic recovery.
+  if (
+    issues.length === 0 &&
+    distinctNeedsReviewCount > 0 &&
+    rows.some(
       (row) =>
-        row.assignment.state === "unresolved" ||
-        (row.source === "SMS" &&
-          row.transaction.isAtmWithdrawal === true &&
-          row.toAssignment?.state !== "existing")
-    ) ||
-    [...reasons].some((reason) =>
-      [
-        "account_needed",
-        "account_match_ambiguous",
-        "account_identity_uncertain",
-        "account_unavailable",
-        "account_group_removed",
-        "account_group_unconfirmed",
-        "cash_transfer_review",
-        "account_evidence_invalid",
-      ].includes(reason)
+        row.assignment.state !== "suggested" && row.reviewReasons.length > 0
     )
   )
-    issueKeys.push("account_review_issue_account");
-  if (issueKeys.length === 0 && distinctNeedsReviewCount > 0)
-    issueKeys.push("account_review_group_needs_review");
-  return issueKeys;
+    issues.push("account_review_group_needs_review");
+  return issues;
+}
+
+export function presentIssueRecoveryTarget(
+  rows: readonly AccountReviewRow[],
+  key: ReviewIssueKey
+): AccountReviewRow | null {
+  return (
+    rows.find((row) =>
+      key === "account_review_group_needs_review"
+        ? row.assignment.state !== "suggested" && row.reviewReasons.length > 0
+        : presentReviewRowIssueKeys(row).includes(key)
+    ) ?? null
+  );
+}
+
+/** A modal may only edit its original owned review and entity revision. */
+export interface ReviewChoiceStamp {
+  readonly ownerId: string;
+  readonly sessionId: string;
+  readonly reviewRevision: string;
+  readonly operationGeneration: string;
+  readonly entityRevision: string;
+}
+export function reviewChoiceStamp(
+  session: AccountReviewSession,
+  entityRevision: string
+): ReviewChoiceStamp {
+  return {
+    ownerId: session.ownerId,
+    sessionId: session.sessionId,
+    reviewRevision: session.revision,
+    operationGeneration: session.operationGeneration,
+    entityRevision,
+  };
+}
+export function isReviewChoiceFresh(
+  choice: ReviewChoiceStamp,
+  session: AccountReviewSession,
+  currentEntityRevision: string | null
+): boolean {
+  return (
+    currentEntityRevision !== null &&
+    choice.ownerId === session.ownerId &&
+    choice.sessionId === session.sessionId &&
+    choice.reviewRevision === session.revision &&
+    choice.operationGeneration === session.operationGeneration &&
+    choice.entityRevision === currentEntityRevision
+  );
+}
+
+/** Global issue rows use the canonical row set, not the currently filtered list.
+ * A single transaction can contribute to more than one issue count.
+ */
+export interface ReviewIssueEntry {
+  readonly key: ReviewIssueKey;
+  readonly label: string;
+  readonly count: number;
+}
+export function presentReviewIssues(
+  rows: readonly AccountReviewRow[],
+  distinctNeedsReviewCount: number,
+  language: ReviewDisplayLanguage
+): readonly ReviewIssueEntry[] {
+  return presentReviewIssueKeys(rows, distinctNeedsReviewCount).map((key) => {
+    const count = rows.filter((row) =>
+      key === "account_review_group_needs_review"
+        ? row.assignment.state !== "suggested" && row.reviewReasons.length > 0
+        : presentReviewRowIssueKeys(row).includes(key)
+    ).length;
+    return {
+      key,
+      label:
+        key === "account_review_group_needs_review"
+          ? reviewCopy(key, language)
+          : t(key, { ns: "transactions", lng: language, defaultValue: key }),
+      count: count === 0 ? distinctNeedsReviewCount : count,
+    };
+  });
+}
+
+/** Intersect guarded per-row candidates for an explicitly disclosed group replacement.
+ * No inferred accounts, new payload, or expanded domain resolver.
+ */
+export function intersectGuardedGroupAccountChoices<
+  T extends { readonly id: string; readonly type: string },
+>(
+  linkedRowIds: readonly string[],
+  groupType: string | null,
+  getCandidates: (rowId: string, role: "source") => readonly T[]
+): readonly T[] {
+  const first = linkedRowIds[0];
+  if (!first) return [];
+  return getCandidates(first, "source").filter(
+    (candidate) =>
+      candidate.type === groupType &&
+      linkedRowIds.every((rowId) =>
+        getCandidates(rowId, "source").some(
+          (other) => other.id === candidate.id
+        )
+      )
+  );
+}
+
+/** Transaction identity and the real merchant, never a generic "Currency". */
+export function presentReviewTransactionContext(
+  transaction: ReviewableTransaction,
+  language: ReviewDisplayLanguage
+): string {
+  const note =
+    "note" in transaction && typeof transaction.note === "string"
+      ? transaction.note.trim()
+      : "";
+  const subject =
+    note || transaction.categoryDisplayName?.trim() || transaction.originLabel;
+  const merchant = (transaction.merchant || transaction.counterparty)?.trim();
+  const identity =
+    merchant &&
+    !subject.toLocaleLowerCase().includes(merchant.toLocaleLowerCase())
+      ? language === "ar"
+        ? subject + " لدى " + merchant
+        : subject + " at " + merchant
+      : subject || merchant || transaction.originLabel;
+  return language === "ar" ? "لـ" + identity : "For " + identity;
+}
+
+/** An approved shared effect, with the live name/count rather than a fixture. */
+export function presentReviewSharedDisclosure(
+  name: string,
+  count: number,
+  language: ReviewDisplayLanguage
+): string {
+  return t("account_review_group_effect", {
+    ns: "transactions",
+    lng: language,
+    count,
+    accountName: displayIdentity(name, language),
+    defaultValue:
+      language === "ar"
+        ? "اختيار معاملة من {{accountName}} يؤكد الحساب للمعاملات المرتبطة ({{count}})."
+        : "Selecting a {{accountName}} transaction confirms this account for all {{count}} linked transactions.",
+  });
+}
+
+export function presentReviewLinkedCount(
+  count: number,
+  language: ReviewDisplayLanguage
+): string {
+  return t("account_review_group_linked_count", {
+    ns: "transactions",
+    lng: language,
+    count,
+    defaultValue:
+      language === "ar"
+        ? "{{count}} معاملات مرتبطة"
+        : "{{count}} linked transactions",
+  });
+}
+
+export function presentReviewReplaceScope(
+  name: string,
+  count: number,
+  language: ReviewDisplayLanguage
+): string {
+  return t("account_review_group_replace_scope", {
+    ns: "transactions",
+    lng: language,
+    count,
+    accountName: displayIdentity(name, language),
+    defaultValue:
+      language === "ar"
+        ? "استبدال {{accountName}} لجميع المعاملات المرتبطة ({{count}})."
+        : "Replace {{accountName}} for all {{count}} linked transactions.",
+  });
+}
+
+/** A conflict candidate is always shown with its friendly name and ISO code. */
+export function presentReviewCurrencyLabel(
+  candidate: string,
+  language: ReviewDisplayLanguage
+): string {
+  const checked = currencyCode.safeParse(candidate);
+  return checked.success ? getCurrencyName(checked.data, language) : candidate;
+}
+
+/** UI-only presentation of already-scoped canonical account and currency choices. */
+export interface CanonicalRowDetails {
+  readonly accountName: string | null;
+  readonly accountType: AccountReviewSession["groups"][number]["type"];
+  readonly accountActionLabel: string | null;
+  readonly accountStatusLabel: string | null;
+  readonly accountStatusTone?: "pending" | "confirmed" | "removed";
+  readonly currencyActionLabel: string | null;
+  readonly currencyContextLabel: string;
+  readonly isSmsAtm: boolean;
+  readonly destinationName: string | null;
+}
+export function presentCanonicalRowDetails(
+  row: AccountReviewRow,
+  group: AccountReviewSession["groups"][number] | null,
+  accounts: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly type: AccountReviewSession["groups"][number]["type"];
+  }>,
+  language: ReviewDisplayLanguage
+): CanonicalRowDetails {
+  const assigned =
+    row.assignment.state === "existing"
+      ? (accounts.find((a) => a.id === row.assignment.accountId) ?? null)
+      : null;
+  const isSmsAtm =
+    row.source === "SMS" && row.transaction.isAtmWithdrawal === true;
+  const currencyUnknown = row.currency.state === "unconfirmed";
+  const accountActionLabel = currencyUnknown
+    ? null
+    : isSmsAtm
+      ? t("from_account", { ns: "transactions", lng: language })
+      : row.assignment.state === "unresolved"
+        ? t("account_review_issue_account", {
+            ns: "transactions",
+            lng: language,
+          })
+        : reviewCopy("account_review_group_change", language);
+  const status =
+    assigned?.id &&
+    row.assignment.state === "existing" &&
+    row.assignment.origin === "default"
+      ? t("default_account", {
+          ns: "accounts",
+          lng: language,
+          defaultValue:
+            language === "ar" ? "الحساب الافتراضي" : "Default account",
+        })
+      : group?.status === "confirmed"
+        ? reviewCopy("account_review_group_confirmed", language)
+        : group?.status === "pending"
+          ? reviewCopy("account_review_group_new_account", language)
+          : group?.status === "removed"
+            ? t("account_review_group_removed", {
+                ns: "transactions",
+                lng: language,
+              })
+            : null;
+  const toAssignment = row.toAssignment;
+  const destination =
+    toAssignment?.state === "existing"
+      ? (accounts.find((a) => a.id === toAssignment.accountId) ?? null)
+      : null;
+  return {
+    accountName: assigned?.name ?? group?.name ?? null,
+    accountType: assigned?.type ?? group?.type ?? null,
+    accountActionLabel,
+    accountStatusLabel: status,
+    accountStatusTone:
+      group?.status === "pending"
+        ? "pending"
+        : group?.status === "confirmed"
+          ? "confirmed"
+          : group?.status === "removed"
+            ? "removed"
+            : undefined,
+    currencyActionLabel: currencyUnknown
+      ? t("account_review_issue_currency", {
+          ns: "transactions",
+          lng: language,
+        })
+      : null,
+    currencyContextLabel: presentReviewTransactionContext(
+      row.transaction,
+      language
+    ),
+    isSmsAtm,
+    destinationName: destination?.name ?? null,
+  };
 }
 
 /** Present only the eligible accounts supplied by the guarded facade. */
@@ -147,23 +511,45 @@ export function presentReviewAccountChoices(
     readonly id: string;
     readonly name: string;
     readonly providerDisplayName: string | null;
+    readonly institutionId?: string | null;
     readonly cardLast4: string | null;
+    readonly type?: string;
     readonly currency: string;
-  }>
+  }>,
+  language: ReviewDisplayLanguage = "en"
 ): readonly AccountChoiceCandidateView[] {
-  return candidates.map((account) => ({
-    id: account.id,
-    displayName: account.name,
-    identityDetails: [
-      account.providerDisplayName,
-      account.cardLast4,
+  return candidates.map((account) => {
+    const typeLabel = account.type
+      ? t("type_" + account.type.toLowerCase(), {
+          ns: "accounts",
+          lng: language,
+          defaultValue: account.type,
+        })
+      : null;
+    const identityDetails = [
+      typeLabel,
+      account.providerDisplayName ?? account.institutionId ?? null,
+      account.cardLast4 ? "•••• " + account.cardLast4 : null,
       account.currency,
     ]
       .filter((text) => text !== null && text.length > 0)
-      .join(" · "),
-    accessibilityLabel: account.name + " " + account.currency,
-    isEligible: true,
-  }));
+      .join(" · ");
+    return {
+      id: account.id,
+      displayName: account.name,
+      identityDetails,
+      iconName:
+        account.type === "CASH"
+          ? "cash-outline"
+          : account.type === "DIGITAL_WALLET"
+            ? "wallet-outline"
+            : account.type === "BANK"
+              ? "business-outline"
+              : "help-circle-outline",
+      accessibilityLabel: account.name + ", " + identityDetails,
+      isEligible: true,
+    };
+  });
 }
 
 /** Preserve original alternatives and show a separately validated picker choice. */

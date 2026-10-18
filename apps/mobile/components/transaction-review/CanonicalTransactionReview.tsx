@@ -1,9 +1,3 @@
-/**
- * #395 T054: cohesive canonical review container extracted from the shared
- * entry to keep each review branch independently maintainable. This invokes
- * ONLY the existing review facade, never legacy per-row account/financial
- * writers, and retains the original typed CAS/save callbacks and layout.
- */
 import {
   accountReviewCommandSchema,
   type AccountReviewSession,
@@ -22,18 +16,25 @@ import { useAccountReview } from "@/hooks/useAccountReview";
 import { useToast } from "@/components/ui/Toast";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AccountReviewPanel } from "./AccountReviewPanel";
-import type { SharedSuggestedGroupView } from "./SharedAccountSuggestions";
 import { AccountChoiceSheet } from "./AccountChoiceSheet";
 import { CurrencyConfirmationSheet } from "./CurrencyConfirmationSheet";
 import { EditSuggestedAccountSheet } from "./EditSuggestedAccountSheet";
-import { choiceCopy } from "./account-review-choice-presentation";
 import {
+  type ReviewIssueKey,
+  type ReviewChoiceStamp,
   presentReviewAccountChoices,
   presentReviewCurrencyOptions,
   presentReviewDefaultAccountName,
-  presentReviewIssueKeys,
-  reviewCopy,
-  ReviewActionButton,
+  presentReviewIssues,
+  intersectGuardedGroupAccountChoices,
+  presentIssueRecoveryTarget,
+  reviewChoiceStamp,
+  isReviewChoiceFresh,
+  presentReviewTransactionContext,
+  presentCanonicalRowDetails,
+  presentReviewReplaceScope,
+  presentReviewCurrencyLabel,
+  presentReviewGroup,
 } from "./shared-account-presentation";
 import React, { useEffect, useRef, useState } from "react";
 import { FlatList, Text, View } from "react-native";
@@ -45,6 +46,7 @@ import { TransactionEditModal } from "./edit-modal/TransactionEditModal";
 import { getExpandedContent } from "./get-expanded-content";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { TransactionItem } from "./TransactionItem";
+import { AtmDestinationStatus } from "./account-review-row-presentation";
 import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import type {
@@ -67,25 +69,23 @@ type ReviewTransactionEditPatch = Extract<
 >["patch"];
 
 type ReviewChoice =
-  | {
-      readonly kind: "row";
-      readonly rowId: string;
-      readonly role: "source" | "destination";
-    }
-  | { readonly kind: "replace"; readonly groupId: string }
-  | {
-      readonly kind: "currency";
-      readonly rowId: string;
-      readonly context: string;
-    }
-  | { readonly kind: "edit"; readonly groupId: string }
+  | ((
+      | {
+          readonly kind: "row";
+          readonly rowId: string;
+          readonly role: "source" | "destination";
+        }
+      | { readonly kind: "replace"; readonly groupId: string }
+      | {
+          readonly kind: "currency" | "picker";
+          readonly rowId: string;
+          readonly context: string;
+        }
+      | { readonly kind: "edit"; readonly groupId: string }
+    ) &
+      ReviewChoiceStamp)
   | null;
 
-/**
- * One canonical facade per review. The old useTransactionReviewState and its
- * DB/account hooks exist only in LegacyTransactionReview; this branch cannot
- * invoke the original per-row financial writer.
- */
 export function CanonicalAccountReview(
   props: TransactionReviewProps & {
     readonly boundary: AccountReviewRuntimeBoundary;
@@ -105,7 +105,6 @@ export function CanonicalAccountReview(
   const [currencySelection, setCurrencySelection] = useState<string | null>(
     null
   );
-  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [showDefaultWhy, setShowDefaultWhy] = useState(false);
   const [busySave, setBusySave] = useState(false);
@@ -117,9 +116,6 @@ export function CanonicalAccountReview(
     props.boundary.onSessionChange?.(session);
   }, [props.boundary.onSessionChange, session]);
 
-  // The retry producer finishes its owned SQLite merge before isRetrying
-  // falls. Refresh the same queue only after that transition, never when the
-  // button is first pressed or on a failed/foreign-owner response.
   const retryInput = props.boundary.input;
   const retryMode = retryInput.mode;
   const retryOwnerId = retryInput.ownerId;
@@ -155,9 +151,6 @@ export function CanonicalAccountReview(
       queueId: retryQueueId,
       retrying,
     };
-    // A partial retry can merge some rows before reporting other failures.
-    // Rehydrate the owned queue after every completed attempt; unchanged
-    // failures simply reload the same persisted choices.
     if (sameQueue && previous.retrying && !retrying) view.reload();
   }, [
     retryMode,
@@ -181,9 +174,6 @@ export function CanonicalAccountReview(
   const groups = new Map(
     session?.groups.map((group) => [group.groupId, group]) ?? []
   );
-  // Modal identity is pinned to the canonical session and row revision.
-  // A changed owner, revoked facade, late edit, reload or accepted competing
-  // command must not keep a stale editor/patch alive.
   const editingRow =
     transactionEdit &&
     session &&
@@ -204,13 +194,35 @@ export function CanonicalAccountReview(
     if (transactionEdit !== null && editingRow === null)
       setTransactionEdit(null);
   }, [transactionEdit, editingRow]);
+  const choiceRevision = choice
+    ? choice.kind === "row" ||
+      choice.kind === "currency" ||
+      choice.kind === "picker"
+      ? (rows.get(choice.rowId)?.revision ?? null)
+      : choice.kind === "replace" || choice.kind === "edit"
+        ? (groups.get(choice.groupId)?.revision ?? null)
+        : null
+    : null;
+  const activeChoice =
+    choice &&
+    session &&
+    props.boundary.input.ownerId === session.ownerId &&
+    props.boundary.input.sessionId === session.sessionId &&
+    !props.boundary.input.signal?.aborted &&
+    isReviewChoiceFresh(choice, session, choiceRevision)
+      ? choice
+      : null;
   const currentRow =
-    choice && (choice.kind === "row" || choice.kind === "currency")
-      ? (rows.get(choice.rowId) ?? null)
+    activeChoice &&
+    (activeChoice.kind === "row" ||
+      activeChoice.kind === "currency" ||
+      activeChoice.kind === "picker")
+      ? (rows.get(activeChoice.rowId) ?? null)
       : null;
   const currentGroup =
-    choice && (choice.kind === "replace" || choice.kind === "edit")
-      ? (groups.get(choice.groupId) ?? null)
+    activeChoice &&
+    (activeChoice.kind === "replace" || activeChoice.kind === "edit")
+      ? (groups.get(activeChoice.groupId) ?? null)
       : null;
 
   // Never expose internal reason codes or exception messages in the UI.
@@ -328,39 +340,44 @@ export function CanonicalAccountReview(
     role: "source" | "destination" = "source"
   ): void => {
     const row = rows.get(rowId);
-    if (!row || busy) return;
+    if (!row || !session || busy) return;
+    if (row.currency.state === "unconfirmed") {
+      openCurrency(rowId);
+      return;
+    }
     setCandidateId(null);
-    setChoice({ kind: "row", rowId, role });
+    setChoice({
+      ...reviewChoiceStamp(session, row.revision),
+      kind: "row",
+      rowId,
+      role,
+    });
   };
-  const openCurrency = (rowId: string, context: string): void => {
+  const openCurrency = (rowId: string): void => {
     const row = rows.get(rowId);
-    if (!row || busy) return;
-    setCurrencySelection(
-      row.currency.state === "known"
-        ? row.currency.code
-        : (row.currency.candidateCodes[0] ?? null)
-    );
-    setChoice({ kind: "currency", rowId, context });
+    if (!row || !session || busy) return;
+    // Neither a candidate nor the display currency is a confirmed choice.
+    setCurrencySelection(null);
+    setChoice({
+      ...reviewChoiceStamp(session, row.revision),
+      kind:
+        row.currency.state === "unconfirmed" &&
+        row.currency.candidateCodes.length === 0
+          ? "picker"
+          : "currency",
+      rowId,
+      context: presentReviewTransactionContext(row.transaction, language),
+    });
   };
   const eligibleCandidates =
-    choice?.kind === "row" && currentRow
-      ? view.getAccountCandidates(currentRow.rowId, choice.role)
-      : choice?.kind === "replace" && currentGroup
-        ? (() => {
-            const first = currentGroup.linkedRowIds[0];
-            if (!first) return [];
-            return view
-              .getAccountCandidates(first, "source")
-              .filter(
-                (candidate) =>
-                  candidate.type === currentGroup.type &&
-                  currentGroup.linkedRowIds.every((id) =>
-                    view
-                      .getAccountCandidates(id, "source")
-                      .some((other) => other.id === candidate.id)
-                  )
-              );
-          })()
+    activeChoice?.kind === "row" && currentRow
+      ? view.getAccountCandidates(currentRow.rowId, activeChoice.role)
+      : activeChoice?.kind === "replace" && currentGroup
+        ? intersectGuardedGroupAccountChoices(
+            currentGroup.linkedRowIds,
+            currentGroup.type,
+            view.getAccountCandidates
+          )
         : [];
   const useAccount = (): void => {
     if (
@@ -369,7 +386,7 @@ export function CanonicalAccountReview(
       !eligibleCandidates.some((candidate) => candidate.id === candidateId)
     )
       return;
-    if (choice?.kind === "row" && currentRow) {
+    if (activeChoice?.kind === "row" && currentRow) {
       send({
         ...scope,
         kind: "choose_row_account",
@@ -377,7 +394,7 @@ export function CanonicalAccountReview(
         expectedRowRevision: currentRow.revision,
         accountId: candidateId,
       });
-    } else if (choice?.kind === "replace" && currentGroup) {
+    } else if (activeChoice?.kind === "replace" && currentGroup) {
       send({
         ...scope,
         kind: "replace_group_account",
@@ -389,9 +406,14 @@ export function CanonicalAccountReview(
     }
     setChoice(null);
   };
-  const useCurrency = (): void => {
-    if (!scope || choice?.kind !== "currency" || !currentRow) return;
-    const checked = currencyCode.safeParse(currencySelection);
+  const confirmCurrency = (currency: string | null): void => {
+    if (
+      !scope ||
+      (activeChoice?.kind !== "currency" && activeChoice?.kind !== "picker") ||
+      !currentRow
+    )
+      return;
+    const checked = currencyCode.safeParse(currency);
     if (!checked.success) return;
     send({
       ...scope,
@@ -402,11 +424,29 @@ export function CanonicalAccountReview(
     });
     setChoice(null);
   };
+  const useCurrency = (): void => confirmCurrency(currencySelection);
+  const recoverIssue = (key: ReviewIssueKey): void => {
+    if (busy) return;
+    const target = presentIssueRecoveryTarget(session?.rows ?? [], key);
+    if (!target) return;
+    if (key === "account_review_issue_currency") openCurrency(target.rowId);
+    else if (key === "account_review_issue_account")
+      openRowChoice(
+        target.rowId,
+        target.assignment.state !== "unresolved" &&
+          target.source === "SMS" &&
+          target.transaction.isAtmWithdrawal === true &&
+          target.toAssignment?.state !== "existing"
+          ? "destination"
+          : "source"
+      );
+    else openTransactionEdit(target.rowId);
+  };
   const useEdit = (value: {
     readonly name: string;
     readonly typeOptionId: string;
   }): void => {
-    if (!scope || choice?.kind !== "edit" || !currentGroup) return;
+    if (!scope || activeChoice?.kind !== "edit" || !currentGroup) return;
     const kind = accountType.safeParse(value.typeOptionId);
     if (!kind.success) return;
     send({
@@ -427,53 +467,16 @@ export function CanonicalAccountReview(
     setChoice(null);
   };
   const presentGroup = (
-    g: AccountReviewSession["groups"][number]
-  ): SharedSuggestedGroupView => {
-    const summary = model?.groupSummaries.find(
-      (item) => item.groupId === g.groupId
+    group: AccountReviewSession["groups"][number]
+  ): ReturnType<typeof presentReviewGroup> =>
+    presentReviewGroup(
+      group,
+      model?.groupSummaries.find((item) => item.groupId === group.groupId)
+        ?.liveLinkedRowIds.length ?? 0,
+      busy,
+      view.undoToken !== null && view.undoGroupId === group.groupId,
+      language
     );
-    const linkedCount = summary?.liveLinkedRowIds.length ?? 0;
-    const removed = g.status === "removed";
-    return {
-      groupId: g.groupId,
-      displayName: g.name,
-      identitySummary: [
-        g.providerDisplayName,
-        g.institutionId,
-        g.cardLast4,
-        ...g.senderNames,
-      ]
-        .filter((part) => part !== null && part.length > 0)
-        .join(" · "),
-      currencyLabel: g.currency,
-      typeIconName:
-        g.type === "CASH"
-          ? "cash-outline"
-          : g.type === "DIGITAL_WALLET"
-            ? "wallet-outline"
-            : "business-outline",
-      linkedCount,
-      statusLabel:
-        g.status === "confirmed"
-          ? reviewCopy("account_review_group_confirmed", language)
-          : removed
-            ? ""
-            : reviewCopy("account_review_group_needs_review", language),
-      disclosureText:
-        String(linkedCount) +
-        " " +
-        reviewCopy("account_review_group_linked", language),
-      isConfirmed: g.status === "confirmed",
-      isRemoved: removed,
-      isBusy: busy,
-      canConfirm: !removed && g.status === "pending" && g.type !== null,
-      canEdit: !removed,
-      canReplace: !removed && linkedCount > 0,
-      canRemove: !removed,
-      canUndo:
-        removed && view.undoToken !== null && view.undoGroupId === g.groupId,
-    };
-  };
 
   if (!session || !model || scope === null) {
     return (
@@ -512,16 +515,20 @@ export function CanonicalAccountReview(
     session.rows,
     view.choiceAccounts
   );
-  const issueLabels = presentReviewIssueKeys(
-    visibleRows,
-    model.summary.distinctNeedsReviewCount
-  ).map((key) =>
-    key === "account_review_group_needs_review"
-      ? reviewCopy(key, language)
-      : tTransactions(key)
+  const issues = presentReviewIssues(
+    session.rows,
+    model.summary.distinctNeedsReviewCount,
+    language
   );
-  const summary = { ...model.summary, issueLabels };
-  const choiceAccountOptions = presentReviewAccountChoices(eligibleCandidates);
+  const summary = {
+    ...model.summary,
+    issueLabels: issues.map((issue) => issue.label),
+    issues,
+  };
+  const choiceAccountOptions = presentReviewAccountChoices(
+    eligibleCandidates,
+    language
+  );
   const checkedCurrency = currencyCode.safeParse(currencySelection);
   const currencyOptions = presentReviewCurrencyOptions(
     currentRow?.currency,
@@ -536,30 +543,22 @@ export function CanonicalAccountReview(
   }): React.JSX.Element => {
     const linked =
       row.assignment.state === "suggested"
-        ? groups.get(row.assignment.groupId)
+        ? (groups.get(row.assignment.groupId) ?? null)
         : null;
-    const assignedName =
-      row.assignment.state === "existing"
-        ? (view.choiceAccounts.find(
-            (account) => account.id === row.assignment.accountId
-          )?.name ?? null)
-        : (linked?.name ?? null);
+    const details = presentCanonicalRowDetails(
+      row,
+      linked,
+      view.choiceAccounts,
+      language
+    );
     const content = getExpandedContent(row.transaction);
-    const isSmsAtm =
-      row.source === "SMS" && row.transaction.isAtmWithdrawal === true;
-    const destinationName =
-      row.toAssignment?.state === "existing"
-        ? (view.choiceAccounts.find(
-            (account) => account.id === row.toAssignment?.accountId
-          )?.name ?? null)
-        : null;
     return (
       <View>
         <TransactionItem
           transaction={row.transaction}
           index={index}
           isSelected={row.selected}
-          accountName={assignedName}
+          accountName={details.accountName}
           expandedContentTitle={content?.title}
           expandedContentBody={content?.body}
           onToggleSelect={() => toggleRow(row.rowId)}
@@ -572,57 +571,27 @@ export function CanonicalAccountReview(
           isSmsWorkspace={props.workspaceVariant === "sms"}
           accountReview={{
             rowId: row.rowId,
-            accountActionLabel: isSmsAtm
-              ? tTransactions("from_account")
-              : choiceCopy("account_review_choice_use_account", language),
-            accountStatusLabel: assignedName,
-            sharedSelectionDisclosure: linked
-              ? String(linked.linkedRowIds.length) +
-                " " +
-                reviewCopy("account_review_group_linked", language)
-              : null,
-            currencyActionLabel:
-              row.currency.state === "unconfirmed"
-                ? choiceCopy("account_review_choice_use_currency", language)
-                : null,
-            currencyContextLabel: reviewCopy(
-              "account_review_group_locked_currency",
-              language
-            ),
-            accountStatusTone:
-              row.assignment.state === "existing"
-                ? undefined
-                : linked?.status === "confirmed"
-                  ? "confirmed"
-                  : linked?.status === "removed"
-                    ? "removed"
-                    : "pending",
+            accountActionLabel: details.accountActionLabel,
+            accountStatusLabel: details.accountStatusLabel,
+            accountType: details.accountType,
+            // Shared selection effect is disclosed under its group, never every row.
+            sharedSelectionDisclosure: null,
+            currencyActionLabel: details.currencyActionLabel,
+            currencyContextLabel: details.currencyContextLabel,
+            accountStatusTone: details.accountStatusTone,
             isBusy: busy,
             onChooseAccount: openRowChoice,
             onChooseCurrency: openCurrency,
           }}
         />
-        {isSmsAtm ? (
-          <View
-            testID="account-review-atm-destination"
-            className="gap-2 px-4 pb-3"
-          >
-            <Text
-              testID="account-review-atm-destination-status"
-              className="text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-            >
-              {tTransactions("to_account")}:{" "}
-              {destinationName ??
-                tTransactions("please_select_destination_account")}
-            </Text>
-            <ReviewActionButton
-              testID="account-review-atm-destination-action"
-              label={tTransactions("to_account")}
-              iconName="pencil-outline"
-              disabled={busy}
-              onPress={() => openRowChoice(row.rowId, "destination")}
-            />
-          </View>
+        {details.isSmsAtm ? (
+          <AtmDestinationStatus
+            label={tTransactions("to_account")}
+            destinationName={details.destinationName}
+            missingLabel={tTransactions("please_select_destination_account")}
+            disabled={busy}
+            onChoose={() => openRowChoice(row.rowId, "destination")}
+          />
         ) : null}
       </View>
     );
@@ -668,6 +637,9 @@ export function CanonicalAccountReview(
               filter={session.filter}
               visibleRowIds={model.visibleRowIds}
               readyVisibleRowIds={model.readyVisibleRowIds}
+              selectedVisibleCount={
+                visibleRows.filter((row) => row.selected).length
+              }
               groups={session.groups.map(presentGroup)}
               summary={summary}
               isAllGroupsSheetOpen={showAllGroups}
@@ -695,11 +667,23 @@ export function CanonicalAccountReview(
               onCloseWhy={() => setShowDefaultWhy(false)}
               onConfirm={(groupId) => sendGroup(groupId, "confirm_group")}
               onEdit={(groupId) => {
-                setChoice({ kind: "edit", groupId });
+                const group = groups.get(groupId);
+                if (!session || !group) return;
+                setChoice({
+                  ...reviewChoiceStamp(session, group.revision),
+                  kind: "edit",
+                  groupId,
+                });
               }}
               onReplace={(groupId) => {
+                const group = groups.get(groupId);
+                if (!session || !group) return;
                 setCandidateId(null);
-                setChoice({ kind: "replace", groupId });
+                setChoice({
+                  ...reviewChoiceStamp(session, group.revision),
+                  kind: "replace",
+                  groupId,
+                });
               }}
               onRemove={(groupId) => sendGroup(groupId, "remove_group")}
               onUndo={(groupId) => {
@@ -716,6 +700,7 @@ export function CanonicalAccountReview(
               }}
               onViewAll={() => setShowAllGroups(true)}
               onCloseAllGroups={() => setShowAllGroups(false)}
+              onIssuePress={recoverIssue}
             />
           </View>
         }
@@ -746,25 +731,34 @@ export function CanonicalAccountReview(
         onReviewLater={props.onReviewLater}
       />
       <AccountChoiceSheet
-        visible={choice?.kind === "row" || choice?.kind === "replace"}
+        visible={
+          activeChoice?.kind === "row" || activeChoice?.kind === "replace"
+        }
         title={
-          choice?.kind === "row" &&
+          activeChoice?.kind === "row" &&
           currentRow?.source === "SMS" &&
           currentRow.transaction.isAtmWithdrawal === true
             ? tTransactions(
-                choice.role === "destination" ? "to_account" : "from_account"
+                activeChoice.role === "destination"
+                  ? "to_account"
+                  : "from_account"
               )
-            : choiceCopy("account_review_choice_use_account", language)
+            : tTransactions("account_review_issue_account")
         }
         contextSubtitle={
-          currentGroup?.name ?? currentRow?.transaction.counterparty
+          currentGroup?.name ??
+          (currentRow
+            ? presentReviewTransactionContext(currentRow.transaction, language)
+            : undefined)
         }
         scopeDisclosure={
-          choice?.kind === "replace" && currentGroup
-            ? String(currentGroup.linkedRowIds.length) +
-              " " +
-              reviewCopy("account_review_group_linked", language)
-            : choiceCopy("account_review_choice_preserve_selection", language)
+          activeChoice?.kind === "replace" && currentGroup
+            ? presentReviewReplaceScope(
+                currentGroup.name,
+                currentGroup.linkedRowIds.length,
+                language
+              )
+            : ""
         }
         candidateOptions={choiceAccountOptions}
         selectedCandidateId={candidateId}
@@ -778,23 +772,29 @@ export function CanonicalAccountReview(
         onClose={() => setChoice(null)}
       />
       <CurrencyConfirmationSheet
-        visible={choice?.kind === "currency"}
-        contextSubtitle={choice?.kind === "currency" ? choice.context : ""}
+        visible={activeChoice?.kind === "currency"}
+        contextSubtitle={
+          activeChoice?.kind === "currency" ? activeChoice.context : ""
+        }
         candidateOptions={currencyOptions.map((code) => ({
           code,
-          label: code,
-          accessibilityLabel: code,
+          label: presentReviewCurrencyLabel(code, language),
+          accessibilityLabel:
+            presentReviewCurrencyLabel(code, language) + ", " + code,
         }))}
         selectedCandidateCode={currencySelection}
         canUseSelection={currencyCode.safeParse(currencySelection).success}
         isBusy={busy}
         onSelectCandidate={setCurrencySelection}
         onUseSelected={useCurrency}
-        onChooseAnother={() => setShowCurrencyPicker(true)}
+        onChooseAnother={() => {
+          if (activeChoice?.kind === "currency")
+            setChoice({ ...activeChoice, kind: "picker" });
+        }}
         onClose={() => setChoice(null)}
       />
       <CurrencyPicker
-        visible={showCurrencyPicker}
+        visible={activeChoice?.kind === "picker"}
         selectedCurrency={
           currencyCode.safeParse(currencySelection).success
             ? currencyCode.parse(currencySelection)
@@ -802,10 +802,10 @@ export function CanonicalAccountReview(
         }
         allowedCurrencies={ACCOUNT_REVIEW_CURRENCIES}
         contextSubtitle={
-          choice?.kind === "currency" ? choice.context : undefined
+          activeChoice?.kind === "picker" ? activeChoice.context : undefined
         }
-        onSelect={(code) => setCurrencySelection(code)}
-        onClose={() => setShowCurrencyPicker(false)}
+        onSelect={confirmCurrency}
+        onClose={() => setChoice(null)}
       />
       {editingRow && transactionEdit && (
         <TransactionEditModal
@@ -842,7 +842,7 @@ export function CanonicalAccountReview(
         />
       )}
       <EditSuggestedAccountSheet
-        visible={choice?.kind === "edit" && currentGroup !== null}
+        visible={activeChoice?.kind === "edit" && currentGroup !== null}
         groupId={currentGroup?.groupId ?? ""}
         groupName={currentGroup?.name ?? ""}
         currentTypeOptionId={currentGroup?.type ?? ""}
@@ -862,7 +862,12 @@ export function CanonicalAccountReview(
         onReplace={() => {
           if (!currentGroup) return;
           setCandidateId(null);
-          setChoice({ kind: "replace", groupId: currentGroup.groupId });
+          if (session)
+            setChoice({
+              ...reviewChoiceStamp(session, currentGroup.revision),
+              kind: "replace",
+              groupId: currentGroup.groupId,
+            });
         }}
         onCancel={() => setChoice(null)}
       />

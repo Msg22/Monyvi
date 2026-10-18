@@ -45,6 +45,10 @@ jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
 }));
 let mockLocale: "en" | "ar" = "en";
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+}));
+
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: "en" | "ar" } => ({
     language: mockLocale,
@@ -592,13 +596,32 @@ describe("T026 US2: distinct confirmed, removed, blocked and full-list states", 
     const name = "QNB Everyday - اسم حساب طويل للغاية for account ending 0007";
     const view = withGroup(base, qnb.groupId, { displayName: name });
     renderGroups(view);
-    expect(screen.getByText(name)).toBeTruthy();
+    expect(screen.getByText(name + " · " + qnb.currencyLabel)).toBeTruthy();
     expect(screen.getByText(/•••• 0007/)).toBeTruthy();
     expect(screen.getByTestId("account-review-details-panel")).toHaveProp(
       "className",
       expect.stringContaining("dark:")
     );
     // This is only semantic coverage, NOT native 340dp/390dp/600dp/font 1.35 proof.
+  });
+
+  it("confirmed group exposes a compact Change action and neutral type circle without implicit selection", () => {
+    const view = makeSharedPresentation("r3-confirmed-feedback");
+    const qnb = requireGroup(view, "QNB");
+    const actions = makeActions();
+    renderGroups(view, actions);
+    expect(
+      screen.queryByTestId("account-review-group-confirm-" + qnb.groupId)
+    ).toBeNull();
+    const change = screen.getByTestId(
+      "account-review-group-change-" + qnb.groupId
+    );
+    fireEvent.press(change);
+    expect(
+      screen.getByTestId("account-review-group-action-sheet")
+    ).toBeTruthy();
+    expect(actions.onConfirm).not.toHaveBeenCalled();
+    expect(actions.onReplace).not.toHaveBeenCalled();
   });
 
   it("renders approved Arabic three-link disclosure and accessible group-specific actions", async () => {

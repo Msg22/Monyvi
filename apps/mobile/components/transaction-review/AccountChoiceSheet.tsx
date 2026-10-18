@@ -23,6 +23,11 @@ export interface AccountChoiceCandidateView {
   readonly identityDetails: string;
   readonly accessibilityLabel: string;
   readonly isEligible: boolean;
+  readonly iconName?:
+    | "business-outline"
+    | "cash-outline"
+    | "wallet-outline"
+    | "help-circle-outline";
 }
 
 export interface AccountChoiceSheetProps {
@@ -93,7 +98,11 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
       }
     >
       <AccountOptionBackground selected={props.selected} />
-      <Ionicons name="business-outline" size={24} color={palette.slate[400]} />
+      <Ionicons
+        name={props.option.iconName ?? "help-circle-outline"}
+        size={22}
+        color={palette.slate[500]}
+      />
       <View className="min-w-0 flex-1 gap-1">
         <Text
           className={
@@ -188,14 +197,16 @@ function AccountChoices({
   ).length;
   return (
     <View className="gap-3">
-      <Text
-        className={
-          "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-          (rtl ? "text-right" : "text-left")
-        }
-      >
-        {source.scopeDisclosure}
-      </Text>
+      {source.scopeDisclosure.trim().length > 0 ? (
+        <Text
+          className={
+            "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+        >
+          {source.scopeDisclosure}
+        </Text>
+      ) : null}
       <Text
         className={
           "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
@@ -205,16 +216,6 @@ function AccountChoices({
         {accountMatchCopy(eligibleCount, language)}
       </Text>
       <AccountCandidateList source={source} language={language} />
-      {source.contextSubtitle === undefined ? (
-        <Text
-          className={
-            "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-            (rtl ? "text-right" : "text-left")
-          }
-        >
-          {choiceCopy("account_review_choice_preserve_selection", language)}
-        </Text>
-      ) : null}
     </View>
   );
 }

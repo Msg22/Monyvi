@@ -3,19 +3,29 @@
  * Parent supplies all labels, scopes, affordances, statuses and callbacks.
  */
 import { Ionicons } from "@expo/vector-icons";
-import type { AccountReviewRow } from "@monyvi/logic";
+import type {
+  AccountReviewRow,
+  AccountReviewSession,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 import React from "react";
 import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { useColorScheme } from "nativewind";
 import { palette } from "@/constants/colors";
-import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
+import {
+  getCategoryIconConfig,
+  getSafeCategoryIconConfig,
+} from "@/utils/category-icon-config";
+import { CategoryIcon } from "@/components/common/CategoryIcon";
 import { useLocale } from "@/context/LocaleContext";
+import { useCategoryLookup } from "@/context/CategoriesContext";
+import { ReviewActionButton } from "./shared-account-presentation";
+import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 
 const rowWritingDirectionStyles = StyleSheet.create({
   rtl: { writingDirection: "rtl" },
@@ -31,6 +41,8 @@ export interface AccountReviewRowPresentationProps {
   readonly sharedSelectionDisclosure: string | null;
   readonly currencyActionLabel: string | null;
   readonly currencyContextLabel: string | null;
+  /** The canonical owned choice/suggested group type, never inferred from source. */
+  readonly accountType?: AccountReviewSession["groups"][number]["type"];
   /** An optional, parent-shaped semantic tone; never guessed from translated text. */
   readonly accountStatusTone?: AccountReviewRowStatusTone;
   readonly isBusy: boolean;
@@ -54,6 +66,7 @@ export function areAccountReviewRowPropsEqual(
     a.sharedSelectionDisclosure === b.sharedSelectionDisclosure &&
     a.currencyActionLabel === b.currencyActionLabel &&
     a.currencyContextLabel === b.currencyContextLabel &&
+    a.accountType === b.accountType &&
     a.accountStatusTone === b.accountStatusTone &&
     a.isBusy === b.isBusy &&
     a.onChooseAccount === b.onChooseAccount &&
@@ -61,223 +74,226 @@ export function areAccountReviewRowPropsEqual(
   );
 }
 
-function statusInk(tone: AccountReviewRowStatusTone | undefined): string {
+/** An inactive control is never a second, misleading "Change" pill. */
+function statusToneColor(tone: AccountReviewRowStatusTone | undefined): string {
   if (tone === "pending") return "text-gold-800 dark:text-gold-400";
   if (tone === "confirmed") return "text-nileGreen-700 dark:text-nileGreen-400";
   if (tone === "removed") return "text-red-600 dark:text-red-500";
   return "text-text-secondary dark:text-text-secondary-dark";
 }
 
-function statusIcon(
-  tone: AccountReviewRowStatusTone | undefined
+function accountTypeIcon(
+  type: AccountReviewRowPresentationProps["accountType"]
 ): keyof typeof Ionicons.glyphMap {
-  if (tone === "pending") return "time-outline";
-  if (tone === "confirmed") return "checkmark-circle-outline";
-  if (tone === "removed") return "close-circle-outline";
-  return "information-circle-outline";
+  if (type === "BANK") return "business-outline";
+  if (type === "CASH") return "cash-outline";
+  if (type === "DIGITAL_WALLET") return "wallet-outline";
+  return "help-circle-outline";
 }
 
-function RowStatus({
-  label,
-  tone,
-  rtl,
-}: {
-  readonly label: string;
-  readonly tone: AccountReviewRowStatusTone | undefined;
+interface AccountMetadataProps {
+  readonly source: AccountReviewRowPresentationProps;
+  readonly name: string | null;
   readonly rtl: boolean;
-}): React.JSX.Element {
-  const { colorScheme } = useColorScheme();
-  const dark = colorScheme === "dark";
-  const tint =
-    tone === "pending"
-      ? dark
-        ? palette.gold[400]
-        : palette.gold[800]
-      : tone === "confirmed"
-        ? dark
-          ? palette.nileGreen[400]
-          : palette.nileGreen[700]
-        : tone === "removed"
-          ? dark
-            ? palette.red[500]
-            : palette.red[600]
-          : palette.slate[500];
-  return (
-    <View
-      className={
-        "items-center gap-2 " + (rtl ? "flex-row-reverse" : "flex-row")
-      }
-    >
-      <Ionicons
-        name={statusIcon(tone)}
-        color={tint}
-        size={18}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-      <Text
-        testID="account-review-row-status"
-        className={
-          "min-w-0 flex-1 text-xs font-semibold leading-[18px] " +
-          statusInk(tone) +
-          (rtl ? " text-right" : " text-left")
-        }
-        style={
-          rtl ? rowWritingDirectionStyles.rtl : rowWritingDirectionStyles.ltr
-        }
-      >
-        {label}
-      </Text>
-    </View>
+}
+function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
+  const { source, name, rtl } = props;
+  const textAlign = rtl ? "text-right" : "text-left";
+  const direction = rtl
+    ? rowWritingDirectionStyles.rtl
+    : rowWritingDirectionStyles.ltr;
+  const action = source.accountActionLabel;
+  const title = name ?? action;
+  const status = source.accountStatusLabel;
+  const content = (
+    <>
+      {title !== null || source.accountType ? (
+        <Ionicons
+          testID="account-review-account-type-icon"
+          name={accountTypeIcon(source.accountType)}
+          color={palette.slate[500]}
+          size={20}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      ) : null}
+      <View className="min-w-0 flex-1">
+        {title !== null ? (
+          <Text
+            testID={
+              name !== null
+                ? "transaction-account-match"
+                : "account-review-account-label"
+            }
+            className={
+              "text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark " +
+              textAlign
+            }
+            style={direction}
+          >
+            {title}
+          </Text>
+        ) : null}
+        {status !== null ? (
+          <Text
+            testID="account-review-row-status"
+            className={
+              "text-xs leading-[18px] " +
+              statusToneColor(source.accountStatusTone) +
+              " " +
+              textAlign
+            }
+            style={direction}
+          >
+            {status}
+          </Text>
+        ) : null}
+      </View>
+      {action !== null && name !== null ? (
+        <Ionicons
+          name="pencil-outline"
+          size={16}
+          color={palette.slate[500]}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      ) : null}
+    </>
   );
-}
-
-interface RowChoiceProps {
-  readonly label: string;
-  readonly context: string | null;
-  readonly testID: string;
-  readonly iconName: "pencil-outline" | "globe-outline";
-  readonly disabled: boolean;
-  readonly rtl: boolean;
-  readonly onPress: () => void;
-}
-
-function RowChoiceButton(props: RowChoiceProps): React.JSX.Element {
-  const { colorScheme } = useColorScheme();
-  const iconColor = props.disabled
-    ? palette.slate[400]
-    : colorScheme === "dark"
-      ? palette.nileGreen[400]
-      : palette.nileGreen[700];
+  const classes =
+    "min-w-0 flex-1 items-center gap-1.5 " +
+    (rtl ? "flex-row-reverse" : "flex-row");
+  if (action === null) {
+    return <View className={classes}>{content}</View>;
+  }
   return (
     <TouchableOpacity
-      testID={props.testID}
+      testID="account-review-row-account-action"
       accessible
       accessibilityRole="button"
-      accessibilityLabel={
-        props.context ? props.label + ", " + props.context : props.label
-      }
-      accessibilityState={{ disabled: props.disabled }}
-      disabled={props.disabled}
-      onPress={() => {
-        if (!props.disabled) props.onPress();
-      }}
+      accessibilityLabel={[action, name, status].filter(Boolean).join(", ")}
+      accessibilityState={{ disabled: source.isBusy }}
+      disabled={source.isBusy}
+      onPress={() => source.onChooseAccount(source.rowId)}
       activeOpacity={0.8}
-      className={
-        "min-h-11 min-w-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 dark:border-border-dark dark:bg-surface-dark " +
-        (props.rtl ? "flex-row-reverse" : "flex-row")
-      }
+      className={"min-h-11 rounded-lg " + classes}
     >
-      <Ionicons
-        name={props.iconName}
-        color={iconColor}
-        size={18}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-      <Text
-        className={
-          "min-w-0 shrink text-center text-sm font-semibold leading-5 " +
-          (props.disabled
-            ? "text-text-muted dark:text-text-muted-dark"
-            : "text-nileGreen-700 dark:text-nileGreen-400")
-        }
-      >
-        {props.label}
-      </Text>
+      {content}
     </TouchableOpacity>
   );
 }
 
-interface RowChoiceBarProps {
+interface RowPresentationProps {
   readonly source: AccountReviewRowPresentationProps;
-  readonly compact: boolean;
-  readonly rtl: boolean;
+  readonly accountName?: string | null;
+  readonly categoryId?: ReviewableTransaction["categoryId"];
+  readonly categoryDisplayName?: string;
 }
-
-function RowChoiceBar(props: RowChoiceBarProps): React.JSX.Element | null {
-  const { source, compact, rtl } = props;
-  if (
-    source.accountActionLabel === null &&
-    source.currencyActionLabel === null
-  ) {
-    return null;
-  }
-  return (
-    <View
-      className={
-        "w-full gap-2 " +
-        (compact
-          ? "flex-col"
-          : rtl
-            ? "flex-row-reverse flex-wrap"
-            : "flex-row flex-wrap")
-      }
-    >
-      {source.accountActionLabel !== null ? (
-        <RowChoiceButton
-          testID="account-review-row-account-action"
-          label={source.accountActionLabel}
-          context={null}
-          iconName="pencil-outline"
-          rtl={rtl}
-          disabled={source.isBusy}
-          onPress={() => source.onChooseAccount(source.rowId)}
-        />
-      ) : null}
-      {source.currencyActionLabel !== null ? (
-        <RowChoiceButton
-          testID="account-review-row-currency-action"
-          label={source.currencyActionLabel}
-          context={source.currencyContextLabel}
-          iconName="globe-outline"
-          rtl={rtl}
-          disabled={source.isBusy || source.currencyContextLabel === null}
-          onPress={() => {
-            if (source.currencyContextLabel !== null) {
-              source.onChooseCurrency(
-                source.rowId,
-                source.currencyContextLabel
-              );
-            }
-          }}
-        />
-      ) : null}
-    </View>
-  );
-}
-
 export function AccountReviewRowPresentation({
   source,
-}: {
-  readonly source: AccountReviewRowPresentationProps;
-}): React.JSX.Element | null {
+  accountName = null,
+  categoryId,
+  categoryDisplayName,
+}: RowPresentationProps): React.JSX.Element | null {
   const { language } = useLocale();
   const { width, fontScale } = useWindowDimensions();
   const rtl = language === "ar";
   const compact = shouldUseDenseRowCompactLayout(width, fontScale);
-  const directionStyle = rtl
-    ? rowWritingDirectionStyles.rtl
-    : rowWritingDirectionStyles.ltr;
+  const categoryMap = useCategoryLookup();
+  const category = categoryId ? categoryMap.get(categoryId) : null;
+  const categoryIcon = category
+    ? getCategoryIconConfig(category)
+    : getSafeCategoryIconConfig(
+        "pricetag-outline",
+        "Ionicons",
+        palette.slate[500]
+      );
+  const context = source.currencyContextLabel;
   if (
+    accountName === null &&
     source.accountStatusLabel === null &&
-    source.sharedSelectionDisclosure === null &&
     source.accountActionLabel === null &&
-    source.currencyActionLabel === null
-  ) {
+    source.currencyActionLabel === null &&
+    source.sharedSelectionDisclosure === null &&
+    !categoryDisplayName
+  )
     return null;
-  }
   return (
-    <View
-      testID="account-review-row-presentation"
-      className="w-full gap-2 px-4 pb-3"
-    >
-      {source.accountStatusLabel !== null ? (
-        <RowStatus
-          label={source.accountStatusLabel}
-          tone={source.accountStatusTone}
-          rtl={rtl}
-        />
+    <View testID="account-review-row-presentation" className="mt-1.5 gap-1.5">
+      <View
+        testID="account-review-row-metadata"
+        className={
+          "gap-x-3 gap-y-2 " +
+          (compact
+            ? "items-start flex-col"
+            : rtl
+              ? "items-center flex-row-reverse"
+              : "items-center flex-row")
+        }
+      >
+        {accountName !== null ||
+        source.accountActionLabel !== null ||
+        source.accountStatusLabel !== null ||
+        source.accountType ? (
+          <View className={compact ? "w-full" : "min-w-0 flex-1"}>
+            <AccountMetadata source={source} name={accountName} rtl={rtl} />
+          </View>
+        ) : null}
+        {categoryDisplayName ? (
+          <View
+            testID="account-review-row-category"
+            className={
+              "min-w-0 items-center gap-1.5 " +
+              (compact ? "w-full " : "flex-1 ") +
+              (rtl ? "flex-row-reverse" : "flex-row")
+            }
+          >
+            <CategoryIcon
+              iconName={categoryIcon.iconName}
+              iconLibrary={categoryIcon.iconLibrary}
+              color={categoryIcon.iconColor}
+              size={18}
+            />
+            <Text
+              className={
+                "min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+                (rtl ? "text-right" : "text-left")
+              }
+              style={
+                rtl
+                  ? rowWritingDirectionStyles.rtl
+                  : rowWritingDirectionStyles.ltr
+              }
+            >
+              {categoryDisplayName}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      {source.currencyActionLabel !== null && context !== null ? (
+        <TouchableOpacity
+          testID="account-review-row-currency-action"
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={source.currencyActionLabel + ", " + context}
+          accessibilityState={{ disabled: source.isBusy }}
+          disabled={source.isBusy}
+          onPress={() => source.onChooseCurrency(source.rowId, context)}
+          activeOpacity={0.8}
+          className={
+            "min-h-12 min-w-11 self-start items-center gap-1.5 rounded-lg border border-border px-3 dark:border-border-dark " +
+            (rtl ? "flex-row-reverse" : "flex-row")
+          }
+        >
+          <Ionicons
+            name="globe-outline"
+            size={18}
+            color={palette.nileGreen[700]}
+          />
+          <Text className="text-sm font-semibold leading-5 text-nileGreen-700 dark:text-nileGreen-400">
+            {source.currencyActionLabel}
+          </Text>
+        </TouchableOpacity>
       ) : null}
       {source.sharedSelectionDisclosure !== null ? (
         <Text
@@ -286,12 +302,46 @@ export function AccountReviewRowPresentation({
             "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
             (rtl ? "text-right" : "text-left")
           }
-          style={directionStyle}
+          style={
+            rtl ? rowWritingDirectionStyles.rtl : rowWritingDirectionStyles.ltr
+          }
         >
           {source.sharedSelectionDisclosure}
         </Text>
       ) : null}
-      <RowChoiceBar source={source} compact={compact} rtl={rtl} />
+    </View>
+  );
+}
+
+/** Existing ATM destination recovery remains a separate, compact target. */
+export interface AtmDestinationStatusProps {
+  readonly label: string;
+  readonly destinationName: string | null;
+  readonly missingLabel: string;
+  readonly disabled: boolean;
+  readonly onChoose: () => void;
+}
+export function AtmDestinationStatus(
+  props: AtmDestinationStatusProps
+): React.JSX.Element {
+  return (
+    <View
+      testID="account-review-atm-destination"
+      className="flex-row flex-wrap items-center gap-2 px-4 pb-3"
+    >
+      <Text
+        testID="account-review-atm-destination-status"
+        className="min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+      >
+        {props.label}: {props.destinationName ?? props.missingLabel}
+      </Text>
+      <ReviewActionButton
+        testID="account-review-atm-destination-action"
+        label={props.label}
+        iconName="pencil-outline"
+        disabled={props.disabled}
+        onPress={props.onChoose}
+      />
     </View>
   );
 }

@@ -30,6 +30,15 @@ import { makeSharedPresentation } from "./shared-account-suggestions-test-fixtur
 
 let mockLanguage: "en" | "ar" = "en";
 let mockWindow = { width: 390, height: 844, fontScale: 1, scale: 1 };
+let mockCategories = new Map<
+  string,
+  {
+    readonly icon: string;
+    readonly iconLibrary: string;
+    readonly color: string;
+    readonly isExpense: boolean;
+  }
+>();
 
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: "en" | "ar" } => ({
@@ -45,6 +54,36 @@ jest.mock("@/components/institutions/InstitutionLogoMark", () => ({
 }));
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
+}));
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: () => mockCategories,
+}));
+// The shared Jest setup makes decorative vector icons null; preserve their
+// actual props locally so the hidden-visual name assertions remain meaningful.
+jest.mock("@expo/vector-icons", () => ({
+  Ionicons: (props: Readonly<Record<string, unknown>>): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return ReactActual.createElement(RN.View, {
+      testID: typeof props.testID === "string" ? props.testID : undefined,
+      ...props,
+    });
+  },
+}));
+jest.mock("@/components/common/CategoryIcon", () => ({
+  CategoryIcon: ({ iconName }: { readonly iconName: string }) => {
+    const react = jest.requireActual<typeof import("react")>("react");
+    const rn =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return react.createElement(
+      rn.Text,
+      {
+        testID: "account-review-resolved-category-icon",
+      },
+      iconName
+    );
+  },
 }));
 
 function renderRow(props: ReviewItemProps): ReturnType<typeof render> {
@@ -77,6 +116,7 @@ beforeAll(async (): Promise<void> => {
 afterEach(async (): Promise<void> => {
   mockLanguage = "en";
   mockWindow = { width: 390, height: 844, fontScale: 1, scale: 1 };
+  mockCategories = new Map();
   await changeLanguage("en");
   jest.clearAllMocks();
 });
@@ -98,6 +138,91 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     expect(
       screen.queryByTestId("account-review-row-currency-action")
     ).toBeNull();
+  });
+
+  it("canonical rows place account-type and category details beneath the title with inline recovery", () => {
+    const sourceActions = {
+      accountType: "BANK" as const,
+      accountStatusLabel: "New account",
+      accountActionLabel: "Change",
+      sharedSelectionDisclosure:
+        "Selecting a QNB transaction confirms the linked group.",
+    };
+    const props = makeCombinedItem(0, { accountName: "QNB" }, sourceActions);
+    mockCategories.set(props.transaction.categoryId, {
+      icon: "restaurant-outline",
+      iconLibrary: "Ionicons",
+      color: "#497A64",
+      isExpense: true,
+    });
+    renderRow(props);
+    expect(
+      screen.getByTestId("account-review-account-type-icon", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("name", "business-outline");
+    expect(screen.getByTestId("account-review-row-category")).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-resolved-category-icon")
+    ).toHaveTextContent("restaurant-outline");
+    expect(screen.getByTestId("account-review-row-metadata")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+    expect(
+      screen.getByTestId("account-review-row-edit-chevron", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(screen.queryByTestId("account-review-transaction-type")).toBeNull();
+    expect(screen.queryByTestId("transaction-review-provider-logo")).toBeNull();
+    expect(screen.queryByText("Review details")).toBeNull();
+    const selection = screen.getByRole("checkbox");
+    expect(selection).not.toBeChecked();
+    expect(selection).not.toBeDisabled();
+    fireEvent.press(selection);
+    expect(props.onToggleSelect).toHaveBeenCalledTimes(1);
+    expect(props.onToggleSelect).toHaveBeenCalledWith(props.index);
+    expect(props.onPress).not.toHaveBeenCalled();
+    expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
+    const accountAction = getAccountAction();
+    expect(accountAction).toHaveProp("accessibilityRole", "button");
+    expect(accountAction.props.accessibilityLabel).toContain("QNB");
+    fireEvent.press(accountAction);
+    expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
+    expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
+      props.accountReview.rowId
+    );
+    expect(props.onPress).not.toHaveBeenCalled();
+    expect(props.onToggleSelect).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("transaction-review-amount")).toBeTruthy();
+  });
+
+  it("canonical account icon is not guessed from Voice or SMS origin", () => {
+    const sourceActions = {
+      accountType: "CASH" as const,
+      accountActionLabel: "Change",
+    };
+    const props = makeDefaultItem({}, sourceActions);
+    renderRow(props);
+    expect(
+      screen.getByTestId("account-review-account-type-icon", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("name", "cash-outline");
+    expect(screen.queryByTestId("transaction-review-provider-logo")).toBeNull();
+  });
+
+  it("falls back to a neutral category icon only when owned category metadata is absent", () => {
+    const props = makeDefaultItem();
+    renderRow(props);
+    expect(
+      screen.getByTestId("account-review-resolved-category-icon")
+    ).toHaveTextContent("pricetag-outline");
+    expect(screen.getByTestId("account-review-row-metadata")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
   });
 
   it("R3-07 exposes Change on an eligible default with no redundant Review account warning", () => {
@@ -128,7 +253,7 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     });
     const original = props.transaction;
     renderRow(props);
-    expect(screen.getByText("Review details")).toBeTruthy();
+    expect(screen.queryByText("Review details")).toBeNull();
     expect(screen.queryByText("Review account")).toBeNull();
     expect(
       screen.getByText(props.transaction.categoryDisplayName)

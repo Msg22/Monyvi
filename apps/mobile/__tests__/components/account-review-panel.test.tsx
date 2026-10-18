@@ -61,6 +61,12 @@ const copy = {
     account_review_group_remove: "Remove",
     account_review_group_undo: "Undo",
     account_review_group_change: "Change",
+    account_review_issue_choose: "Choose",
+    account_review_issue_review: "Review",
+    account_review_toolbar_count_one: "1 transaction",
+    account_review_toolbar_count_other: "{{count}} transactions",
+    account_review_issue_count_one: "1 transaction",
+    account_review_issue_count_other: "{{count}} transactions",
   },
   ar: {
     account_review_details_title: "تفاصيل للمراجعة",
@@ -75,6 +81,12 @@ const copy = {
     account_review_group_remove: "إزالة",
     account_review_group_undo: "تراجع",
     account_review_group_change: "تغيير",
+    account_review_issue_choose: "اختيار",
+    account_review_issue_review: "مراجعة",
+    account_review_toolbar_count_one: "معاملة واحدة",
+    account_review_toolbar_count_other: "{{count}} معاملة",
+    account_review_issue_count_one: "معاملة واحدة",
+    account_review_issue_count_other: "{{count}} معاملة",
   },
 } as const;
 
@@ -199,6 +211,7 @@ function propsFor(id: string, overrides: Partial<PanelProps> = {}): PanelProps {
     // Readiness is injected by the parent from T059/reducer, never inferred
     // from a row label or an unconfirmed group inside the panel.
     readyVisibleRowIds: [],
+    selectedVisibleCount: view.summary.selectedCount,
     defaultAccountName: view.summary.defaultAssignmentCount > 0 ? "Cash" : null,
     isAllGroupsSheetOpen: false,
     isWhySheetOpen: false,
@@ -280,8 +293,11 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
     expect(screen.queryByText("Confirm all")).toBeNull();
     assertThreeFilters("all");
-    expect(screen.getByTestId("account-review-select-ready")).toBeTruthy();
+    expect(screen.queryByTestId("account-review-select-ready")).toBeNull();
     expect(screen.getByTestId("account-review-clear-selection")).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-visible-count")
+    ).toHaveTextContent("7 transactions");
   });
 
   it("R3-07 default-only has the quiet note without an empty details panel", () => {
@@ -315,6 +331,45 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     }
     expect(screen.queryByTestId("account-review-default-info")).toBeNull();
     expect(screen.queryByTestId("account-review-group-view-all")).toBeNull();
+  });
+
+  it("shows per-issue overlapping counts and sends a precise review recovery callback", () => {
+    const base = propsFor("r3-issues-only");
+    const onIssuePress = jest.fn();
+    render(
+      <AccountReviewPanel
+        {...base}
+        onIssuePress={onIssuePress}
+        summary={{
+          ...base.summary,
+          issues: [
+            {
+              key: "account_review_issue_account",
+              label: "Choose an account",
+              count: 2,
+            },
+            {
+              key: "account_review_issue_currency",
+              label: "Confirm currency",
+              count: 1,
+            },
+          ],
+        }}
+      />
+    );
+    const account = screen.getByTestId(
+      "account-review-issue-account_review_issue_account"
+    );
+    expect(
+      within(account).getByTestId("account-review-issue-count")
+    ).toHaveTextContent("2 transactions");
+    const action = screen.getByTestId(
+      "account-review-issue-action-account_review_issue_account"
+    );
+    expect(action.props.accessibilityLabel).toContain("Choose");
+    fireEvent.press(action);
+    expect(onIssuePress).toHaveBeenCalledWith("account_review_issue_account");
+    expect(base.onConfirm).not.toHaveBeenCalled();
   });
 
   it("R3-10 clean has no details or empty default container, but retains filter controls", () => {
@@ -385,6 +440,8 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       distinctNeedsReviewCount: 0,
     });
     assertThreeFilters("selected");
+    // Filtering does not hide the real unfiltered summary.
+    expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
     expect(screen.getByTestId("account-review-filter-empty")).toBeTruthy();
     expect(screen.queryByTestId("voice-no-transactions")).toBeNull();
     expect(screen.queryByText("No transactions detected")).toBeNull();
@@ -396,37 +453,52 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
 });
 
 describe("#395 T058 — parent-owned filters, selections and group actions", () => {
-  it("three filters only notify the parent; Select ready and Clear are separate commands", () => {
+  it("one contextual bulk action selects ready rows, then becomes Clear after the parent updates", () => {
     const first = requireScene("r3-confirmed-feedback");
     const readyId = first.rows[1]?.rowId;
     if (!readyId) throw new Error("Missing confirmed unchecked fixture row");
-    const props = show("r3-confirmed-feedback", {
+    const props = propsFor("r3-confirmed-feedback", {
       readyVisibleRowIds: [readyId],
     });
+    const view = render(<AccountReviewPanel {...props} />);
     fireEvent.press(screen.getByTestId("account-review-filter-needs_review"));
     fireEvent.press(screen.getByTestId("account-review-filter-selected"));
     expect(props.onFilterChange).toHaveBeenNthCalledWith(1, "needs_review");
     expect(props.onFilterChange).toHaveBeenNthCalledWith(2, "selected");
-    assertThreeFilters("all"); // controlled, no speculative local filter mutation
+    assertThreeFilters("all");
+    expect(screen.queryByTestId("account-review-clear-selection")).toBeNull();
     fireEvent.press(screen.getByTestId("account-review-select-ready"));
-    fireEvent.press(screen.getByTestId("account-review-clear-selection"));
     expect(props.onSelectReady).toHaveBeenCalledTimes(1);
+    // The parent/reducer owns selection readiness; no speculative local toggle.
+    view.rerender(
+      <AccountReviewPanel
+        {...props}
+        readyVisibleRowIds={[]}
+        selectedVisibleCount={1}
+      />
+    );
+    expect(screen.queryByTestId("account-review-select-ready")).toBeNull();
+    fireEvent.press(screen.getByTestId("account-review-clear-selection"));
     expect(props.onClearSelection).toHaveBeenCalledTimes(1);
     expect(props.onConfirm).not.toHaveBeenCalled();
     expect(props.onRemove).not.toHaveBeenCalled();
   });
 
-  it("does not enable ready-only bulk action based merely on pending groups", () => {
+  it("never offers Select ready merely because groups are pending", () => {
     const props = show("r3-combined-en", { readyVisibleRowIds: [] });
-    const ready = screen.getByTestId("account-review-select-ready");
-    expect(ready).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ disabled: true })
-    );
-    expect(ready).toBeDisabled();
-    fireEvent.press(ready);
+    expect(screen.queryByTestId("account-review-select-ready")).toBeNull();
+    expect(screen.getByTestId("account-review-clear-selection")).toBeTruthy();
     expect(props.onSelectReady).not.toHaveBeenCalled();
     expect(props.onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps the bulk action disabled when no rows are eligible or selected", () => {
+    const props = show("r3-issues-only", { readyVisibleRowIds: [] });
+    const button = screen.getByTestId("account-review-select-ready");
+    expect(button).toBeDisabled();
+    fireEvent.press(button);
+    expect(props.onSelectReady).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("account-review-clear-selection")).toBeNull();
   });
 
   it("View all forwards only the parent callback and renders a scrollable six-group sheet", () => {
@@ -486,9 +558,11 @@ describe("#395 T058 — responsive, RTL, long-list and semantic-only coverage", 
         index === 1 ? { ...group, displayName: longName } : group
       );
       show("r3-combined-en", { groups, summary: scene.summary });
-      expect(screen.getByText(longName)).toBeTruthy();
+      expect(
+        screen.getByText(longName + " · " + groups[1]?.currencyLabel)
+      ).toBeTruthy();
       expect(screen.getByTestId("account-review-filter-selected")).toBeTruthy();
-      expect(screen.getByTestId("account-review-select-ready")).toBeTruthy();
+      expect(screen.getByTestId("account-review-clear-selection")).toBeTruthy();
       expect(
         screen.getByTestId("account-review-group-actions-" + groups[0]?.groupId)
       ).toHaveProp("accessibilityRole", "button");

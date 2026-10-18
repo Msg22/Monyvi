@@ -31,7 +31,9 @@ appId: com.monyvi.app
 - assertVisible:
     id: "account-review-account-use"
 # The use button is disabled until selection (separate Jest accessibility proof).
-- tapOn: "QNB Savings EGP"
+# The option's accessible identity now includes account type/provider/mask.
+# Match its existing account name and currency, never brittle full-label copy.
+- tapOn: "QNB Savings.*EGP"
 - tapOn:
     id: "account-review-account-use"
 - assertNotVisible:

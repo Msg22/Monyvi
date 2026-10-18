@@ -34,6 +34,7 @@ export interface AccountReviewPanelProps extends SharedAccountSuggestionsProps {
   readonly filter: ReviewFilter;
   readonly visibleRowIds: readonly ReviewRowId[];
   readonly readyVisibleRowIds: readonly ReviewRowId[];
+  readonly selectedVisibleCount: number;
   readonly defaultAccountName: string | null;
   readonly isWhySheetOpen: boolean;
   readonly onFilterChange: (filter: ReviewFilter) => void;
@@ -68,35 +69,36 @@ interface FilterButtonProps {
   readonly active: boolean;
   readonly disabled: boolean;
   readonly onChange: (filter: ReviewFilter) => void;
+  readonly language: "en" | "ar";
 }
 
 function FilterButton(props: FilterButtonProps): React.JSX.Element {
-  const color = props.active
-    ? "border-gold-800 bg-gold-50 dark:border-gold-400 dark:bg-surface-dark"
-    : "border-border bg-surface dark:border-border-dark dark:bg-surface-dark";
   const ink = props.active
-    ? "text-gold-800 dark:text-gold-400"
+    ? "text-slate-900 dark:text-slate-900"
     : "text-text-secondary dark:text-text-secondary-dark";
+  const count = new Intl.NumberFormat(
+    props.language === "ar" ? "ar-EG" : "en-EG"
+  ).format(props.count);
   return (
     <TouchableOpacity
       testID={"account-review-filter-" + props.value}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={props.label + ", " + props.count}
+      accessibilityLabel={props.label + " (" + count + ")"}
       accessibilityState={{ selected: props.active, disabled: props.disabled }}
       disabled={props.disabled}
       onPress={() => props.onChange(props.value)}
       activeOpacity={0.8}
       className={
-        "min-h-12 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-2 py-2 " +
-        color
+        "min-h-12 min-w-0 flex-1 items-center justify-center rounded-lg px-1.5 py-2 " +
+        (props.active ? "bg-gold-400 dark:bg-gold-400" : "bg-transparent")
       }
     >
       <Text className={"text-center text-sm font-semibold leading-5 " + ink}>
         {props.label}
-      </Text>
-      <Text className={"text-center text-xs leading-[18px] " + ink}>
-        {props.count}
+        {" ("}
+        {count}
+        {")"}
       </Text>
     </TouchableOpacity>
   );
@@ -133,7 +135,7 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
     <View
       testID="account-review-filter-bar"
       className={
-        "w-full max-w-[350px] self-center gap-2 " +
+        "w-full self-center gap-1 rounded-xl border border-border bg-surface p-1 dark:border-border-dark dark:bg-surface-dark " +
         (language === "ar" ? "flex-row-reverse" : "flex-row")
       }
     >
@@ -144,6 +146,7 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
           label={labels[value]}
           count={counts[value]}
           active={props.filter === value}
+          language={language}
           disabled={props.isBusy}
           onChange={props.onFilterChange}
         />
@@ -181,7 +184,7 @@ function ToolbarButton(props: ToolbarButtonProps): React.JSX.Element {
       onPress={props.onPress}
       activeOpacity={0.8}
       className={
-        "min-h-12 min-w-0 flex-1 items-center justify-center rounded-lg px-3 py-2 " +
+        "min-h-12 min-w-0 items-center justify-center rounded-lg px-3 py-2 " +
         surface
       }
     >
@@ -193,7 +196,8 @@ function ToolbarButton(props: ToolbarButtonProps): React.JSX.Element {
 }
 
 interface SelectionToolbarProps {
-  readonly selectedCount: number;
+  readonly visibleRowCount: number;
+  readonly selectedVisibleCount: number;
   readonly readyVisibleRowIds: readonly ReviewRowId[];
   readonly isBusy: boolean;
   readonly onSelectReady: () => void;
@@ -207,11 +211,13 @@ function ReviewSelectionToolbar(
   const { language } = useLocale();
   const { width, fontScale } = useWindowDimensions();
   const stacked = shouldUseCompactLayout(width, fontScale);
+  const offerClear =
+    props.readyVisibleRowIds.length === 0 && props.selectedVisibleCount > 0;
   return (
     <View
       testID="account-review-selection-toolbar"
       className={
-        "w-full max-w-[350px] self-center gap-3 " +
+        "w-full self-center items-center justify-between gap-2 " +
         (stacked
           ? "flex-col"
           : language === "ar"
@@ -219,23 +225,32 @@ function ReviewSelectionToolbar(
             : "flex-row")
       }
     >
+      <Text
+        testID="account-review-visible-count"
+        className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+      >
+        {t("account_review_toolbar_count", { count: props.visibleRowCount })}
+      </Text>
       <ToolbarButton
-        testID="account-review-select-ready"
-        label={t("account_review_select_ready", {
-          defaultValue: approvedCopy[language].selectReady,
-        })}
-        primary
-        disabled={props.isBusy || props.readyVisibleRowIds.length === 0}
-        onPress={props.onSelectReady}
-      />
-      <ToolbarButton
-        testID="account-review-clear-selection"
-        label={t("account_review_clear_selection", {
-          defaultValue: approvedCopy[language].clearSelection,
-        })}
+        testID={
+          offerClear
+            ? "account-review-clear-selection"
+            : "account-review-select-ready"
+        }
+        label={
+          offerClear
+            ? t("account_review_clear_selection", {
+                defaultValue: approvedCopy[language].clearSelection,
+              })
+            : t("account_review_select_ready", {
+                defaultValue: approvedCopy[language].selectReady,
+              })
+        }
         primary={false}
-        disabled={props.isBusy || props.selectedCount === 0}
-        onPress={props.onClearSelection}
+        disabled={
+          props.isBusy || (!offerClear && props.readyVisibleRowIds.length === 0)
+        }
+        onPress={offerClear ? props.onClearSelection : props.onSelectReady}
       />
     </View>
   );
@@ -288,7 +303,7 @@ function ReviewFilterEmpty(props: EmptyFilterProps): React.JSX.Element {
   return (
     <View
       testID="account-review-filter-empty"
-      className="w-full max-w-[350px] self-center items-center gap-3 rounded-xl border border-border bg-surface px-4 py-5 dark:border-border-dark dark:bg-surface-dark"
+      className="w-full self-center items-center gap-3 px-4 py-6"
     >
       <FilterEmptyMessage filter={props.filter} />
       <TouchableOpacity
@@ -320,16 +335,18 @@ interface DefaultDisclosureProps {
 }
 
 function DefaultDisclosure(
-  props: DefaultDisclosureProps
+  props: DefaultDisclosureProps & { readonly standalone: boolean }
 ): React.JSX.Element | null {
   if (props.count === 0 || props.name === null) return null;
   return (
     <>
-      <DefaultAccountInfo
-        defaultAccountName={props.name}
-        assignmentCount={props.count}
-        onWhyPress={props.onDefaultWhyPress}
-      />
+      {props.standalone ? (
+        <DefaultAccountInfo
+          defaultAccountName={props.name}
+          assignmentCount={props.count}
+          onWhyPress={props.onDefaultWhyPress}
+        />
+      ) : null}
       <DefaultAccountWhySheet
         visible={props.isWhySheetOpen && !props.isAllGroupsSheetOpen}
         defaultAccountName={props.name}
@@ -355,8 +372,14 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
         onUndo={props.onUndo}
         onViewAll={props.onViewAll}
         onCloseAllGroups={props.onCloseAllGroups}
+        defaultAccountName={props.defaultAccountName}
+        onDefaultWhyPress={props.onDefaultWhyPress}
+        onIssuePress={props.onIssuePress}
       />
       <DefaultDisclosure
+        standalone={
+          props.groups.length === 0 && props.summary.issueLabels.length === 0
+        }
         name={props.defaultAccountName}
         count={props.summary.defaultAssignmentCount}
         isWhySheetOpen={props.isWhySheetOpen}
@@ -385,7 +408,8 @@ export function AccountReviewPanel(
         onFilterChange={props.onFilterChange}
       />
       <ReviewSelectionToolbar
-        selectedCount={props.summary.selectedCount}
+        visibleRowCount={props.visibleRowIds.length}
+        selectedVisibleCount={props.selectedVisibleCount}
         readyVisibleRowIds={props.readyVisibleRowIds}
         isBusy={props.isBusy}
         onSelectReady={props.onSelectReady}

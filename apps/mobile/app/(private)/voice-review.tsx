@@ -337,7 +337,10 @@ export default function VoiceReviewScreen(): React.JSX.Element {
   // ── Voice Review ────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+    <SafeAreaView
+      edges={["left", "right", "bottom"]}
+      className="flex-1 bg-background dark:bg-background-dark"
+    >
       {/* Header (S-03 + S-06) */}
       <PageHeader
         title={t("voice_review_title")}

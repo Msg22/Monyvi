@@ -5,6 +5,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
+import { t } from "i18next";
 import {
   FlatList,
   Modal,
@@ -20,13 +21,17 @@ import { palette } from "@/constants/colors";
 import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { DefaultAccountInfo } from "./DefaultAccountInfo";
 import {
   displayIdentity,
+  presentReviewLinkedCount,
   ReviewActionButton,
   ReviewPointerBackdrop,
   ReviewSheetHandle,
   reviewCopy,
   type ReviewDisplayLanguage,
+  type ReviewIssueEntry,
+  type ReviewIssueKey,
 } from "./shared-account-presentation";
 
 export interface SharedSuggestedGroupView {
@@ -55,6 +60,7 @@ export interface SharedReviewSummaryView {
   readonly defaultAssignmentCount: number;
   readonly selectedCount: number;
   readonly issueLabels: readonly string[];
+  readonly issues?: readonly ReviewIssueEntry[];
 }
 export interface SharedAccountSuggestionsProps {
   readonly groups: readonly SharedSuggestedGroupView[];
@@ -68,6 +74,9 @@ export interface SharedAccountSuggestionsProps {
   readonly onUndo: (groupId: string) => void;
   readonly onViewAll: () => void;
   readonly onCloseAllGroups: () => void;
+  readonly defaultAccountName?: string | null;
+  readonly onDefaultWhyPress?: () => void;
+  readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }
 type GroupCommandAction = "edit" | "replace" | "remove";
 interface GroupCardProps {
@@ -81,10 +90,15 @@ interface GroupCardProps {
 }
 function groupIcon(
   input: string
-): "business-outline" | "wallet-outline" | "cash-outline" {
+):
+  | "business-outline"
+  | "wallet-outline"
+  | "cash-outline"
+  | "help-circle-outline" {
   if (input === "wallet-outline") return "wallet-outline";
   if (input === "cash-outline") return "cash-outline";
-  return "business-outline";
+  if (input === "business-outline") return "business-outline";
+  return "help-circle-outline";
 }
 function GroupIdentity({
   group,
@@ -102,14 +116,12 @@ function GroupIdentity({
         "items-start gap-3"
       }
     >
-      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-nileGreen-50 dark:bg-nileGreen-900">
+      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
         <Ionicons
           name={groupIcon(group.typeIconName)}
           size={22}
           color={
-            colorScheme === "dark"
-              ? palette.nileGreen[400]
-              : palette.nileGreen[700]
+            colorScheme === "dark" ? palette.slate[300] : palette.slate[600]
           }
           accessibilityElementsHidden
           importantForAccessibility="no"
@@ -123,38 +135,52 @@ function GroupIdentity({
           }
           style={{ writingDirection: direction }}
         >
-          {displayIdentity(group.displayName, language)}
+          {displayIdentity(group.displayName, language)} ·{" "}
+          {displayIdentity(group.currencyLabel, language)}
         </Text>
-        <Text
+        <View
           className={
-            "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-            (rtl ? "text-right" : "text-left")
+            (rtl ? "flex-row-reverse " : "flex-row ") +
+            "flex-wrap items-center gap-1"
           }
-          style={{ writingDirection: direction }}
         >
-          {displayIdentity(group.identitySummary, language)}
-        </Text>
+          <Text
+            testID={"account-review-group-status-" + group.groupId}
+            className={
+              "text-sm font-semibold leading-5 " +
+              (group.isRemoved
+                ? "text-red-600 dark:text-red-500"
+                : group.isConfirmed
+                  ? "text-nileGreen-700 dark:text-nileGreen-400"
+                  : "text-gold-800 dark:text-gold-400")
+            }
+          >
+            {group.statusLabel ||
+              (group.isRemoved
+                ? t("account_review_group_removed", {
+                    lng: language,
+                    ns: "transactions",
+                  })
+                : "")}
+          </Text>
+          <Text className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
+            {" · "}
+            {presentReviewLinkedCount(group.linkedCount, language)}
+          </Text>
+        </View>
+        {group.identitySummary.trim().length > 0 ? (
+          <Text
+            className={
+              "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+              (rtl ? "text-right" : "text-left")
+            }
+            style={{ writingDirection: direction }}
+          >
+            {displayIdentity(group.identitySummary, language)}
+          </Text>
+        ) : null}
       </View>
     </View>
-  );
-}
-function GroupStatus({
-  group,
-}: {
-  readonly group: SharedSuggestedGroupView;
-}): React.JSX.Element {
-  const statusColor = group.isRemoved
-    ? "text-red-600 dark:text-red-500"
-    : group.isConfirmed
-      ? "text-nileGreen-700 dark:text-nileGreen-400"
-      : "text-gold-800 dark:text-gold-400";
-  return (
-    <Text
-      testID={"account-review-group-status-" + group.groupId}
-      className={"text-xs font-semibold leading-[18px] " + statusColor}
-    >
-      {group.statusLabel}
-    </Text>
   );
 }
 function GroupMenuTrigger({
@@ -242,6 +268,15 @@ function GroupControls(props: GroupCardProps): React.JSX.Element {
           onPress={props.onUndo}
         />
       ) : null}
+      {!group.isRemoved && group.isConfirmed && group.canEdit ? (
+        <ReviewActionButton
+          testID={"account-review-group-change-" + group.groupId}
+          tone="outline"
+          label={reviewCopy("account_review_group_change", language)}
+          disabled={disabled}
+          onPress={props.onMenu}
+        />
+      ) : null}
       {!group.isRemoved ? (
         <GroupMenuTrigger
           group={group}
@@ -260,28 +295,25 @@ function GroupCard(props: GroupCardProps): React.JSX.Element {
   return (
     <View
       testID={"account-review-group-card-" + group.groupId}
-      className="min-h-[68px] border-b border-border py-3 dark:border-border-dark"
+      className="min-h-[68px] gap-2 border-b border-border py-3 dark:border-border-dark"
     >
       <View
         className={
           compact
-            ? "gap-3"
+            ? "gap-2"
             : rtl
-              ? "flex-row-reverse items-center gap-3"
-              : "flex-row items-center gap-3"
+              ? "flex-row-reverse flex-wrap items-start gap-2"
+              : "flex-row flex-wrap items-start gap-2"
         }
       >
         <GroupIdentity group={group} language={language} compact={compact} />
-        <View className={compact ? "gap-2" : "items-end gap-2"}>
-          <GroupStatus group={group} />
-          <GroupControls {...props} />
-        </View>
+        <GroupControls {...props} />
       </View>
-      {!group.isRemoved ? (
+      {!group.isRemoved && group.disclosureText.trim().length > 0 ? (
         <Text
           testID={"account-review-group-disclosure-" + group.groupId}
           className={
-            "mt-2 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+            "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
             (rtl ? "text-right" : "text-left")
           }
           style={{ writingDirection: direction }}
@@ -535,54 +567,135 @@ interface OverviewPanelProps {
   readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
   readonly onViewAll: () => void;
   readonly disabled: boolean;
+  readonly defaultAccountName?: string | null;
+  readonly onDefaultWhyPress?: () => void;
+  readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }
 function GroupIssues({
   labels,
+  issues,
   language,
+  disabled,
+  onIssuePress,
 }: {
   readonly labels: readonly string[];
+  readonly issues?: readonly ReviewIssueEntry[];
   readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }): React.JSX.Element | null {
+  const { colorScheme } = useColorScheme();
   const rtl = language === "ar";
-  if (labels.length === 0) return null;
+  const displayed: ReadonlyArray<{
+    readonly key: ReviewIssueKey | null;
+    readonly label: string;
+    readonly count: number | null;
+  }> = issues ?? labels.map((label) => ({ key: null, label, count: null }));
+  if (displayed.length === 0) return null;
   return (
     <View className="mt-3 gap-2">
-      {labels.map((label) => (
-        <View
-          key={label}
-          className={
-            rtl
-              ? "flex-row-reverse items-center gap-2"
-              : "flex-row items-center gap-2"
-          }
-        >
-          <Ionicons
-            name="alert-circle-outline"
-            size={18}
-            color={palette.gold[800]}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
-          <Text
+      {displayed.map((issue, index) => {
+        const actionLabel = t(
+          issue.key === "account_review_issue_account" ||
+            issue.key === "account_review_issue_category"
+            ? "account_review_issue_choose"
+            : "account_review_issue_review",
+          { ns: "transactions", lng: language }
+        );
+        const inactive = disabled || issue.key === null || !onIssuePress;
+        return (
+          <View
+            key={issue.key ?? String(index)}
+            testID={"account-review-issue-" + (issue.key ?? index)}
             className={
-              "min-w-0 flex-1 text-sm leading-5 text-gold-800 dark:text-gold-400 " +
-              (rtl ? "text-right" : "text-left")
+              "min-h-[68px] flex-wrap items-center gap-2 border-b border-border py-3 dark:border-border-dark " +
+              (rtl ? "flex-row-reverse" : "flex-row")
             }
           >
-            {label}
-          </Text>
-        </View>
-      ))}
+            <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-50 dark:bg-surface-dark">
+              <Ionicons
+                name="alert-circle-outline"
+                size={22}
+                color={
+                  colorScheme === "dark" ? palette.gold[400] : palette.gold[800]
+                }
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+            </View>
+            <View className="min-w-0 flex-1 gap-1">
+              <Text
+                className={
+                  "text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark " +
+                  (rtl ? "text-right" : "text-left")
+                }
+              >
+                {issue.label}
+              </Text>
+              {issue.count !== null ? (
+                <Text
+                  testID="account-review-issue-count"
+                  className={
+                    "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+                    (rtl ? "text-right" : "text-left")
+                  }
+                >
+                  {t("account_review_issue_count", {
+                    ns: "transactions",
+                    lng: language,
+                    count: issue.count,
+                  })}
+                </Text>
+              ) : null}
+            </View>
+            {issue.key !== null && onIssuePress ? (
+              <TouchableOpacity
+                testID={"account-review-issue-action-" + issue.key}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={actionLabel + ", " + issue.label}
+                accessibilityState={{ disabled: inactive }}
+                disabled={inactive}
+                onPress={() => {
+                  if (!inactive && issue.key) onIssuePress(issue.key);
+                }}
+                className={
+                  "min-h-12 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-border px-3 dark:border-border-dark " +
+                  (rtl ? "flex-row-reverse" : "flex-row")
+                }
+              >
+                <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                  {actionLabel}
+                </Text>
+                <Ionicons
+                  name={
+                    rtl ? "chevron-back-outline" : "chevron-forward-outline"
+                  }
+                  size={18}
+                  color={
+                    colorScheme === "dark"
+                      ? palette.nileGreen[400]
+                      : palette.nileGreen[700]
+                  }
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
+
 function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
   const { summary, groups, language } = props;
   const rtl = language === "ar";
   return (
     <View
       testID="account-review-details-panel"
-      className="w-full max-w-[350px] self-center rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark"
+      className="w-full self-center rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark"
     >
       <Text
         accessibilityRole="header"
@@ -596,11 +709,42 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
           (rtl ? "text-right" : "text-left")
         }
       >
-        {summary.distinctNeedsReviewCount}{" "}
-        {reviewCopy("account_review_group_needs_review", language)}
-        {" · "}
-        {summary.selectedCount}{" "}
-        {reviewCopy("account_review_group_selected", language)}
+        {groups.length === 0
+          ? t("account_review_details_needs", {
+              ns: "transactions",
+              lng: language,
+              count: summary.distinctNeedsReviewCount,
+            })
+          : [
+              summary.pendingGroupCount > 0
+                ? t("account_review_details_pending", {
+                    ns: "transactions",
+                    lng: language,
+                    count: summary.pendingGroupCount,
+                  })
+                : null,
+              (summary.issues?.find(
+                (issue) => issue.key === "account_review_issue_currency"
+              )?.count ?? 0) > 0
+                ? t("account_review_details_currency", {
+                    ns: "transactions",
+                    lng: language,
+                    count:
+                      summary.issues?.find(
+                        (issue) => issue.key === "account_review_issue_currency"
+                      )?.count ?? 0,
+                  })
+                : null,
+              summary.confirmedGroupCount > 0
+                ? t("account_review_details_confirmed", {
+                    ns: "transactions",
+                    lng: language,
+                    count: summary.confirmedGroupCount,
+                  })
+                : null,
+            ]
+              .filter((part): part is string => part !== null)
+              .join(" · ")}{" "}
       </Text>
       <View className="mt-3">
         {groups.slice(0, 2).map((group) => (
@@ -609,7 +753,22 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
           </React.Fragment>
         ))}
       </View>
-      <GroupIssues labels={summary.issueLabels} language={language} />
+      <GroupIssues
+        labels={summary.issueLabels}
+        issues={summary.issues}
+        language={language}
+        disabled={props.disabled}
+        onIssuePress={props.onIssuePress}
+      />
+      {props.defaultAccountName &&
+      summary.defaultAssignmentCount > 0 &&
+      props.onDefaultWhyPress ? (
+        <DefaultAccountInfo
+          defaultAccountName={props.defaultAccountName}
+          assignmentCount={summary.defaultAssignmentCount}
+          onWhyPress={props.onDefaultWhyPress}
+        />
+      ) : null}
       {groups.length > 1 ? (
         <View className="mt-3">
           <ReviewActionButton
@@ -646,6 +805,9 @@ function GroupSurfaceComposition(
         renderGroup={p.renderGroup}
         disabled={source.isBusy}
         onViewAll={source.onViewAll}
+        defaultAccountName={source.defaultAccountName}
+        onDefaultWhyPress={source.onDefaultWhyPress}
+        onIssuePress={source.onIssuePress}
       />
       <AllGroupsSheet
         open={source.isAllGroupsSheetOpen}

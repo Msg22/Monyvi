@@ -1,7 +1,4 @@
-/**
- * #395 T054 RNTL tests-first — canonical row body transaction edit and
- * owner/revision scoped cancellation. No legacy edit state or financial writer.
- */
+/** #395 canonical edit/review owner-revision and UI regressions. */
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
@@ -32,12 +29,18 @@ import {
   SECOND_UNDO_ID,
   twoGroupSession,
   removeActualGroup,
+  makeUnconfirmedCurrencyReview,
+  initializeCanonicalReviewTranslations,
+  toFacadeChoiceCandidate,
 } from "./TransactionReview.canonical-edit-fixtures";
 
 const mockDispatch = jest.fn();
 const mockModal = jest.fn<void, [ControlledReviewTransactionEditModalProps]>();
 const mockToast = jest.fn();
-const mockCandidates = jest.fn();
+const mockCandidates = jest.fn<
+  ReturnType<UseAccountReviewResult["getAccountCandidates"]>,
+  Parameters<UseAccountReviewResult["getAccountCandidates"]>
+>();
 const mockUndoRemoval = jest.fn();
 
 jest.mock("@/hooks/useAccountReview", () => ({
@@ -54,6 +57,10 @@ jest.mock("@/hooks/useAccountDisplayNames", () => ({
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+}));
+
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: string } => ({ language: "en" }),
 }));
@@ -139,6 +146,7 @@ jest.mock("@/components/transaction-review/CurrencyConfirmationSheet", () => ({
     selectedCandidateCode: string | null;
     canUseSelection: boolean;
     onChooseAnother: () => void;
+    onSelectCandidate: (code: string) => void;
     onUseSelected: () => void;
   }) => {
     if (!props.visible) return null;
@@ -157,6 +165,17 @@ jest.mock("@/components/transaction-review/CurrencyConfirmationSheet", () => ({
         RN.Text,
         { testID: "pr-currency-options" },
         props.candidateOptions.map((c) => c.code).join(",")
+      ),
+      ...props.candidateOptions.map((option) =>
+        ReactActual.createElement(
+          RN.TouchableOpacity,
+          {
+            key: option.code,
+            testID: "pr-currency-option-" + option.code,
+            onPress: () => props.onSelectCandidate(option.code),
+          },
+          ReactActual.createElement(RN.Text, null, option.code)
+        )
       ),
       ReactActual.createElement(
         RN.TouchableOpacity,
@@ -293,9 +312,11 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
     onPress,
     index,
     accountReview,
+    accountName,
   }: {
     index: number;
     onPress: (index: number) => void;
+    accountName: string | null;
     accountReview: {
       onChooseAccount: (rowId: string) => void;
       onChooseCurrency: (rowId: string, context: string) => void;
@@ -322,6 +343,11 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
         {
           testID: "pr-source-account-" + index,
         },
+        accountName ?? ""
+      ),
+      ReactActual.createElement(
+        RN.Text,
+        { testID: "pr-account-status-" + index },
         accountReview.accountStatusLabel ?? ""
       ),
       ReactActual.createElement(
@@ -456,6 +482,8 @@ beforeEach(() => {
   );
 });
 
+beforeAll(initializeCanonicalReviewTranslations);
+
 describe("#395 T054 canonical transaction edit route", () => {
   it("row body enters existing controlled modal and dispatches only current row-CAS command", async () => {
     const screen = render(review());
@@ -480,7 +508,6 @@ describe("#395 T054 canonical transaction edit route", () => {
       })
     );
   });
-
   it("Cancel removes editor without dispatch or creating a financial entity", () => {
     const screen = render(review());
     fireEvent.press(screen.getAllByTestId("canonical-edit-row")[0]);
@@ -488,7 +515,6 @@ describe("#395 T054 canonical transaction edit route", () => {
     expect(screen.queryByTestId("canonical-transaction-edit-modal")).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
   });
-
   it("revokes stale modal on owner/session replacement before any attempted Save", async () => {
     const screen = render(review());
     fireEvent.press(screen.getAllByTestId("canonical-edit-row")[0]);
@@ -503,7 +529,6 @@ describe("#395 T054 canonical transaction edit route", () => {
     );
     expect(mockDispatch).not.toHaveBeenCalled();
   });
-
   it("refuses a late close from a superseded modal without hiding the newer revision", async () => {
     const rendered = render(review());
     fireEvent.press(rendered.getAllByTestId("canonical-edit-row")[0]);
@@ -535,14 +560,12 @@ describe("#395 T054 canonical transaction edit route", () => {
     ).toBeTruthy();
     expect(mockDispatch).not.toHaveBeenCalled();
   });
-
   it("renders supplied partial-SMS retry notice and QA diagnostics above the canonical panel", () => {
     const screen = render(review(undefined, true));
     expect(screen.getByTestId("canonical-partial-results")).toBeTruthy();
     expect(screen.getByTestId("canonical-qa-diagnostics")).toBeTruthy();
     expect(screen.getByTestId("canonical-review-panel")).toBeTruthy();
   });
-
   it("does not invent a partial-results notice when the source supplied none", () => {
     const screen = render(review());
     expect(screen.queryByTestId("canonical-partial-results")).toBeNull();
@@ -551,50 +574,26 @@ describe("#395 T054 canonical transaction edit route", () => {
 });
 
 describe("#395 PR396 review comment regressions — canonical actual-container bindings", () => {
-  it("picker EUR outside original EGP/USD conflict becomes a confirmable Use action", async () => {
-    const row = sourceSession.rows[0];
-    if (!row) throw new Error("missing_real_currency_row");
-    const conflicting = accountReviewSessionSchema.parse({
-      ...sourceSession,
-      // Unconfirmed currency cannot authorize an active suggested group.
-      // Keep the original transaction/evidence, but require an explicit
-      // currency confirmation and an independent later account choice.
-      groups: [],
-      rows: [
-        {
-          ...row,
-          selected: false,
-          assignment: {
-            state: "unresolved",
-            accountId: null,
-            reasonCode: "account_needed",
-            candidateAccountIds: [],
-          },
-          currency: {
-            state: "unconfirmed",
-            reason: "conflicting",
-            candidateCodes: ["EGP", "USD"],
-            statedCode: "EGP",
-            evidenceSpans: [],
-          },
-          reviewReasons: ["account_needed", "currency_confirmation_needed"],
-        },
-      ],
-    });
+  it("a tap in the existing picker directly commits only the pinned row with one foreground sheet", async () => {
+    const conflicting = makeUnconfirmedCurrencyReview(sourceSession);
+    const row = conflicting.rows[0];
+    if (!row) throw new Error("missing_currency_row");
     mockHook.mockImplementation(() => fakeHook(conflicting));
     const screen = render(review());
-    fireEvent.press(screen.getByTestId("canonical-choose-currency"));
+    fireEvent.press(screen.getByTestId("canonical-choose-account"));
+    // A guarded account chooser without a confirmed currency is never opened.
+    expect(mockCandidates).not.toHaveBeenCalled();
+    expect(screen.getByTestId("pr-currency-use")).toBeDisabled();
     expect(screen.getByTestId("pr-currency-options")).toHaveTextContent(
       "EGP,USD"
     );
+    expect(screen.getByTestId("pr-currency-use")).toBeDisabled();
+    expect(screen.queryByTestId("pr-full-currency-picker")).toBeNull();
     fireEvent.press(screen.getByTestId("pr-currency-another"));
+    expect(screen.queryByTestId("pr-currency-sheet")).toBeNull();
+    expect(screen.getByTestId("pr-full-currency-picker")).toBeTruthy();
     fireEvent.press(screen.getByTestId("pr-pick-EUR"));
-    fireEvent.press(screen.getByTestId("pr-close-picker"));
-    expect(screen.getByTestId("pr-currency-options")).toHaveTextContent(
-      /(?:^|,)EUR(?:,|$)/
-    );
-    expect(screen.getByTestId("pr-currency-use")).toBeEnabled();
-    fireEvent.press(screen.getByTestId("pr-currency-use"));
+    expect(screen.queryByTestId("pr-full-currency-picker")).toBeNull();
     await waitFor(() =>
       expect(mockDispatch).toHaveBeenCalledWith({
         kind: "confirm_row_currency",
@@ -607,8 +606,20 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
         currency: "EUR",
       })
     );
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+    expect(mockCandidates).not.toHaveBeenCalled();
   });
-
+  it("picker cancel leaves the original row and currency untouched", () => {
+    const conflicting = makeUnconfirmedCurrencyReview(sourceSession);
+    mockHook.mockImplementation(() => fakeHook(conflicting));
+    const screen = render(review());
+    fireEvent.press(screen.getByTestId("canonical-choose-currency"));
+    fireEvent.press(screen.getByTestId("pr-currency-another"));
+    fireEvent.press(screen.getByTestId("pr-close-picker"));
+    expect(screen.queryByTestId("pr-currency-sheet")).toBeNull();
+    expect(screen.queryByTestId("pr-full-currency-picker")).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
   it("real removals A then B expose Undo only on B; B restoration never restores A", async () => {
     const before = twoGroupSession();
     const first = removeActualGroup(
@@ -729,8 +740,10 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
         },
       ],
     });
-    mockCandidates.mockImplementation((_id: string, role: string) =>
-      role === "destination" ? [cash] : [bank]
+    mockCandidates.mockImplementation((_id, role) =>
+      role === "destination"
+        ? [toFacadeChoiceCandidate(cash)]
+        : [toFacadeChoiceCandidate(bank)]
     );
     mockHook.mockImplementation(() => ({
       ...fakeHook(resolved),
@@ -829,6 +842,11 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
       expect(screen.getByTestId("pr-source-account-0")).toHaveTextContent(
         bank.name
       );
+      if (origin === "default") {
+        expect(screen.getByTestId("pr-account-status-0")).toHaveTextContent(
+          "Default account"
+        );
+      }
     }
   );
 

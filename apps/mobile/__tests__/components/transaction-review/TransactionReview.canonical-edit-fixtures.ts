@@ -6,6 +6,9 @@ import {
   accountReviewCommandSchema,
   accountReviewSessionSchema,
 } from "@monyvi/logic";
+import i18next from "i18next";
+import enTransactions from "@/locales/en/transactions.json";
+import type { UseAccountReviewResult } from "@/hooks/useAccountReview";
 import {
   reduceAccountReviewCommand,
   type ReviewUndoLease,
@@ -75,5 +78,67 @@ export function removeActualGroup(
     accountSnapshots: makeOwnedContext(),
     nextUndoToken: token,
     undo,
+  });
+}
+
+/** The same singleton used by the presentation helper's direct i18next t import. */
+export async function initializeCanonicalReviewTranslations(): Promise<void> {
+  await i18next.init({
+    lng: "en",
+    fallbackLng: "en",
+    ns: ["transactions"],
+    defaultNS: "transactions",
+    resources: { en: { transactions: enTransactions } },
+    interpolation: { escapeValue: false },
+  });
+}
+
+/** The facade exposes fully shaped account choices, not raw account snapshots. */
+export function toFacadeChoiceCandidate(
+  account: ReturnType<typeof makeOwnedContext>["accounts"][number]
+): ReturnType<UseAccountReviewResult["getAccountCandidates"]>[number] {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    type: account.type,
+    institutionId: account.institutionId ?? null,
+    providerDisplayName: account.providerDisplayName ?? null,
+    cardLast4: account.cardLast4 ?? null,
+    isDefault: account.isDefault,
+  };
+}
+
+export function makeUnconfirmedCurrencyReview(
+  sourceSession: AccountReviewSession
+): AccountReviewSession {
+  const row = sourceSession.rows[0];
+  if (!row) throw new Error("missing_real_currency_row");
+  return accountReviewSessionSchema.parse({
+    ...sourceSession,
+    // Unconfirmed currency cannot authorize an active suggested group.
+    // Keep the original transaction/evidence, but require an explicit
+    // currency confirmation and an independent later account choice.
+    groups: [],
+    rows: [
+      {
+        ...row,
+        selected: false,
+        assignment: {
+          state: "unresolved",
+          accountId: null,
+          reasonCode: "account_needed",
+          candidateAccountIds: [],
+        },
+        currency: {
+          state: "unconfirmed",
+          reason: "conflicting",
+          candidateCodes: ["EGP", "USD"],
+          statedCode: "EGP",
+          evidenceSpans: [],
+        },
+        reviewReasons: ["account_needed", "currency_confirmation_needed"],
+      },
+    ],
   });
 }

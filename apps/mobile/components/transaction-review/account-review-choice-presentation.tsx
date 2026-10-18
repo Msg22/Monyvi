@@ -133,7 +133,7 @@ function ChoiceModalContent({
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
       >
-        <View className="w-full max-w-[350px] self-center gap-3">
+        <View className="w-full gap-3">
           <ChoiceModalHeader props={props} />
           {props.contextSubtitle ? (
             <Text

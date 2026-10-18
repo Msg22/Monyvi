@@ -9,11 +9,18 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import i18next from "i18next";
 import React, { useState } from "react";
-import { KeyboardAvoidingView, Modal, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Modal, ScrollView, View } from "react-native";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AccountChoiceSheet } from "@/components/transaction-review/AccountChoiceSheet";
+import {
+  isReviewChoiceFresh,
+  presentCanonicalRowDetails,
+  presentReviewIssues,
+  reviewChoiceStamp,
+} from "@/components/transaction-review/shared-account-presentation";
+import { makeDefaultInfoSession } from "./account-review-default-info-test-fixtures";
 import { CurrencyConfirmationSheet } from "@/components/transaction-review/CurrencyConfirmationSheet";
 import {
   GROUP_SCOPE_EN,
@@ -353,6 +360,20 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
     expect(
       screen.getByTestId("account-review-account-choice-sheet")
     ).toHaveProp("accessibilityViewIsModal", true);
+  });
+
+  it("uses the existing currency/account sheet with fluid content width at 390 and larger layouts", () => {
+    renderAccounts();
+    const content = screen
+      .UNSAFE_getAllByType(View)
+      .find((node) => node.props.className === "w-full gap-3");
+    expect(content).toBeDefined();
+    expect(content?.props.className).not.toContain("max-w-[350px]");
+    expect(
+      screen.getByTestId("account-review-account-choice-sheet")
+    ).toHaveStyle({
+      paddingBottom: 24,
+    });
   });
 
   it("retains long names, visible dark semantic tokens, and Arabic user data unchanged", async () => {
@@ -709,5 +730,88 @@ describe("T035 — conflict/picker parent mode transition", () => {
       screen.queryByTestId("account-review-existing-currency-picker")
     ).toBeNull();
     expect(onResolved).not.toHaveBeenCalled();
+  });
+});
+
+describe("#395 accepted review context and modal revision gates", () => {
+  it("R3 combined shows currency issue without duplicating the pending shared-account blocker", () => {
+    const session = makeDefaultInfoSession("r3-combined-en");
+    const distinctNeedsReviewCount = session.rows.filter(
+      (row) => row.reviewReasons.length > 0
+    ).length;
+    const issues = presentReviewIssues(
+      session.rows,
+      distinctNeedsReviewCount,
+      "en"
+    );
+    expect(issues.map((issue) => issue.key)).toContain(
+      "account_review_issue_currency"
+    );
+    expect(issues.map((issue) => issue.key)).not.toContain(
+      "account_review_issue_account"
+    );
+    expect(distinctNeedsReviewCount).toBe(5);
+  });
+
+  it("presents a real default-origin Cash assignment quietly without an account blocker", () => {
+    const session = makeDefaultInfoSession("r3-default-only");
+    const row = session.rows.find(
+      (item) =>
+        item.assignment.state === "existing" &&
+        item.assignment.origin === "default"
+    );
+    if (!row || row.assignment.state !== "existing")
+      throw new Error("missing_canonical_default_row");
+    const shown = presentCanonicalRowDetails(
+      row,
+      null,
+      [{ id: row.assignment.accountId, name: "Cash", type: "CASH" }],
+      "en"
+    );
+    expect(shown.accountName).toBe("Cash");
+    expect(shown.accountType).toBe("CASH");
+    expect(shown.accountStatusLabel).toBe("Default account");
+    expect(shown.accountStatusTone).toBeUndefined();
+    expect(shown.currencyActionLabel).toBeNull();
+  });
+
+  it("revokes an open choice on changed owner, session, review, operation or row revision", () => {
+    const session = makeDefaultInfoSession("r3-combined-en");
+    const row = session.rows.find(
+      (item) => item.currency.state === "unconfirmed"
+    );
+    if (!row) throw new Error("missing_conflicting_currency_row");
+    const stamp = reviewChoiceStamp(session, row.revision);
+    expect(isReviewChoiceFresh(stamp, session, row.revision)).toBe(true);
+    expect(isReviewChoiceFresh(stamp, session, null)).toBe(false);
+    expect(isReviewChoiceFresh(stamp, session, "changed-row")).toBe(false);
+    expect(
+      isReviewChoiceFresh(
+        stamp,
+        { ...session, revision: "changed-review" },
+        row.revision
+      )
+    ).toBe(false);
+    expect(
+      isReviewChoiceFresh(
+        stamp,
+        { ...session, operationGeneration: "changed-generation" },
+        row.revision
+      )
+    ).toBe(false);
+    expect(
+      isReviewChoiceFresh(
+        stamp,
+        { ...session, sessionId: "changed-session" },
+        row.revision
+      )
+    ).toBe(false);
+    expect(
+      isReviewChoiceFresh(
+        stamp,
+        { ...session, ownerId: "changed-owner" },
+        row.revision
+      )
+    ).toBe(false);
   });
 });

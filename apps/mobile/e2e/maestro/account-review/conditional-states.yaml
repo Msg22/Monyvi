@@ -29,7 +29,9 @@ appId: com.monyvi.app
     id: "account-review-filter-needs_review"
 - assertVisible:
     id: "account-review-filter-selected"
-- assertVisible:
+# No unchecked reducer-eligible rows remain in this combined fixture.
+# The ONE contextual toolbar action is Clear selection (the two default rows).
+- assertNotVisible:
     id: "account-review-select-ready"
 - assertVisible:
     id: "account-review-clear-selection"
@@ -101,6 +103,11 @@ appId: com.monyvi.app
     timeout: 30000
 - assertNotVisible:
     id: "account-review-details-panel"
+# R3-10 is a clean, already-selected fixture; its only bulk action is Clear.
+- assertVisible:
+    id: "account-review-clear-selection"
+- assertNotVisible:
+    id: "account-review-select-ready"
 # Arabic descriptor does not change app locale; RTL/device evidence is manual.
 # SMS r3-issues-only/removed Undo/save-failure remain NOT E2E here because
 # SMS requires an actual persisted owned V2 queue and namespace lease.

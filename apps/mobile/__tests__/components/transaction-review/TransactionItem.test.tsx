@@ -35,6 +35,10 @@ jest.mock("@/components/ui/Skeleton", () => ({
   },
 }));
 
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+}));
+
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: string } => ({ language: "ar" }),
 }));

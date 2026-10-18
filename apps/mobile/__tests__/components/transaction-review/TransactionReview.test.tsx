@@ -25,6 +25,10 @@ jest.mock("@/components/navigation/PageHeader", () => ({
   },
 }));
 
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+}));
+
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
 }));

@@ -268,6 +268,156 @@ function TransactionItemInner({
     ? transaction.counterparty
     : transaction.counterparty || "Unknown";
 
+  // The accepted review row is a separate presentation. Legacy callers keep
+  // the complete pre-#395 transaction card and source-specific affordances.
+  if (accountReview) {
+    const title =
+      (isVoice && "note" in transaction && typeof transaction.note === "string"
+        ? transaction.note.trim()
+        : "") ||
+      transaction.counterparty?.trim() ||
+      transaction.originLabel;
+    return (
+      <View
+        testID="transaction-review-row"
+        className="min-h-[68px] border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
+      >
+        <View className="flex-row items-start gap-1 px-4 py-3">
+          <TouchableOpacity
+            testID="account-review-row-checkbox"
+            accessible
+            accessibilityRole="checkbox"
+            accessibilityLabel={t(
+              isSelected
+                ? "sms_review_deselect_accessibility"
+                : "sms_review_select_accessibility",
+              { name: accessibleName }
+            )}
+            accessibilityState={{ checked: isSelected, disabled: reviewIsBusy }}
+            disabled={reviewIsBusy}
+            onPress={handleToggle}
+            activeOpacity={0.7}
+            className="h-11 w-11 shrink-0 items-center justify-center"
+          >
+            <View
+              className={
+                "h-6 w-6 items-center justify-center rounded-md border-2 " +
+                (isSelected
+                  ? "border-nileGreen-600 bg-nileGreen-600"
+                  : "border-slate-500")
+              }
+            >
+              {isSelected ? (
+                <Ionicons name="checkmark" size={16} color="white" />
+              ) : null}
+            </View>
+          </TouchableOpacity>
+          <View className="min-w-0 flex-1">
+            <TouchableOpacity
+              testID="transaction-review-edit-action"
+              accessible
+              accessibilityRole="button"
+              accessibilityLanguage={language}
+              accessibilityLabel={t("transaction_review_accessibility", {
+                origin: transaction.originLabel,
+                type: t(isExpense ? "expense" : "income"),
+                amount: formattedAmount,
+                counterparty: transaction.counterparty ?? "",
+                category: transaction.categoryDisplayName,
+                account: accountName ?? "",
+              })}
+              accessibilityHint={t("tap_to_edit_transaction")}
+              accessibilityState={{ disabled: reviewIsBusy }}
+              disabled={reviewIsBusy}
+              onPress={handlePress}
+              activeOpacity={0.75}
+              className="min-h-11 flex-row items-start gap-2"
+            >
+              <View className="min-w-0 flex-1">
+                <Text className="text-base font-semibold leading-6 text-text-primary dark:text-text-primary-dark">
+                  {title}
+                </Text>
+                <Text className="mt-0.5 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark">
+                  {formatReviewDateTime(
+                    transaction.date,
+                    t("review_date_today"),
+                    t("review_date_yesterday"),
+                    language
+                  )}
+                </Text>
+              </View>
+              <View className="max-w-[45%] items-end">
+                <Text
+                  testID="transaction-review-amount"
+                  className={
+                    "text-base font-semibold leading-6 " +
+                    (isExpense
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-nileGreen-600 dark:text-nileGreen-400")
+                  }
+                >
+                  {formattedSignedAmount}
+                </Text>
+              </View>
+              <Ionicons
+                testID="account-review-row-edit-chevron"
+                name={
+                  language === "ar"
+                    ? "chevron-back-outline"
+                    : "chevron-forward-outline"
+                }
+                color={palette.slate[500]}
+                size={18}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+            </TouchableOpacity>
+            <AccountReviewRowPresentation
+              source={accountReview}
+              accountName={accountName}
+              categoryId={transaction.categoryId}
+              categoryDisplayName={transaction.categoryDisplayName}
+            />
+            {hasExpandableContent ? (
+              <TouchableOpacity
+                testID="transaction-review-expand-toggle"
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={t(
+                  isExpanded
+                    ? "sms_review_collapse_accessibility"
+                    : "sms_review_expand_accessibility",
+                  { name: accessibleName }
+                )}
+                accessibilityState={{ expanded: isExpanded }}
+                onPress={handleToggleExpand}
+                className="min-h-11 min-w-11 self-end items-center justify-center"
+              >
+                <Ionicons
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={palette.slate[500]}
+                />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+        {isExpanded && hasExpandableContent ? (
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(150)}
+            className="px-5 pb-3"
+          >
+            <OriginalContentBlock
+              title={expandedContentTitle ?? ""}
+              body={expandedContentBody ?? ""}
+            />
+          </Animated.View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View
       testID="transaction-review-row"
