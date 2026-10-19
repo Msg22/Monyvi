@@ -159,6 +159,35 @@ Deno.test(
 );
 
 Deno.test(
+  "T012 v2 Egyptian spoken pounds require separate exact proof, not account or preferred guess",
+  () => {
+    const instruction = buildVoiceReviewV2Instructions(
+      makeReviewRequestContext()
+    );
+    for (const term of ["جنيه", "جنيهات", "جنيه مصري", "gneh", "gnih"]) {
+      assert.ok(instruction.includes(term));
+    }
+    assert.match(instruction, /candidateCodes \["EGP"\]/);
+    assert.match(instruction, /financial currency to "EGP"/);
+    assert.match(instruction, /original_transcript/);
+    assert.match(instruction, /UTF-16/);
+    assert.match(instruction, /separate 120 and 75 rows/);
+    assert.match(instruction, /first\/second occurrence/);
+    assert.match(instruction, /sterling means GBP, NOT EGP/);
+    assert.match(instruction, /Unqualified English pounds.*ambiguous/);
+    assert.match(instruction, /conflicting or unsupported/);
+    assert.match(
+      instruction,
+      /Never infer currency from any suggested\/matched account ID/
+    );
+    assert.match(
+      instruction,
+      /Use omitted currencyEvidence only if speech truly omitted it/
+    );
+  }
+);
+
+Deno.test(
   "T012 v2 uses the generated canonical Gemini schema without copying the DTO",
   () => {
     const config = buildVoiceReviewV2GenerationConfig();

@@ -23,6 +23,7 @@ import { createVoiceAccountReviewSession } from "./account-review-source-adapter
 import { uuidV8FromSha256 } from "../../../packages/logic/src/account-review/identity";
 import {
   classifyVoiceReviewV2Response,
+  summarizeVoiceCurrencyDiagnostics,
   projectVoiceFinancialAtSourceIndex,
   attachVoiceReviewSession,
 } from "./ai-voice-parser-review";
@@ -162,6 +163,25 @@ async function buildVoiceReviewNormalizationInput(input: {
     sessionId: uuidV8FromSha256(digest),
     hashProvider,
   };
+}
+
+/** Transient, development-console-only review proof summary. No content logging. */
+function debugVoiceCurrencyReview(input: {
+  readonly classification: ReturnType<typeof classifyVoiceReviewV2Response>;
+  readonly originalTranscript: string;
+  readonly requestKey: string;
+  readonly reviewSession: AccountReviewSession | null;
+}): void {
+  if (!__DEV__) return;
+  logger.debug(
+    "[ai-voice-parser] Currency evidence (dev only)",
+    summarizeVoiceCurrencyDiagnostics({
+      classification: input.classification,
+      originalTranscript: input.originalTranscript,
+      requestKey: input.requestKey,
+      finalSession: input.reviewSession,
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -671,6 +691,13 @@ export async function parseVoiceWithAi(
       classification === null ||
       originalFinancialRows.length !== results.length
     ) {
+      if (classification !== null)
+        debugVoiceCurrencyReview({
+          classification,
+          originalTranscript,
+          requestKey: options.requestKey,
+          reviewSession: null,
+        });
       return {
         kind: "schema",
         message:
@@ -707,13 +734,26 @@ export async function parseVoiceWithAi(
         };
       }
       await assertVoiceReviewOwner(ownedReview.ownerId);
-      return attachVoiceReviewSession({
+      const attached = attachVoiceReviewSession({
         success,
         reviewSession,
         expectedOwnerId: ownedReview.ownerId,
         expectedSessionId: input.sessionId,
       });
+      debugVoiceCurrencyReview({
+        classification,
+        originalTranscript,
+        requestKey: options.requestKey,
+        reviewSession: attached.reviewSession ?? null,
+      });
+      return attached;
     } catch (reviewError: unknown) {
+      debugVoiceCurrencyReview({
+        classification,
+        originalTranscript,
+        requestKey: options.requestKey,
+        reviewSession: null,
+      });
       // No raw provider, transcript, category, account or Zod issue payload.
       logger.warn("[ai-voice-parser] Review session unavailable", {
         reasonCode: "review_session_unavailable",

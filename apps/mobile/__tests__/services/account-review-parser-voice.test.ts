@@ -49,6 +49,7 @@ const mockInvoke = jest.fn<
   [name: string, options: MockFunctionOptions]
 >();
 const mockScopedUser = jest.fn<Promise<void>, [userId: string]>();
+const mockLoggerDebug = jest.fn<void, [message: string, details?: unknown]>();
 const mockLoggerWarn = jest.fn<void, [message: string, details?: unknown]>();
 const mockLoggerError = jest.fn<
   void,
@@ -70,11 +71,18 @@ const mockStableSession: Session = {
   },
 };
 
-jest.mock("expo-crypto", () => ({
-  randomUUID: (): string => "00000000-0000-4000-8000-000000000199",
-  digestStringAsync: (): Promise<string> => Promise.resolve("f".repeat(64)),
-  CryptoDigestAlgorithm: { SHA256: "SHA256" },
-}));
+jest.mock("expo-crypto", () => {
+  const crypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    randomUUID: (): string => "00000000-0000-4000-8000-000000000199",
+    digestStringAsync: (_algorithm: unknown, value: string): Promise<string> =>
+      Promise.resolve(
+        crypto.createHash("sha256").update(value, "utf8").digest("hex")
+      ),
+    CryptoDigestAlgorithm: { SHA256: "SHA256" },
+  };
+});
 
 jest.mock("@/services/supabase", () => ({
   getStableAuthSession: (): Promise<{
@@ -125,7 +133,8 @@ jest.mock("@/config/sms-safeguard-qa-config", () => ({
 
 jest.mock("@/utils/logger", () => ({
   logger: {
-    debug: jest.fn(),
+    debug: (message: string, details?: unknown): void =>
+      mockLoggerDebug(message, details),
     info: jest.fn(),
     warn: (message: string, details?: unknown): void =>
       mockLoggerWarn(message, details),
@@ -519,6 +528,226 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     expect(row?.assignment.state).toBe("unresolved");
     expect(row?.selected).toBe(false);
     expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("two distinct Arabic amounts have independently grounded Egyptian جنيه proof, never display fallback", async () => {
+    const privateMarker = "PRIVATE_SYNTHETIC_VOICE_MARKER";
+    // Emoji before the denominations makes JS indexOf exercise UTF-16 offsets.
+    const original =
+      "🛒 " + privateMarker + " دفعت ١٢٠ جنيه مواصلات و٧٥ جنيه أكل";
+    const firstOffset = original.indexOf("جنيه");
+    const secondOffset = original.lastIndexOf("جنيه");
+    if (firstOffset < 0 || secondOffset <= firstOffset)
+      throw new Error("Missing distinct synthetic Egyptian-pound witnesses");
+    const base = explicitVoiceResponse();
+    const first = base.transactions[0];
+    if (!first) throw new Error("Missing synthetic v2 financial row");
+    const currencyRow = (
+      amount: number,
+      start: number,
+      index: number
+    ): ReturnType<typeof explicitVoiceResponse>["transactions"][number] => ({
+      ...first,
+      transactionRef: "synthetic-egp-row-" + index,
+      amount,
+      description: "Synthetic Arabic purchase " + index,
+      counterparty: null,
+      accountId: null,
+      currency: "EGP",
+      suggestionRef: null,
+      toAccountEvidence: null,
+      accountEvidence: {
+        state: "absent" as const,
+        name: null,
+        type: null,
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        evidenceSpans: [],
+        candidateAccountIds: [],
+      },
+      currencyEvidence: {
+        state: "explicit" as const,
+        statedCode: "EGP",
+        candidateCodes: ["EGP"],
+        evidenceSpans: [
+          {
+            sourceRef: mockVoiceRequestKey,
+            field: "transcript" as const,
+            start,
+            end: start + "جنيه".length,
+            text: "جنيه",
+          },
+        ],
+      },
+    });
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        ...base,
+        transcript: "I paid 120 Egyptian pounds for transport and 75 for food",
+        original_transcript: original,
+        detected_language: "ar",
+        transactions: [
+          currencyRow(120, firstOffset, 0),
+          currencyRow(75, secondOffset, 1),
+        ],
+        suggestedAccounts: [],
+      },
+      error: null,
+    });
+    const result = await parseVoiceWithAi(voiceOptions());
+    if (isVoiceParserError(result))
+      throw new Error("Grounded synthetic Arabic Voice rows rejected");
+    expect(result.transactions.map((row) => row.amount)).toEqual([120, 75]);
+    expect(result.transactions.map((row) => row.currency)).toEqual([
+      "EGP",
+      "EGP",
+    ]);
+    const session = requireReviewSession(result);
+    expect(session.rows).toHaveLength(2);
+    expect(session.rows.map((row) => row.transaction.amount)).toEqual([
+      120, 75,
+    ]);
+    for (const [index, row] of session.rows.entries()) {
+      expect(row.currency).toEqual({
+        state: "known",
+        code: "EGP",
+        origin: "explicit",
+      });
+      expect(row.reviewReasons).not.toContain("currency_confirmation_needed");
+      const expectedStart = index === 0 ? firstOffset : secondOffset;
+      expect(original.slice(expectedStart, expectedStart + 4)).toBe("جنيه");
+    }
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    if (__DEV__) {
+      expect(mockLoggerDebug).toHaveBeenCalledTimes(1);
+      const diagnostic = mockLoggerDebug.mock.calls[0]?.[1];
+      expect(diagnostic).toMatchObject({
+        classifier: "v2",
+        financialCount: 2,
+        advisoryCount: 2,
+        transcriptEqual: true,
+        evidenceStates: { explicit: 2 },
+        spans: { checked: 2, sourceMatches: 2, utf16Matches: 2, bothMatch: 2 },
+        normalized: { knownExplicit: 2 },
+      });
+      const safePayload = JSON.stringify(mockLoggerDebug.mock.calls);
+      expect(safePayload).not.toContain(privateMarker);
+      expect(safePayload).not.toContain(mockVoiceRequestKey);
+      expect(safePayload).not.toContain("١٢٠");
+      expect(safePayload).not.toContain("جنيه");
+    } else {
+      expect(mockLoggerDebug).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps opted-in Voice success but emits no currency diagnostics when __DEV__ is false", async () => {
+    const previousDev = __DEV__;
+    try {
+      expect(Reflect.set(globalThis, "__DEV__", false)).toBe(true);
+      expect(__DEV__).toBe(false);
+      mockInvoke.mockResolvedValueOnce({
+        data: explicitVoiceResponse(),
+        error: null,
+      });
+      const result = await parseVoiceWithAi(voiceOptions());
+      if (isVoiceParserError(result))
+        throw new Error("Valid opted-in Voice response must succeed");
+      expect(result.transactions).toHaveLength(1);
+      expect(requireReviewSession(result).rows[0]?.currency).toEqual({
+        state: "known",
+        code: "EGP",
+        origin: "explicit",
+      });
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockLoggerDebug).not.toHaveBeenCalled();
+    } finally {
+      Reflect.set(globalThis, "__DEV__", previousDev);
+    }
+  });
+
+  it("unsupported Voice denomination remains blocked while mapped financial EGP is only display", async () => {
+    const base = explicitVoiceResponse();
+    const first = base.transactions[0];
+    if (!first) throw new Error("Missing synthetic v2 row");
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        ...base,
+        suggestedAccounts: [],
+        transactions: [
+          {
+            ...first,
+            suggestionRef: null,
+            currency: null,
+            currencyEvidence: {
+              state: "unsupported",
+              statedCode: "XYZ",
+              candidateCodes: [],
+              evidenceSpans: [],
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const result = await parseVoiceWithAi(voiceOptions());
+    if (isVoiceParserError(result))
+      throw new Error("Unsupported currency erased finance");
+    expect(result.transactions[0]?.currency).toBe("EGP");
+    const row = requireReviewSession(result).rows[0];
+    expect(row?.currency).toMatchObject({
+      state: "unconfirmed",
+      reason: "unsupported",
+    });
+    expect(row?.reviewReasons).toContain("currency_confirmation_needed");
+    expect(row?.assignment.state).toBe("unresolved");
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("malformed Voice currency span rejects the advisory without silently confirming EGP", async () => {
+    const base = explicitVoiceResponse();
+    const first = base.transactions[0];
+    const span = first?.currencyEvidence.evidenceSpans[0];
+    if (!first || !span)
+      throw new Error("Missing synthetic grounded currency span");
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        ...base,
+        transactions: [
+          {
+            ...first,
+            currencyEvidence: {
+              ...first.currencyEvidence,
+              evidenceSpans: [{ ...span, text: "WRONG_PRIVATE_SPAN_MARKER" }],
+            },
+          },
+        ],
+      },
+      error: null,
+    });
+    const result = await parseVoiceWithAi(voiceOptions());
+    if (isVoiceParserError(result))
+      throw new Error("Malformed advisory erased finance");
+    const row = requireReviewSession(result).rows[0];
+    expect(row?.currency).toMatchObject({
+      state: "unconfirmed",
+      reason: "legacy_unknown",
+    });
+    expect(row?.reviewReasons).toContain("currency_confirmation_needed");
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    if (__DEV__) {
+      const diagnostic = mockLoggerDebug.mock.calls[0]?.[1];
+      expect(diagnostic).toMatchObject({
+        classifier: "malformed_advisory",
+        normalized: { unconfirmed: { legacy_unknown: 1 } },
+      });
+      const safePayload = JSON.stringify(mockLoggerDebug.mock.calls);
+      expect(safePayload).not.toContain("WRONG_PRIVATE_SPAN_MARKER");
+      expect(safePayload).not.toContain(REVIEW_VOICE_TRANSCRIPT);
+      expect(safePayload).not.toContain(mockVoiceRequestKey);
+    } else {
+      expect(mockLoggerDebug).not.toHaveBeenCalled();
+    }
   });
 
   it("keeps no-options v1 Voice parsing unchanged with reviewSession absent", async () => {
