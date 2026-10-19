@@ -450,27 +450,60 @@ export function DevelopmentToolsSettingsSection({
   isVisible,
   isStartupQaVisible,
   isSmsProviderEvaluationVisible,
+  isReviewTranscriptFixturesVisible,
   chevronColor,
   onQaSmsPatternIntakePress,
   onStartupQaPress,
   onSmsProviderEvaluationPress,
+  onReviewTranscriptFixturesPress,
 }: {
   readonly t: TranslateFn;
   readonly isVisible: boolean;
   readonly isStartupQaVisible: boolean;
   readonly isSmsProviderEvaluationVisible: boolean;
+  readonly isReviewTranscriptFixturesVisible: boolean;
   readonly chevronColor: string;
   readonly onQaSmsPatternIntakePress: () => void;
   readonly onStartupQaPress: () => void;
   readonly onSmsProviderEvaluationPress: () => void;
+  readonly onReviewTranscriptFixturesPress: () => void;
 }): React.JSX.Element | null {
-  if (!isVisible && !isStartupQaVisible && !isSmsProviderEvaluationVisible) {
+  if (
+    !isVisible &&
+    !isStartupQaVisible &&
+    !isSmsProviderEvaluationVisible &&
+    !isReviewTranscriptFixturesVisible
+  ) {
     return null;
   }
 
   return (
     <View className="mb-8">
       <SectionLabel>{t("development_tools")}</SectionLabel>
+
+      {isReviewTranscriptFixturesVisible && (
+        <TouchableOpacity
+          testID="review-transcript-fixtures-settings-link"
+          onPress={onReviewTranscriptFixturesPress}
+          className="mb-2 flex-row items-center justify-between rounded-2xl bg-white p-4 dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="mic-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("review_transcript_fixtures")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("review_transcript_fixtures_description")}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
 
       {isVisible && (
         <TouchableOpacity

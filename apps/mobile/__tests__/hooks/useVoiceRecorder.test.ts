@@ -12,7 +12,7 @@ import {
   mockRequestPermissions,
   mockGetPermissions,
   mockSetAudioModeAsync,
-  mockDeleteAsync,
+  mockFileDelete,
   mountedUnmounts,
   unwrap,
   renderHook,
@@ -533,7 +533,7 @@ describe("useVoiceRecorder", () => {
         await unwrap(result).discard();
       });
 
-      expect(mockDeleteAsync).toHaveBeenCalled();
+      expect(mockFileDelete).toHaveBeenCalled();
       expect(mockRelease).toHaveBeenCalled();
       expect(unwrap(result).status).toBe("idle");
       expect(unwrap(result).audioUri).toBeNull();
@@ -616,9 +616,8 @@ describe("useVoiceRecorder", () => {
         expect(mockRecord).not.toHaveBeenCalled();
         expect(mockStop).not.toHaveBeenCalled();
         expect(mockRelease).toHaveBeenCalledTimes(1);
-        expect(mockDeleteAsync).toHaveBeenCalledWith(
-          "file:///tmp/recording.m4a",
-          { idempotent: true }
+        expect(mockFileDelete).toHaveBeenCalledWith(
+          "file:///tmp/recording.m4a"
         );
         expect(jest.getTimerCount()).toBe(0);
       }
@@ -639,7 +638,7 @@ describe("useVoiceRecorder", () => {
       });
 
       expect(mockStop).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).not.toHaveBeenCalled();
+      expect(mockFileDelete).not.toHaveBeenCalled();
       expect(mockRelease).not.toHaveBeenCalled();
 
       await actAsync(async (): Promise<void> => {
@@ -648,10 +647,7 @@ describe("useVoiceRecorder", () => {
         await Promise.resolve();
       });
 
-      expect(mockDeleteAsync).toHaveBeenCalledWith(
-        "file:///tmp/recording.m4a",
-        { idempotent: true }
-      );
+      expect(mockFileDelete).toHaveBeenCalledWith("file:///tmp/recording.m4a");
       expect(mockRelease).toHaveBeenCalledTimes(1);
     });
 
@@ -676,7 +672,7 @@ describe("useVoiceRecorder", () => {
       });
 
       expect(mockStop).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).not.toHaveBeenCalled();
+      expect(mockFileDelete).not.toHaveBeenCalled();
 
       await actAsync(async (): Promise<void> => {
         nativeStop.resolve(undefined);
@@ -687,7 +683,7 @@ describe("useVoiceRecorder", () => {
       });
 
       expect(mockStop).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+      expect(mockFileDelete).toHaveBeenCalledTimes(1);
       expect(mockRelease).toHaveBeenCalledTimes(1);
     });
 
@@ -719,7 +715,7 @@ describe("useVoiceRecorder", () => {
         await Promise.resolve();
       });
 
-      expect(mockDeleteAsync).not.toHaveBeenCalled();
+      expect(mockFileDelete).not.toHaveBeenCalled();
       expect(mockRelease).not.toHaveBeenCalled();
 
       await actAsync(async (): Promise<void> => {
@@ -730,10 +726,7 @@ describe("useVoiceRecorder", () => {
       });
 
       expect(mockStop).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).toHaveBeenCalledWith(
-        "file:///tmp/recording.m4a",
-        { idempotent: true }
-      );
+      expect(mockFileDelete).toHaveBeenCalledWith("file:///tmp/recording.m4a");
       expect(mockRelease).toHaveBeenCalledTimes(1);
     });
 

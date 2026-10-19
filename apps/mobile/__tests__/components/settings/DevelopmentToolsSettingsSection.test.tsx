@@ -15,10 +15,12 @@ describe("DevelopmentToolsSettingsSection", () => {
         isVisible
         isStartupQaVisible={false}
         isSmsProviderEvaluationVisible={false}
+        isReviewTranscriptFixturesVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={onQaSmsPatternIntakePress}
         onStartupQaPress={jest.fn()}
         onSmsProviderEvaluationPress={jest.fn()}
+        onReviewTranscriptFixturesPress={jest.fn()}
       />
     );
 
@@ -39,10 +41,12 @@ describe("DevelopmentToolsSettingsSection", () => {
         isVisible={false}
         isStartupQaVisible
         isSmsProviderEvaluationVisible={false}
+        isReviewTranscriptFixturesVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={jest.fn()}
         onStartupQaPress={onStartupQaPress}
         onSmsProviderEvaluationPress={jest.fn()}
+        onReviewTranscriptFixturesPress={jest.fn()}
       />
     );
 
@@ -60,14 +64,49 @@ describe("DevelopmentToolsSettingsSection", () => {
         isVisible={false}
         isStartupQaVisible={false}
         isSmsProviderEvaluationVisible={false}
+        isReviewTranscriptFixturesVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={jest.fn()}
         onStartupQaPress={jest.fn()}
         onSmsProviderEvaluationPress={jest.fn()}
+        onReviewTranscriptFixturesPress={jest.fn()}
       />
     );
 
     expect(screen.queryByText("development_tools")).toBeNull();
     expect(screen.queryByText("qa_sms_pattern_intake")).toBeNull();
+    expect(
+      screen.queryByTestId("review-transcript-fixtures-settings-link")
+    ).toBeNull();
+  });
+
+  it("shows the dev-only review transcript fixtures link and opens it", () => {
+    const onReviewTranscriptFixturesPress = jest.fn();
+    render(
+      <DevelopmentToolsSettingsSection
+        t={t}
+        isVisible={false}
+        isStartupQaVisible={false}
+        isSmsProviderEvaluationVisible={false}
+        isReviewTranscriptFixturesVisible
+        chevronColor="#64748b"
+        onQaSmsPatternIntakePress={jest.fn()}
+        onStartupQaPress={jest.fn()}
+        onSmsProviderEvaluationPress={jest.fn()}
+        onReviewTranscriptFixturesPress={onReviewTranscriptFixturesPress}
+      />
+    );
+
+    expect(screen.getByText("development_tools")).toBeTruthy();
+    expect(screen.getByText("review_transcript_fixtures")).toBeTruthy();
+    expect(
+      screen.getByText("review_transcript_fixtures_description")
+    ).toBeTruthy();
+    expect(screen.queryByText("qa_sms_pattern_intake")).toBeNull();
+
+    fireEvent.press(
+      screen.getByTestId("review-transcript-fixtures-settings-link")
+    );
+    expect(onReviewTranscriptFixturesPress).toHaveBeenCalledTimes(1);
   });
 });

@@ -16,8 +16,8 @@ import {
   mockRelease,
   mockGetPermissions,
   mockSetAudioModeAsync,
-  mockDeleteAsync,
-  mockGetInfoAsync,
+  mockFileDelete,
+  mockFileExists,
   mountedUnmounts,
   unwrap,
   renderHook,
@@ -92,8 +92,8 @@ beforeEach((): void => {
   mockStop.mockReset().mockResolvedValue(undefined);
   mockPrepareToRecordAsync.mockReset().mockResolvedValue(undefined);
   mockSetAudioModeAsync.mockReset().mockResolvedValue(undefined);
-  mockGetInfoAsync.mockReset().mockResolvedValue({ exists: true });
-  mockDeleteAsync.mockReset().mockResolvedValue(undefined);
+  mockFileExists.mockReset().mockReturnValue(true);
+  mockFileDelete.mockReset();
   mockGetPermissions.mockReset().mockResolvedValue({
     granted: true,
     canAskAgain: true,
@@ -132,7 +132,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
     expect(unwrap(result).audioUri).toBe(RETAINED_URI);
     expect(mockRelease).not.toHaveBeenCalled();
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).not.toHaveBeenCalled();
 
     await advanceActiveClock(5_000);
     expect(mockStop).toHaveBeenCalledTimes(1);
@@ -187,23 +187,21 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       // The mock URI getter throws after release, so successful deletion proves
       // the URI was captured while the native recorder still owned it.
       expect(mockRelease).toHaveBeenCalledTimes(1);
-      expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
-      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
-        idempotent: true,
-      });
+      expect(mockFileExists).toHaveBeenCalledWith(RETAINED_URI);
+      expect(mockFileDelete).toHaveBeenCalledTimes(1);
+      expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
       expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
-        mockGetInfoAsync.mock.invocationCallOrder[0]
+        mockFileExists.mock.invocationCallOrder[0]
       );
       expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
-        mockDeleteAsync.mock.invocationCallOrder[0]
+        mockFileDelete.mock.invocationCallOrder[0]
       );
       await advanceActiveClock(1_500);
       expect(mockStop).toHaveBeenCalledTimes(1);
       expect(unwrap(result).status).toBe("error");
       expect(unwrap(result).audioUri).toBeNull();
       expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
-      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+      expect(mockFileDelete).toHaveBeenCalledTimes(1);
       expect(mockRelease).toHaveBeenCalledTimes(1);
       expect(
         clearIntervalSpy.mock.calls.filter(
@@ -225,42 +223,39 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       expect(unwrap(result).status).toBe("idle");
       expect(unwrap(result).audioUri).toBeNull();
       expect(mockStop).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+      expect(mockFileDelete).toHaveBeenCalledTimes(1);
       expect(mockRelease).toHaveBeenCalledTimes(1);
     }
   );
 
-  it("waits for failed-cap audio deletion before starting a replacement", async (): Promise<void> => {
-    const info = deferred<{ exists: boolean }>();
-    mockGetInfoAsync.mockReturnValueOnce(info.promise);
+  it("deletes failed-cap audio synchronously before starting a replacement", async (): Promise<void> => {
     mockStop.mockRejectedValueOnce(new Error("Native stop failed"));
     const { result } = renderHook(() => useVoiceRecorder());
     await approachCap(result);
     await advanceActiveClock(100);
 
     expect(unwrap(result).status).toBe("error");
-    expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
-
-    let restart: Promise<void> = Promise.resolve();
-    actSync((): void => {
-      restart = unwrap(result).start();
-    });
-    await advanceActiveClock(500);
-    expect(mockRecord).toHaveBeenCalledTimes(1);
     expect(mockStop).toHaveBeenCalledTimes(1);
-
-    await actAsync(async (): Promise<void> => {
-      info.resolve({ exists: true });
-      await info.promise;
-      for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
-      jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
-      await restart;
-    });
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
     expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockFileExists).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFileExists.mock.invocationCallOrder[0]
+    );
+    expect(mockFileExists.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFileDelete.mock.invocationCallOrder[0]
+    );
+
+    // File.exists and File.delete are synchronous: deletion finishes BEFORE
+    // a replacement can enter native start. There is no filesystem promise.
+    await startRecordingWithFlush(result);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockRecord).toHaveBeenCalledTimes(2);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecord.mock.invocationCallOrder[1]
+    );
     expect(unwrap(result).status).toBe("recording");
     expect(unwrap(result).audioUri).toBeNull();
   });
@@ -305,7 +300,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     await advanceActiveClock(1_000);
     expect(unwrap(result).status).toBe("recording");
     expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockStop).toHaveBeenCalledTimes(1);
   });
 
@@ -439,7 +434,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
 
     await advanceActiveClock(100);
     const stopCallsAtCap = mockStop.mock.calls.length;
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).not.toHaveBeenCalled();
     expect(mockRelease).not.toHaveBeenCalled();
 
     await advanceActiveClock(2_000);
@@ -454,7 +449,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(unwrap(result).status).toBe("completed");
     expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
     expect(unwrap(result).audioUri).toBe(RETAINED_URI);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).not.toHaveBeenCalled();
   });
 
   it("makes repeated native Stop and cap overlap one finalization", async (): Promise<void> => {
@@ -494,7 +489,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       discard = unwrap(result).discard();
     });
     await advanceActiveClock(200);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).not.toHaveBeenCalled();
 
     await actAsync(async (): Promise<void> => {
       stopped.resolve(undefined);
@@ -503,7 +498,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     });
     expect(stopCallsAtCap).toBe(1);
     expect(mockStop).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(unwrap(result).status).toBe("idle");
     expect(unwrap(result).audioUri).toBeNull();
@@ -527,7 +522,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       await unwrap(result).discard();
     });
     expect(mockStop).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(unwrap(result).audioUri).toBeNull();
     expect(unwrap(result).status).toBe("idle");
   });
@@ -542,7 +537,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
 
     unmount();
     await advanceActiveClock(100);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).not.toHaveBeenCalled();
     expect(mockRelease).not.toHaveBeenCalled();
 
     await actAsync(async (): Promise<void> => {
@@ -554,9 +549,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     });
     expect(stopCallsAtCap).toBe(1);
     expect(mockStop).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
-      idempotent: true,
-    });
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
     expect(mockRelease).toHaveBeenCalledTimes(1);
     actSync((): void => {
       jest.advanceTimersByTime(0);
@@ -586,9 +579,7 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(stopCallsAtCap).toBe(1);
     expect(mockStop).toHaveBeenCalledTimes(1);
     expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
-      idempotent: true,
-    });
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
     expect(unwrap(result).status).toBe("idle");
     expect(unwrap(result).audioUri).toBeNull();
   });
@@ -683,10 +674,8 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       await unwrap(result).reset();
     });
     expect(mockStop).toHaveBeenCalledTimes(stopCallsAtCap);
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
-      idempotent: true,
-    });
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(unwrap(result).status).toBe("idle");
     expect(unwrap(result).audioUri).toBeNull();
@@ -696,17 +685,12 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(unwrap(result).status).toBe("idle");
     expect(unwrap(result).audioUri).toBeNull();
     expect(mockStop).toHaveBeenCalledTimes(stopCallsAtCap);
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
   });
 
   it("suppresses a discarded session completion from its pending cap stop", async (): Promise<void> => {
     const stopped = deferred<void>();
     mockStop.mockImplementationOnce((): Promise<void> => stopped.promise);
-    const cleanupGate = deferred<void>();
-    mockGetInfoAsync.mockImplementationOnce(
-      (): Promise<{ exists: boolean }> =>
-        cleanupGate.promise.then((): { exists: boolean } => ({ exists: true }))
-    );
     const { result } = renderHook(() => useVoiceRecorder());
     await approachCap(result);
     await advanceActiveClock(100);
@@ -718,31 +702,25 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       discarding = unwrap(result).discard();
     });
     await advanceActiveClock(100);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    // The real asynchronous barrier is native Stop, not synchronous File.exists.
+    expect(mockFileDelete).not.toHaveBeenCalled();
+    expect(mockRelease).not.toHaveBeenCalled();
 
     await actAsync(async (): Promise<void> => {
       stopped.resolve(undefined);
       await stopped.promise;
-      for (let index = 0; index < 8; index += 1) {
-        await Promise.resolve();
-      }
-    });
-    expect(unwrap(result).audioUri).toBeNull();
-    expect(unwrap(result).status).not.toBe("completed");
-
-    await actAsync(async (): Promise<void> => {
-      cleanupGate.resolve(undefined);
       await discarding;
     });
     expect(mockStop).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
-      idempotent: true,
-    });
+    expect(mockFileExists).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(unwrap(result).status).toBe("idle");
+    expect(unwrap(result).status).not.toBe("completed");
     expect(unwrap(result).audioUri).toBeNull();
     expect(unwrap(result).durationMs).toBe(0);
   });
+
   it("abandons a warmup Stop before native cleanup when Discard supersedes it", async (): Promise<void> => {
     const stopped = deferred<void>();
     mockStop.mockReturnValueOnce(stopped.promise);
@@ -780,16 +758,9 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(mockRelease).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves superseded failed Start resources for the pending cleanup", async (): Promise<void> => {
+  it("cleans superseded failed Start before admitting a replacement", async (): Promise<void> => {
     const prepare = deferred<void>();
-    const cleanupGate = deferred<void>();
     mockPrepareToRecordAsync.mockReturnValueOnce(prepare.promise);
-    mockGetInfoAsync.mockImplementationOnce(
-      async (): Promise<{ exists: boolean }> => {
-        await cleanupGate.promise;
-        return { exists: true };
-      }
-    );
     const { result } = renderHook(() => useVoiceRecorder());
     const failure = new Error("Superseded preparation failed");
     let starting: Promise<void> = Promise.resolve();
@@ -804,41 +775,35 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     actSync((): void => {
       discarding = unwrap(result).discard();
     });
+    expect(mockFileDelete).not.toHaveBeenCalled();
+    expect(mockRecord).not.toHaveBeenCalled();
+
+    // Preparation is the real async barrier; sync File deletion completes
+    // after native release, before the next Start can record.
     await actAsync(async (): Promise<void> => {
       prepare.reject(failure);
       expect(await failureResult).toBe(failure);
-      for (let index = 0; index < 8; index += 1) {
-        await Promise.resolve();
-      }
+      await discarding;
     });
-    expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockFileExists).toHaveBeenCalledWith(RETAINED_URI);
     expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockFileDelete).toHaveBeenCalledWith(RETAINED_URI);
     expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
-      mockGetInfoAsync.mock.invocationCallOrder[0]
+      mockFileExists.mock.invocationCallOrder[0]
+    );
+    expect(mockFileExists.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFileDelete.mock.invocationCallOrder[0]
     );
     expect(mockRecord).not.toHaveBeenCalled();
 
-    let restarting: Promise<void> = Promise.resolve();
-    actSync((): void => {
-      restarting = unwrap(result).start();
-    });
-    await advanceActiveClock(100);
-    expect(mockPrepareToRecordAsync).toHaveBeenCalledTimes(1);
-    expect(mockRecord).not.toHaveBeenCalled();
-
-    await actAsync(async (): Promise<void> => {
-      cleanupGate.resolve(undefined);
-      await discarding;
-      for (let index = 0; index < 8; index += 1) {
-        await Promise.resolve();
-      }
-      jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
-      await restarting;
-    });
-    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    await startRecordingWithFlush(result);
+    expect(mockPrepareToRecordAsync).toHaveBeenCalledTimes(2);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockRelease).toHaveBeenCalledTimes(1);
     expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(mockFileDelete.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecord.mock.invocationCallOrder[0]
+    );
     expect(unwrap(result).status).toBe("recording");
     expect(unwrap(result).audioUri).toBeNull();
   });
