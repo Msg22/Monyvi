@@ -25,6 +25,7 @@ import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection"
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -354,12 +355,22 @@ export default function AddAccount(): React.ReactNode {
 
           <View testID={"account-default-state-" + defaultState.status}>
             {defaultState.status === "loading" ? (
-              <Text
+              <View
+                testID="account-default-loading-skeleton"
                 accessibilityRole="progressbar"
-                className="mb-3 py-4 text-sm text-text-secondary dark:text-text-secondary-dark"
+                accessibilityLabel={tCommon("loading")}
+                className="mb-3 min-h-11 flex-row items-center justify-between px-1 py-4"
               >
-                {tCommon("loading")}
-              </Text>
+                <Skeleton width={22} height={22} borderRadius={11} />
+                <View className="ms-3 min-w-0 flex-1 gap-2">
+                  <Skeleton width="55%" height={24} borderRadius={6} />
+                  <Skeleton width="85%" height={18} borderRadius={6} />
+                  <Skeleton width="70%" height={18} borderRadius={6} />
+                </View>
+                <View className="ms-3">
+                  <Skeleton width={48} height={28} borderRadius={14} />
+                </View>
+              </View>
             ) : (
               <AccountDefaultField
                 accountType={formData.accountType}

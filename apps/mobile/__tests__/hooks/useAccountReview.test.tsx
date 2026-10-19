@@ -517,6 +517,9 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
         useAccountReview(makeSmsReviewInput())
       );
       await waitFor(() => expect(result.current.session).toEqual(initial));
+      expect(result.current.readModel).not.toBeNull();
+      const verifiedReadModel = result.current.readModel;
+      const verifiedAccounts = result.current.choiceAccounts;
       let failed!: ReturnType<typeof result.current.dispatch>;
       act(() => {
         failed = result.current.dispatch(command);
@@ -529,7 +532,10 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       });
       expect(result.current.session).toEqual(initial);
       expect(result.current.isBusy).toBe(false);
-      expect(result.current.error).toBe(failure);
+      // A recoverable command rejection reaches dispatch, not the fatal view.
+      expect(result.current.error).toBeNull();
+      expect(result.current.readModel).toEqual(verifiedReadModel);
+      expect(result.current.choiceAccounts).toEqual(verifiedAccounts);
       await act(async (): Promise<void> => {
         await result.current.dispatch(command);
       });

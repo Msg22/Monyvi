@@ -6,6 +6,7 @@ import {
   accountReviewCommandSchema,
   accountReviewSessionSchema,
 } from "@monyvi/logic";
+import type React from "react";
 import i18next from "i18next";
 import enTransactions from "@/locales/en/transactions.json";
 import type { UseAccountReviewResult } from "@/hooks/useAccountReview";
@@ -141,4 +142,154 @@ export function makeUnconfirmedCurrencyReview(
       },
     ],
   });
+}
+
+/** Canonical compact row host with the visible-index discard callback. */
+export function renderCanonicalReviewTransactionItem({
+  onPress,
+  onDiscard,
+  isSelected,
+  index,
+  accountReview,
+  accountName,
+}: {
+  index: number;
+  isSelected: boolean;
+  onDiscard?: (visibleIndex: number, wasSelected: boolean) => void;
+  onPress: (index: number) => void;
+  accountName: string | null;
+  accountReview: {
+    onChooseAccount: (rowId: string) => void;
+    onChooseCurrency: (rowId: string, context: string) => void;
+    rowId: string;
+    accountStatusTone?: string;
+    accountStatusLabel?: string | null;
+  };
+}): React.JSX.Element {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const RN = jest.requireActual<typeof import("react-native")>("react-native");
+  return ReactActual.createElement(
+    RN.View,
+    null,
+    onDiscard
+      ? ReactActual.createElement(
+          RN.TouchableOpacity,
+          {
+            testID: "sms-review-discard-" + index,
+            onPress: () => onDiscard(index, isSelected),
+          },
+          ReactActual.createElement(RN.Text, null, "Discard")
+        )
+      : null,
+    ReactActual.createElement(
+      RN.Text,
+      {
+        testID: "pr-account-tone-" + index,
+      },
+      accountReview.accountStatusTone ?? "neutral"
+    ),
+    ReactActual.createElement(
+      RN.Text,
+      {
+        testID: "pr-source-account-" + index,
+      },
+      accountName ?? ""
+    ),
+    ReactActual.createElement(
+      RN.Text,
+      { testID: "pr-account-status-" + index },
+      accountReview.accountStatusLabel ?? ""
+    ),
+    ReactActual.createElement(
+      RN.TouchableOpacity,
+      { testID: "canonical-edit-row", onPress: () => onPress(index) },
+      ReactActual.createElement(RN.Text, null, "Row")
+    ),
+    ReactActual.createElement(
+      RN.TouchableOpacity,
+      {
+        testID: "canonical-choose-account",
+        onPress: () => accountReview.onChooseAccount(accountReview.rowId),
+      },
+      ReactActual.createElement(RN.Text, null, "Account")
+    ),
+    ReactActual.createElement(
+      RN.TouchableOpacity,
+      {
+        testID: "canonical-choose-currency",
+        onPress: () =>
+          accountReview.onChooseCurrency(accountReview.rowId, "context"),
+      },
+      ReactActual.createElement(RN.Text, null, "Currency")
+    )
+  );
+}
+
+/** Source and Cash are two distinct owned SMS ATM endpoints. */
+export function makeExistingT025AtmChoiceReview(): {
+  readonly session: AccountReviewSession;
+  readonly owned: ReturnType<typeof makeOwnedContext>["accounts"];
+  readonly bank: ReturnType<typeof makeOwnedContext>["accounts"][number];
+  readonly cash: ReturnType<typeof makeOwnedContext>["accounts"][number];
+} {
+  const sourceSession = makeT025ReviewSession();
+  const row = sourceSession.rows[0];
+  const owned = makeOwnedContext().accounts;
+  const bank = owned.find((account) => account.type === "BANK");
+  const cash = owned.find((account) => account.type === "CASH");
+  if (!row || !bank || !cash)
+    throw new Error("missing_real_owned_atm_endpoints");
+  const session = accountReviewSessionSchema.parse({
+    ...sourceSession,
+    groups: [],
+    rows: [
+      {
+        ...row,
+        assignment: {
+          state: "existing",
+          accountId: bank.id,
+          origin: "user",
+          currency: "EGP",
+          identityRevision: "0",
+        },
+        toAssignment: {
+          state: "existing",
+          accountId: cash.id,
+          origin: "user",
+          currency: "EGP",
+          identityRevision: "0",
+        },
+        transaction: {
+          ...row.transaction,
+          isAtmWithdrawal: true,
+          toAccountId: cash.id,
+        },
+        reviewReasons: [],
+      },
+    ],
+  });
+  return { session, owned, bank, cash };
+}
+
+/** Visible index zero still maps to original SMS index one. */
+export function makeSelectedSecondT025Review(): {
+  readonly original: AccountReviewSession;
+  readonly filtered: AccountReviewSession;
+} {
+  const original = makeT025ReviewSession(
+    T025_IDS.queue,
+    [makeT025SmsOriginal(0), makeT025SmsOriginal(1)],
+    [T025_IDS.rowOne, T025_IDS.rowTwo]
+  );
+  return {
+    original,
+    filtered: accountReviewSessionSchema.parse({
+      ...original,
+      filter: "selected",
+      rows: original.rows.map((row, index) => ({
+        ...row,
+        selected: index === 1,
+      })),
+    }),
+  };
 }

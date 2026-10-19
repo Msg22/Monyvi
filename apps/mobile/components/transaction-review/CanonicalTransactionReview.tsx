@@ -4,26 +4,23 @@ import {
   type AccountReviewRow,
   type AccountReviewCommand,
 } from "@monyvi/logic";
+import { getExplicitAccountCurrencyOptions } from "../../../../packages/logic/src/account-review/candidates";
+import { prepareAccountReviewManualSourceDraft } from "@/services/account-review-manual-draft-service";
 import {
-  ACCOUNT_REVIEW_ACCOUNT_TYPES,
-  ACCOUNT_REVIEW_CURRENCIES,
-} from "../../../../packages/logic/src/account-review/generated-vocabulary";
+  preselectedOwnedAccountId,
+  reviewGroupChoiceRole,
+  renderAccountReviewChoiceSheets,
+  type ReviewChoice,
+} from "./account-review-choice-controller";
 import {
   accountType,
   currencyCode,
 } from "../../../../packages/logic/src/account-review/schema-primitives";
 import { useAccountReview } from "@/hooks/useAccountReview";
 import { useToast } from "@/components/ui/Toast";
-import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AccountReviewPanel } from "./AccountReviewPanel";
-import { AccountChoiceSheet } from "./AccountChoiceSheet";
-import { CurrencyConfirmationSheet } from "./CurrencyConfirmationSheet";
-import { EditSuggestedAccountSheet } from "./EditSuggestedAccountSheet";
 import {
   type ReviewIssueKey,
-  type ReviewChoiceStamp,
-  presentReviewAccountChoices,
-  presentReviewCurrencyOptions,
   presentReviewDefaultAccountName,
   presentReviewIssues,
   intersectGuardedGroupAccountChoices,
@@ -32,8 +29,6 @@ import {
   isReviewChoiceFresh,
   presentReviewTransactionContext,
   presentCanonicalRowDetails,
-  presentReviewReplaceScope,
-  presentReviewCurrencyLabel,
   presentReviewGroup,
 } from "./shared-account-presentation";
 import React, { useEffect, useRef, useState } from "react";
@@ -68,24 +63,6 @@ type ReviewTransactionEditPatch = Extract<
   { kind: "edit_row_transaction" }
 >["patch"];
 
-type ReviewChoice =
-  | ((
-      | {
-          readonly kind: "row";
-          readonly rowId: string;
-          readonly role: "source" | "destination";
-        }
-      | { readonly kind: "replace"; readonly groupId: string }
-      | {
-          readonly kind: "currency" | "picker";
-          readonly rowId: string;
-          readonly context: string;
-        }
-      | { readonly kind: "edit"; readonly groupId: string }
-    ) &
-      ReviewChoiceStamp)
-  | null;
-
 export function CanonicalAccountReview(
   props: TransactionReviewProps & {
     readonly boundary: AccountReviewRuntimeBoundary;
@@ -108,10 +85,13 @@ export function CanonicalAccountReview(
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [showDefaultWhy, setShowDefaultWhy] = useState(false);
   const [busySave, setBusySave] = useState(false);
+  const [preparingDraft, setPreparingDraft] = useState(false);
+  const draftInFlight = useRef(false);
+  const draftEpoch = useRef(0);
 
   const session = view.session;
   const model = view.readModel;
-  const busy = view.isBusy || props.isSaving || busySave;
+  const busy = view.isBusy || props.isSaving || busySave || preparingDraft;
   useEffect(() => {
     props.boundary.onSessionChange?.(session);
   }, [props.boundary.onSessionChange, session]);
@@ -341,11 +321,26 @@ export function CanonicalAccountReview(
   ): void => {
     const row = rows.get(rowId);
     if (!row || !session || busy) return;
-    if (row.currency.state === "unconfirmed") {
-      openCurrency(rowId);
-      return;
+    const endpoint = role === "source" ? row.assignment : row.toAssignment;
+    if (endpoint?.state === "suggested") {
+      const existingDraft = groups.get(endpoint.groupId);
+      if (existingDraft && existingDraft.status !== "removed") {
+        setChoice({
+          ...reviewChoiceStamp(session, existingDraft.revision),
+          kind: "edit",
+          groupId: existingDraft.groupId,
+        });
+        return;
+      }
     }
-    setCandidateId(null);
+    const candidates = getExplicitAccountCurrencyOptions({
+      session,
+      rowId,
+      role,
+      ownedAccounts: view.choiceAccounts,
+    });
+    // Never select the first candidate automatically.
+    setCandidateId(preselectedOwnedAccountId(row, role, candidates));
     setChoice({
       ...reviewChoiceStamp(session, row.revision),
       kind: "row",
@@ -370,29 +365,50 @@ export function CanonicalAccountReview(
     });
   };
   const eligibleCandidates =
-    activeChoice?.kind === "row" && currentRow
-      ? view.getAccountCandidates(currentRow.rowId, activeChoice.role)
-      : activeChoice?.kind === "replace" && currentGroup
+    activeChoice?.kind === "row" && currentRow && session
+      ? getExplicitAccountCurrencyOptions({
+          session,
+          rowId: currentRow.rowId,
+          role: activeChoice.role,
+          ownedAccounts: view.choiceAccounts,
+        })
+      : activeChoice?.kind === "replace" && currentGroup && session
         ? intersectGuardedGroupAccountChoices(
             currentGroup.linkedRowIds,
             currentGroup.type,
-            view.getAccountCandidates
+            view.getAccountCandidates,
+            reviewGroupChoiceRole(session.source, currentGroup)
           )
         : [];
+  const canCreateDraft =
+    activeChoice?.kind === "row" &&
+    currentRow?.currency.state === "known" &&
+    (activeChoice.role === "source"
+      ? currentRow.assignment.state === "unresolved"
+      : currentRow.toAssignment?.state === "unresolved") &&
+    view.getAccountCandidates(currentRow.rowId, activeChoice.role).length === 0;
+
   const useAccount = (): void => {
-    if (
-      !scope ||
-      !candidateId ||
-      !eligibleCandidates.some((candidate) => candidate.id === candidateId)
-    )
-      return;
+    if (!scope || !candidateId) return;
+    const candidate = eligibleCandidates.find((a) => a.id === candidateId);
+    if (!candidate) return;
     if (activeChoice?.kind === "row" && currentRow) {
       send({
         ...scope,
-        kind: "choose_row_account",
+        kind: "confirm_row_account_and_currency",
         rowId: currentRow.rowId,
         expectedRowRevision: currentRow.revision,
-        accountId: candidateId,
+        role: activeChoice.role,
+        accountId: candidate.id,
+        acknowledgedCurrency: candidate.currency,
+        expectedAccountIdentity: {
+          name: candidate.name,
+          type: candidate.type,
+          currency: candidate.currency,
+          institutionId: candidate.institutionId,
+          providerDisplayName: candidate.providerDisplayName,
+          cardLast4: candidate.cardLast4,
+        },
       });
     } else if (activeChoice?.kind === "replace" && currentGroup) {
       send({
@@ -400,11 +416,59 @@ export function CanonicalAccountReview(
         kind: "replace_group_account",
         groupId: currentGroup.groupId,
         expectedGroupRevision: currentGroup.revision,
-        accountId: candidateId,
+        accountId: candidate.id,
         disclosedLinkedRowCount: currentGroup.linkedRowIds.length,
       });
     }
     setChoice(null);
+  };
+
+  const submitManualDraft = async (
+    identity: Extract<
+      AccountReviewCommand,
+      { kind: "create_row_account_draft" }
+    >["identity"]
+  ): Promise<void> => {
+    if (
+      !scope ||
+      !session ||
+      !currentRow ||
+      !canCreateDraft ||
+      activeChoice?.kind !== "row" ||
+      busy ||
+      draftInFlight.current
+    )
+      return;
+    draftInFlight.current = true;
+    setPreparingDraft(true);
+    const epoch = draftEpoch.current;
+    try {
+      const manualDraft = await prepareAccountReviewManualSourceDraft({
+        session,
+        row: currentRow,
+        role: activeChoice.role,
+        identity,
+      });
+      if (props.boundary.input.signal?.aborted || draftEpoch.current !== epoch)
+        return;
+      const command = accountReviewCommandSchema.parse({
+        ...scope,
+        kind: "create_row_account_draft",
+        rowId: currentRow.rowId,
+        expectedRowRevision: currentRow.revision,
+        role: activeChoice.role,
+        identity,
+        manualDraft,
+      });
+      const result = await view.dispatch(command);
+      if (result.reasonCodes.length > 0) showCommandFailure("warning");
+      else setChoice(null);
+    } catch {
+      showCommandFailure("error");
+    } finally {
+      draftInFlight.current = false;
+      setPreparingDraft(false);
+    }
   };
   const confirmCurrency = (currency: string | null): void => {
     if (
@@ -424,7 +488,6 @@ export function CanonicalAccountReview(
     });
     setChoice(null);
   };
-  const useCurrency = (): void => confirmCurrency(currencySelection);
   const recoverIssue = (key: ReviewIssueKey): void => {
     if (busy) return;
     const target = presentIssueRecoveryTarget(session?.rows ?? [], key);
@@ -525,15 +588,6 @@ export function CanonicalAccountReview(
     issueLabels: issues.map((issue) => issue.label),
     issues,
   };
-  const choiceAccountOptions = presentReviewAccountChoices(
-    eligibleCandidates,
-    language
-  );
-  const checkedCurrency = currencyCode.safeParse(currencySelection);
-  const currencyOptions = presentReviewCurrencyOptions(
-    currentRow?.currency,
-    checkedCurrency.success ? checkedCurrency.data : null
-  );
   const renderRow = ({
     item: row,
     index,
@@ -549,9 +603,20 @@ export function CanonicalAccountReview(
       row,
       linked,
       view.choiceAccounts,
-      language
+      language,
+      row.toAssignment?.state === "suggested"
+        ? (groups.get(row.toAssignment.groupId) ?? null)
+        : null
     );
     const content = getExpandedContent(row.transaction);
+    const originalSmsIndex =
+      row.source === "SMS"
+        ? props.transactions.findIndex(
+            (transaction) =>
+              "smsFingerprint" in transaction &&
+              transaction.smsFingerprint === row.sourceFingerprint
+          )
+        : -1;
     return (
       <View>
         <TransactionItem
@@ -569,6 +634,19 @@ export function CanonicalAccountReview(
             row.assignment.state === "unresolved"
           }
           isSmsWorkspace={props.workspaceVariant === "sms"}
+          onDiscard={
+            row.source === "SMS" &&
+            props.workspaceVariant === "sms" &&
+            props.onDiscardItem &&
+            originalSmsIndex >= 0
+              ? (_visibleIndex, wasSelected) => {
+                  // The list index changes with filters. Keep SMS draft removal
+                  // pinned to the original source fingerprint and selection.
+                  if (!busy)
+                    void props.onDiscardItem?.(originalSmsIndex, wasSelected);
+                }
+              : undefined
+          }
           accountReview={{
             rowId: row.rowId,
             accountActionLabel: details.accountActionLabel,
@@ -726,87 +804,56 @@ export function CanonicalAccountReview(
           }
         }}
         onDiscard={props.onDiscard}
-        hideDiscard={props.workspaceVariant === "sms"}
         isSmsWorkspace={props.workspaceVariant === "sms"}
         onReviewLater={props.onReviewLater}
       />
-      <AccountChoiceSheet
-        visible={
-          activeChoice?.kind === "row" || activeChoice?.kind === "replace"
-        }
-        title={
-          activeChoice?.kind === "row" &&
-          currentRow?.source === "SMS" &&
-          currentRow.transaction.isAtmWithdrawal === true
-            ? tTransactions(
-                activeChoice.role === "destination"
-                  ? "to_account"
-                  : "from_account"
-              )
-            : tTransactions("account_review_issue_account")
-        }
-        contextSubtitle={
-          currentGroup?.name ??
-          (currentRow
-            ? presentReviewTransactionContext(currentRow.transaction, language)
-            : undefined)
-        }
-        scopeDisclosure={
-          activeChoice?.kind === "replace" && currentGroup
-            ? presentReviewReplaceScope(
-                currentGroup.name,
-                currentGroup.linkedRowIds.length,
-                language
-              )
-            : ""
-        }
-        candidateOptions={choiceAccountOptions}
-        selectedCandidateId={candidateId}
-        canUseSelection={
-          candidateId !== null &&
-          eligibleCandidates.some((a) => a.id === candidateId)
-        }
-        isBusy={busy}
-        onSelectCandidate={setCandidateId}
-        onUseSelected={useAccount}
-        onClose={() => setChoice(null)}
-      />
-      <CurrencyConfirmationSheet
-        visible={activeChoice?.kind === "currency"}
-        contextSubtitle={
-          activeChoice?.kind === "currency" ? activeChoice.context : ""
-        }
-        candidateOptions={currencyOptions.map((code) => ({
-          code,
-          label: presentReviewCurrencyLabel(code, language),
-          accessibilityLabel:
-            presentReviewCurrencyLabel(code, language) + ", " + code,
-        }))}
-        selectedCandidateCode={currencySelection}
-        canUseSelection={currencyCode.safeParse(currencySelection).success}
-        isBusy={busy}
-        onSelectCandidate={setCurrencySelection}
-        onUseSelected={useCurrency}
-        onChooseAnother={() => {
+      {renderAccountReviewChoiceSheets({
+        activeChoice,
+        currentRow,
+        currentGroup,
+        source: session.source,
+        candidates: eligibleCandidates,
+        selectedCandidateId: candidateId,
+        currencySelection,
+        canCreateDraft,
+        busy,
+        language,
+        tTransactions,
+        tAccounts,
+        onCandidate: setCandidateId,
+        onUseAccount: useAccount,
+        onCreateDraft: (identity) => {
+          void submitManualDraft(identity);
+        },
+        onEditExistingDraft: () => {
+          if (!currentGroup) return;
+          setChoice({
+            ...reviewChoiceStamp(session, currentGroup.revision),
+            kind: "edit",
+            groupId: currentGroup.groupId,
+          });
+        },
+        onClose: () => {
+          draftEpoch.current += 1;
+          setChoice(null);
+        },
+        onCurrencyCandidate: setCurrencySelection,
+        onConfirmCurrency: confirmCurrency,
+        onOpenCurrencyPicker: () => {
           if (activeChoice?.kind === "currency")
             setChoice({ ...activeChoice, kind: "picker" });
-        }}
-        onClose={() => setChoice(null)}
-      />
-      <CurrencyPicker
-        visible={activeChoice?.kind === "picker"}
-        selectedCurrency={
-          currencyCode.safeParse(currencySelection).success
-            ? currencyCode.parse(currencySelection)
-            : null
-        }
-        allowedCurrencies={ACCOUNT_REVIEW_CURRENCIES}
-        contextSubtitle={
-          activeChoice?.kind === "picker" ? activeChoice.context : undefined
-        }
-        onSelect={confirmCurrency}
-        onClose={() => setChoice(null)}
-      />
+        },
+        onEditGroup: useEdit,
+        onReplaceEditingGroup: () => {
+          if (!currentGroup) return;
+          setCandidateId(null);
+          setChoice({
+            ...reviewChoiceStamp(session, currentGroup.revision),
+            kind: "replace",
+            groupId: currentGroup.groupId,
+          });
+        },
+      })}
       {editingRow && transactionEdit && (
         <TransactionEditModal
           key={
@@ -841,36 +888,6 @@ export function CanonicalAccountReview(
           }
         />
       )}
-      <EditSuggestedAccountSheet
-        visible={activeChoice?.kind === "edit" && currentGroup !== null}
-        groupId={currentGroup?.groupId ?? ""}
-        groupName={currentGroup?.name ?? ""}
-        currentTypeOptionId={currentGroup?.type ?? ""}
-        allowedTypeOptions={ACCOUNT_REVIEW_ACCOUNT_TYPES.map((type) => ({
-          id: type,
-          label: tAccounts("type_" + type.toLowerCase()),
-        }))}
-        lockedCurrencyLabel={currentGroup?.currency ?? ""}
-        identitySummary={
-          currentGroup?.providerDisplayName ?? currentGroup?.institutionId ?? ""
-        }
-        linkedCount={currentGroup?.linkedRowIds.length ?? 0}
-        canSubmit={!busy && currentGroup?.status !== "removed"}
-        isBusy={busy}
-        validationMessage={null}
-        onSubmit={useEdit}
-        onReplace={() => {
-          if (!currentGroup) return;
-          setCandidateId(null);
-          if (session)
-            setChoice({
-              ...reviewChoiceStamp(session, currentGroup.revision),
-              kind: "replace",
-              groupId: currentGroup.groupId,
-            });
-        }}
-        onCancel={() => setChoice(null)}
-      />
     </View>
   );
 }

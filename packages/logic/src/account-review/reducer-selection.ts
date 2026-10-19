@@ -43,11 +43,29 @@ function hardReasonsRemain(row: AccountReviewRow): boolean {
 /** The shared resolver validates Cash ownership, currency, distinct endpoints,
  * default origin and evidence. The ORIGINAL row must also retain that proof;
  * a valid transient resolution cannot authorize selection of stale input. */
-function hasSatisfiedAtmDestination(row: AccountReviewRow): boolean {
-  return (
-    row.source !== "SMS" ||
-    row.transaction.isAtmWithdrawal !== true ||
-    row.toAssignment?.state === "existing"
+function hasSatisfiedAtmDestination(
+  row: AccountReviewRow,
+  groups: readonly AccountReviewGroup[]
+): boolean {
+  if (row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true)
+    return true;
+  const destination = row.toAssignment;
+  if (destination?.state === "existing") return true;
+  if (
+    destination?.state !== "suggested" ||
+    destination.confirmation !== "confirmed" ||
+    row.currency.state !== "known"
+  )
+    return false;
+  const confirmedCurrency = row.currency.code;
+  return groups.some(
+    (group) =>
+      group.groupId === destination.groupId &&
+      group.status === "confirmed" &&
+      group.type === "CASH" &&
+      group.currency === confirmedCurrency &&
+      group.revision === destination.groupRevision &&
+      group.linkedRowIds.includes(row.rowId)
   );
 }
 
@@ -60,7 +78,7 @@ function isReady(
   if (
     row.currency.state !== "known" ||
     row.reviewReasons.length > 0 ||
-    !hasSatisfiedAtmDestination(row)
+    !hasSatisfiedAtmDestination(row, groups)
   )
     return false;
   const assignment = row.assignment;
@@ -214,8 +232,8 @@ export function reduceSelectRow(
     current.currency.state !== "known" ||
     hardReasonsRemain(row) ||
     hardReasonsRemain(current) ||
-    !hasSatisfiedAtmDestination(row) ||
-    !hasSatisfiedAtmDestination(current)
+    !hasSatisfiedAtmDestination(row, session.groups) ||
+    !hasSatisfiedAtmDestination(current, refreshed.groups)
   ) {
     return blocked("account_needed");
   }

@@ -86,11 +86,13 @@ authoritative even when formatting is skipped.
 - **Do not deviate** from the binding UI surface at the declared reference
   context.
 - Do not reproduce explicitly non-binding framing as application UI.
-- At other supported contexts, preserve the approved composition, hierarchy,
-  semantics, and material styling. Controlled reflow, including stacking or
-  spacing changes, is allowed only when measured space or text scale requires it
-  to keep content usable and readable. Follow the centralized responsive
-  breakpoints and validation contract in `AGENTS.md`.
+- At other supported contexts, preserve the approved hierarchy and semantics.
+  Use actual component/container space, readable shrinkable labels and stable
+  44/48 dp action hit areas. Modest typography, icon, control and spacing token
+  adaptations can precede stacking; never disable font scaling or hide financial
+  identity. Shared viewport breakpoints are hints, not forced layout switches.
+  Follow the responsive rule in `AGENTS.md`, with existing checks and owner
+  visual review rather than cosmetic viewport/className test matrices.
 - Do not introduce at the declared reference context, or as an unrequired design
   change elsewhere:
   - Alternative layouts or reflow

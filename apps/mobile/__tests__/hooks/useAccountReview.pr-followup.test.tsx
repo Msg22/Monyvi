@@ -170,6 +170,87 @@ describe("#395 PR396 same-ID SMS retry facade reload", () => {
     expect(mockSmsCommand).not.toHaveBeenCalled();
   });
 
+  it("keeps the validated owned Review usable after a recoverable command rejection and accepts an explicit retry", async () => {
+    const { before } = beforeAndAfterActualQueueMerge();
+    mockBootstrap.mockResolvedValue(before);
+    mockSmsCommand
+      .mockRejectedValueOnce(new Error("transient_review_command_rejected"))
+      .mockImplementationOnce(({ command, accountSnapshots, nextUndoToken }) =>
+        Promise.resolve(
+          reduceAccountReviewCommand({
+            state: before,
+            command,
+            accountSnapshots,
+            nextUndoToken: nextUndoToken ?? null,
+            undo: null,
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useAccountReview(input()));
+    await waitFor(() => expect(result.current.session).toEqual(before));
+    await waitFor(() => expect(result.current.readModel).not.toBeNull());
+    const originalView = result.current.readModel;
+    const originalChoices = result.current.choiceAccounts;
+    expect(originalChoices.length).toBeGreaterThan(0);
+
+    const command = accountReviewCommandSchema.parse({
+      kind: "set_filter",
+      ownerId: before.ownerId,
+      sessionId: before.sessionId,
+      expectedReviewRevision: before.revision,
+      expectedOperationGeneration: before.operationGeneration,
+      filter: "selected",
+    });
+    await act(async () => {
+      await expect(result.current.dispatch(command)).rejects.toThrow(
+        "transient_review_command_rejected"
+      );
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.session).toEqual(before);
+    expect(result.current.readModel).toEqual(originalView);
+    expect(result.current.choiceAccounts).toEqual(originalChoices);
+    expect(mockSmsCommand).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      const accepted = await result.current.dispatch(command);
+      expect(accepted.reasonCodes).toEqual([]);
+      expect(accepted.state.filter).toBe("selected");
+    });
+    expect(mockSmsCommand).toHaveBeenCalledTimes(2);
+    expect(result.current.session?.filter).toBe("selected");
+    expect(result.current.error).toBeNull();
+    expect(result.current.readModel).not.toBeNull();
+    expect(result.current.choiceAccounts).toEqual(originalChoices);
+  });
+
+  it("still blocks stale Review projection and choices after an ownership rejection", async () => {
+    const { before } = beforeAndAfterActualQueueMerge();
+    mockBootstrap.mockResolvedValue(before);
+    mockSmsCommand.mockRejectedValueOnce(new Error("AUTH_SCOPE_CHANGED"));
+    const { result } = renderHook(() => useAccountReview(input()));
+    await waitFor(() => expect(result.current.readModel).not.toBeNull());
+    await act(async () => {
+      await expect(
+        result.current.dispatch(
+          accountReviewCommandSchema.parse({
+            kind: "set_filter",
+            ownerId: before.ownerId,
+            sessionId: before.sessionId,
+            expectedReviewRevision: before.revision,
+            expectedOperationGeneration: before.operationGeneration,
+            filter: "selected",
+          })
+        )
+      ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+    });
+    expect(result.current.error?.message).toBe("AUTH_SCOPE_CHANGED");
+    expect(result.current.readModel).toBeNull();
+    expect(result.current.choiceAccounts).toEqual([]);
+    expect(mockSmsCommand).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a late same-ID retry result after the actor changes, without exposing the old owner's choices", async () => {
     const { before, merged } = beforeAndAfterActualQueueMerge();
     let resolveReload!: (value: AccountReviewSession) => void;

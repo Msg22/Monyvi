@@ -75,11 +75,17 @@ function isLiveMember(
   row: AccountReviewRow | undefined,
   group: AccountReviewGroup
 ): boolean {
+  if (!row) return false;
+  const destination =
+    row.source === "SMS" &&
+    row.transaction.isAtmWithdrawal === true &&
+    group.type === "CASH";
+  const assignment = destination ? row.toAssignment : row.assignment;
   return (
-    row?.assignment.state === "suggested" &&
-    row.assignment.groupId === group.groupId &&
-    row.assignment.groupRevision === group.revision &&
-    row.assignment.confirmation === group.status
+    assignment?.state === "suggested" &&
+    assignment.groupId === group.groupId &&
+    assignment.groupRevision === group.revision &&
+    assignment.confirmation === group.status
   );
 }
 

@@ -54,3 +54,55 @@ export function getAccountReviewAccountCandidates(
     row.currency.code
   ).filter((account) => account.id !== otherId);
 }
+
+/** Opt-in UI projection only. This NEVER feeds automatic/default resolution.
+ * Admission must recheck the selected account against fresh owned snapshots. */
+type ExplicitChoiceAccount = Pick<
+  AccountReviewOwnedContext["accounts"][number],
+  | "id"
+  | "name"
+  | "currency"
+  | "type"
+  | "institutionId"
+  | "providerDisplayName"
+  | "cardLast4"
+>;
+
+export interface GetExplicitAccountCurrencyOptionsInput<
+  T extends ExplicitChoiceAccount,
+> {
+  readonly session: AccountReviewSession;
+  readonly rowId: AccountReviewSession["rows"][number]["rowId"];
+  readonly role: "source" | "destination";
+  readonly ownedAccounts: readonly T[];
+}
+
+export function getExplicitAccountCurrencyOptions<
+  T extends ExplicitChoiceAccount,
+>(input: GetExplicitAccountCurrencyOptionsInput<T>): readonly T[] {
+  const session = accountReviewSessionSchema.parse(input.session);
+  const row = session.rows.find((item) => item.rowId === input.rowId);
+  if (!row) return [];
+  if (
+    input.role === "destination" &&
+    (row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true)
+  )
+    return [];
+  const oppositeId =
+    input.role === "destination"
+      ? row.assignment.state === "existing"
+        ? row.assignment.accountId
+        : null
+      : row.toAssignment?.state === "existing"
+        ? row.toAssignment.accountId
+        : null;
+  return input.ownedAccounts.filter(
+    (account) =>
+      account.id !== oppositeId &&
+      (input.role === "destination"
+        ? account.type === "CASH"
+        : row.source === "VOICE" ||
+          account.type === "BANK" ||
+          account.type === "DIGITAL_WALLET")
+  );
+}

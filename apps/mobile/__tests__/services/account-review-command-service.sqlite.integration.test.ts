@@ -1,9 +1,5 @@
-/**
- * #395 T025 TESTS FIRST — real SQLite writer / owned queue / V2 codec.
- * Expected missing-SUT creation Red until T016/T028/T029 are separately granted.
- * Mocks below replace ONLY auth scope and native DB constructor with an actual
- * SQLiteAdapter + Watermelon Database, never command, repository or codec logic.
- */
+/** #395: real SQLite command writer, owned queue, V2 codec and CAS regressions.
+ * Only native constructor/auth are mocked; commands use actual SQLite. */
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import { setGenerator } from "@nozbe/watermelondb/utils/common/randomId";
@@ -21,7 +17,6 @@ import {
 } from "../../../../packages/logic/src/account-review/schemas";
 import { makeOwnedContext } from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
 import {
-  decodeSmsReviewDraftPayload,
   encodeSmsReviewDraftV2,
   smsReviewDraftPayloadV2Schema,
 } from "../../../../packages/logic/src/sms-review-drafts/sms-review-draft-codec";
@@ -31,7 +26,16 @@ import {
   makeT025StoredReview,
   T025_IDS,
 } from "../../../../packages/logic/src/sms-review-drafts/__tests__/account-review-v2-t025-fixtures";
-import { seedCapturedSmsReviewContext } from "./sms-review-real-sqlite-fixture";
+import {
+  seedCapturedSmsReviewContext,
+  makeT025AtmSmsOriginal,
+  withT025CashDestination,
+  prepareT025CashDraftInWriter,
+  assertT025CashDraftColdReload,
+  decodeT025OwnedV2 as decodeOwnedV2,
+  readT025PhysicalSmsDrafts,
+  openFreshT025SqliteDatabase,
+} from "./sms-review-real-sqlite-fixture";
 import {
   confirmedCommand,
   selectCommand,
@@ -243,28 +247,19 @@ async function ownedDrafts(): Promise<SmsReviewDraftItem[]> {
     .fetch();
 }
 
-async function rawDraftPostimages(
+const rawDraftPostimages = (
   source: Database = database
-): Promise<readonly DraftPostimage[]> {
-  const drafts = await source
-    .get<SmsReviewDraftItem>("sms_review_draft_items")
-    .query(Q.where("user_id", T025_IDS.owner))
-    .fetch();
-  return drafts
-    .map((draft) => ({
-      id: draft.id,
-      fingerprint: draft.smsFingerprint,
-      json: draft.payloadJson,
-      version: draft.payloadVersion,
-      selected: draft.selectionOverride,
-    }))
-    .sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
-}
+): Promise<readonly DraftPostimage[]> =>
+  readT025PhysicalSmsDrafts(source, T025_IDS.owner);
 
 async function seedLinkedV2Queue(
-  logicalRowIds?: readonly string[]
+  logicalRowIds?: readonly string[],
+  firstIsAtm = false
 ): Promise<SeededQueue> {
-  const originals = [makeT025SmsOriginal(0), makeT025SmsOriginal(1)];
+  const originals = [
+    firstIsAtm ? makeT025AtmSmsOriginal() : makeT025SmsOriginal(0),
+    makeT025SmsOriginal(1),
+  ];
   const merged = await mergeSmsReviewDrafts({
     transactions: originals,
     expectedUserId: T025_IDS.owner,
@@ -284,7 +279,8 @@ async function seedLinkedV2Queue(
     a.smsFingerprint.localeCompare(b.smsFingerprint)
   );
   const rowIds = logicalRowIds ?? arranged.map((draft) => draft.id);
-  const session = makeT025ReviewSession(queue.id, sortedOriginals, rowIds);
+  const normalized = makeT025ReviewSession(queue.id, sortedOriginals, rowIds);
+  const session = firstIsAtm ? withT025CashDestination(normalized) : normalized;
   await database.write(async () => {
     await database.batch(
       ...arranged.map((draft, index) => {
@@ -327,16 +323,9 @@ function execute(
   });
 }
 
-/** Reopen the same SQLite data through independent Watermelon record caches. */
-async function openFreshSqliteDatabase(): Promise<Database> {
-  const { Database: WatermelonDatabase } = jest.requireActual<
-    typeof import("@nozbe/watermelondb")
-  >("@nozbe/watermelondb");
-  return new WatermelonDatabase({
-    adapter: await adapter.testClone(),
-    modelClasses,
-  });
-}
+/** Reopen the same physical SQLite through independently cached models. */
+const openFreshSqliteDatabase = (): Promise<Database> =>
+  openFreshT025SqliteDatabase(adapter, modelClasses);
 
 interface WriterBarrier {
   readonly promise: Promise<void>;
@@ -351,20 +340,6 @@ function writerBarrier(): WriterBarrier {
     release = resolve;
   });
   return { promise, release: () => release() };
-}
-
-function decodeOwnedV2(
-  item: SmsReviewDraftItem,
-  queueId: string
-): ReturnType<typeof decodeSmsReviewDraftPayload> {
-  return decodeSmsReviewDraftPayload({
-    version: item.payloadVersion,
-    json: item.payloadJson,
-    expectedFingerprint: item.smsFingerprint,
-    expectedOwnerId: item.userId,
-    expectedSessionId: queueId,
-    selectionOverride: item.selectionOverride,
-  });
 }
 
 beforeAll(async () => {
@@ -760,6 +735,28 @@ describe("#395 T025 command service with real SQLite and no writer stub", () => 
     expect(
       await database.get<Transaction>("transactions").query().fetchCount()
     ).toBe(0);
+  });
+
+  it("a real owned ATM source and row-only Cash draft survive SQLite cold reload without creating an account", async () => {
+    const seeded = await seedLinkedV2Queue(undefined, true);
+    const { confirmed, prepared, row, draftGroupId } =
+      await prepareT025CashDraftInWriter({
+        database,
+        session: seeded.session,
+        execute: (command) => execute(seeded.queueId, command),
+      });
+    expect(confirmed.reasonCodes).toEqual([]);
+    expect(prepared.reasonCodes).toEqual([]);
+    expect(prepared.effect).toBe("persist_sms");
+    await assertT025CashDraftColdReload({
+      prepared,
+      row,
+      draftGroupId,
+      queueId: seeded.queueId,
+      ownerId: T025_IDS.owner,
+      fresh: openFreshSqliteDatabase,
+      execute: (command) => execute(seeded.queueId, command),
+    });
   });
 
   it("rehydrates identical confirmed group revisions and authoritative clicked selection from a fresh SQLite adapter", async () => {

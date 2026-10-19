@@ -259,9 +259,9 @@ function TransactionItemInner({
   const handleDiscard = useCallback(
     (event: GestureResponderEvent): void => {
       event.stopPropagation();
-      onDiscard?.(index, isSelected);
+      if (!reviewIsBusy) onDiscard?.(index, isSelected);
     },
-    [index, isSelected, onDiscard]
+    [index, isSelected, onDiscard, reviewIsBusy]
   );
 
   const counterpartyText = isVoice
@@ -271,6 +271,8 @@ function TransactionItemInner({
   // The accepted review row is a separate presentation. Legacy callers keep
   // the complete pre-#395 transaction card and source-specific affordances.
   if (accountReview) {
+    const showSmsDiscard =
+      isSmsWorkspace && !isVoice && onDiscard !== undefined;
     const title =
       (isVoice && "note" in transaction && typeof transaction.note === "string"
         ? transaction.note.trim()
@@ -280,8 +282,25 @@ function TransactionItemInner({
     return (
       <View
         testID="transaction-review-row"
-        className="min-h-[68px] border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
+        className="relative min-h-[68px] border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
       >
+        {showSmsDiscard ? (
+          <TouchableOpacity
+            testID={`sms-review-discard-${index}`}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={t("sms_review_discard_accessibility", {
+              name: accessibleName,
+            })}
+            disabled={reviewIsBusy}
+            accessibilityState={{ disabled: reviewIsBusy }}
+            onPress={handleDiscard}
+            activeOpacity={0.7}
+            className="absolute end-2 top-2 z-10 h-11 w-11 items-center justify-center rounded-full border border-red-500/40 bg-background dark:bg-background-dark"
+          >
+            <Ionicons name="close" size={18} color={palette.red[400]} />
+          </TouchableOpacity>
+        ) : null}
         <View className="flex-row items-start gap-1 px-4 py-3">
           <TouchableOpacity
             testID="account-review-row-checkbox"
@@ -331,7 +350,10 @@ function TransactionItemInner({
               disabled={reviewIsBusy}
               onPress={handlePress}
               activeOpacity={0.75}
-              className="min-h-11 flex-row items-start gap-2"
+              className={
+                "min-h-11 flex-row items-start gap-2" +
+                (showSmsDiscard ? " pe-11" : "")
+              }
             >
               <View className="min-w-0 flex-1">
                 <Text className="text-base font-semibold leading-6 text-text-primary dark:text-text-primary-dark">

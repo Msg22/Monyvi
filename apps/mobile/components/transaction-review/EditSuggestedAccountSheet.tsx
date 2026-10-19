@@ -16,7 +16,6 @@ import {
   type TextStyle,
 } from "react-native";
 import { palette } from "@/constants/colors";
-import { shouldUseCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { TextField } from "@/components/ui/TextField";
@@ -120,11 +119,13 @@ function EditSheetHeader({
 function EditNameField({
   value,
   onChange,
+  onFocus,
   language,
   disabled,
 }: {
   readonly value: string;
   readonly onChange: (text: string) => void;
+  readonly onFocus: () => void;
   readonly language: ReviewDisplayLanguage;
   readonly disabled: boolean;
 }): React.JSX.Element {
@@ -137,6 +138,7 @@ function EditNameField({
       label={label}
       value={value}
       onChangeText={onChange}
+      onFocus={onFocus}
       editable={!disabled}
       autoCapitalize="words"
       returnKeyType="done"
@@ -273,20 +275,20 @@ function EditorFooter(props: EditorFooterProps): React.JSX.Element {
     <View
       className={
         props.compact
-          ? "w-full gap-3 px-5 pt-2 pb-3"
+          ? "w-full max-w-[350px] self-center shrink-0 gap-3 px-5 pt-2 pb-3"
           : props.language === "ar"
-            ? "w-full flex-row-reverse gap-3 px-5 pt-2 pb-3"
-            : "w-full flex-row gap-3 px-5 pt-2 pb-3"
+            ? "w-full max-w-[350px] self-center shrink-0 flex-row-reverse gap-3 px-5 pt-2 pb-3"
+            : "w-full max-w-[350px] self-center shrink-0 flex-row gap-3 px-5 pt-2 pb-3"
       }
     >
-      <View className="flex-1">
+      <View className={props.compact ? "w-full" : "min-w-0 flex-1"}>
         <ReviewActionButton
           label={reviewCopy("account_review_group_edit_cancel", props.language)}
           tone="outline"
           onPress={props.onCancel}
         />
       </View>
-      <View className="flex-1">
+      <View className={props.compact ? "w-full" : "min-w-0 flex-1"}>
         <ReviewActionButton
           testID="account-review-group-edit-submit"
           label={reviewCopy("account_review_group_edit_submit", props.language)}
@@ -310,20 +312,27 @@ interface EditSheetSurfaceProps {
   readonly compact: boolean;
   readonly bottomInset: number;
   readonly maxHeight: number;
+  readonly onSheetWidth: (width: number) => void;
   readonly submit: () => void;
 }
 function EditSheetSurface(p: EditSheetSurfaceProps): React.JSX.Element {
   const source = p.source;
+  const scrollRef = React.useRef<ScrollView>(null);
   return (
     <View
       testID="account-review-group-edit-sheet"
       accessibilityViewIsModal
       importantForAccessibility="yes"
-      className="w-full overflow-hidden rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+      className="w-full min-h-0 overflow-hidden rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
       style={{ maxHeight: p.maxHeight, paddingBottom: p.bottomInset }}
+      onLayout={(event) =>
+        p.onSheetWidth(Math.round(event.nativeEvent.layout.width))
+      }
     >
       <ReviewSheetHandle />
       <ScrollView
+        ref={scrollRef}
+        className="min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
@@ -346,6 +355,12 @@ function EditSheetSurface(p: EditSheetSurfaceProps): React.JSX.Element {
           <EditNameField
             value={p.name}
             onChange={p.setName}
+            onFocus={() => {
+              // The name field is near the top of the existing scroll body;
+              // reveal it within the keyboard-resized Android sheet.
+              if (Platform.OS === "android")
+                scrollRef.current?.scrollTo({ y: 0, animated: true });
+            }}
             language={p.language}
             disabled={source.isBusy}
           />
@@ -396,6 +411,7 @@ export function EditSuggestedAccountSheet(
   const bottomInset = useModalBottomInset();
   const [name, setName] = useState(props.groupName);
   const [typeOptionId, setTypeOptionId] = useState(props.currentTypeOptionId);
+  const [sheetWidth, setSheetWidth] = useState<number | null>(null);
   useEffect(() => {
     setName(props.groupName);
     setTypeOptionId(props.currentTypeOptionId);
@@ -413,6 +429,13 @@ export function EditSuggestedAccountSheet(
   const submit = (): void => {
     if (canSubmit) props.onSubmit({ name, typeOptionId });
   };
+  const innerWidth = Math.min(sheetWidth ?? width, 350) - 40;
+  const cancelLabel = reviewCopy("account_review_group_edit_cancel", language);
+  const submitLabel = reviewCopy("account_review_group_edit_submit", language);
+  // Two unchanged 48 dp actions need label width + horizontal padding + gap.
+  // Use the actual capped sheet width; compact rows only when they cannot fit.
+  const compactFooter =
+    innerWidth < (cancelLabel.length + submitLabel.length) * 8 * fontScale + 60;
   if (!props.visible) return null;
   return (
     <Modal
@@ -424,7 +447,7 @@ export function EditSuggestedAccountSheet(
     >
       <KeyboardAvoidingView
         className="flex-1 justify-end"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ReviewPointerBackdrop onPress={props.onCancel} />
         <EditSheetSurface
@@ -436,9 +459,12 @@ export function EditSuggestedAccountSheet(
           canSubmit={canSubmit}
           language={language}
           submit={submit}
-          compact={shouldUseCompactLayout(width, fontScale)}
+          compact={compactFooter}
           bottomInset={bottomInset}
           maxHeight={Math.max(0, (height - bottomInset) * 0.8)}
+          onSheetWidth={(next) =>
+            setSheetWidth((previous) => (previous === next ? previous : next))
+          }
         />
       </KeyboardAvoidingView>
     </Modal>

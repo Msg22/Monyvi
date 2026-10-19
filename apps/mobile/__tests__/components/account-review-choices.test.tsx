@@ -6,7 +6,12 @@
  * produce TypeScript Red until the additive T037 contract lands.
  * Callback assertions are not proof of reducer, DB, route or financial Save.
  */
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import i18next from "i18next";
 import React, { useState } from "react";
 import { KeyboardAvoidingView, Modal, ScrollView, View } from "react-native";
@@ -32,6 +37,8 @@ import {
   makeCurrencyConflictProps,
   makeGroupChoiceProps,
   makeQnbChoiceCandidates,
+  makeManualDraftChoiceProps,
+  makeExplicitCurrencyConsentChoiceProps,
   type AccountChoiceViewProps,
   type CurrencyConflictViewProps,
 } from "./account-review-choices-test-fixtures";
@@ -236,9 +243,13 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
   });
 
   it("does not enable Use for an empty list, null selection, or ineligible option", () => {
-    const candidate = getQnbCandidate(makeQnbChoiceCandidates(), "0007");
+    const candidates = makeQnbChoiceCandidates();
+    const candidate = getQnbCandidate(candidates, "0007");
+    const eligible = getQnbCandidate(candidates, "9221");
     const props = makeAccountChoiceProps({
-      candidateOptions: [{ ...candidate, isEligible: false }],
+      // A genuinely ineligible option stays disabled while another eligible
+      // option keeps Use visible, but disabled until explicitly selected.
+      candidateOptions: [{ ...candidate, isEligible: false }, eligible],
       canUseSelection: false,
     });
     const onSelectCandidate = jest.fn();
@@ -813,5 +824,77 @@ describe("#395 accepted review context and modal revision gates", () => {
         row.revision
       )
     ).toBe(false);
+  });
+});
+
+describe("#395 owner recovery: account drafts and currency consent", () => {
+  it("empty source offers a typed draft, never invokes existing account Use", () => {
+    const onSubmit = jest.fn();
+    const onUseSelected = jest.fn();
+    renderAccounts(
+      makeManualDraftChoiceProps("BANK", onSubmit, {
+        onUseSelected,
+      })
+    );
+    expect(screen.queryByTestId("account-review-account-use")).toBeNull();
+    fireEvent.press(screen.getByTestId("account-review-create-draft"));
+    expect(
+      within(
+        screen.getByTestId("account-review-manual-draft-currency")
+      ).getByText("EGP", { exact: true })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-manual-draft-submit")
+    ).toBeDisabled();
+    fireEvent.changeText(
+      screen.getByTestId("account-review-manual-draft-name"),
+      "New bank"
+    );
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-type"));
+    fireEvent.press(
+      screen.getByTestId("account-review-manual-draft-type-option")
+    );
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-submit"));
+    expect(onSubmit).toHaveBeenCalledWith({ name: "New bank", type: "BANK" });
+    expect(onUseSelected).not.toHaveBeenCalled();
+  });
+
+  it("missing ATM Cash offers Cash draft; group replacement retains Edit/Keep", () => {
+    const onEditExistingDraft = jest.fn();
+    const onCash = jest.fn();
+    const r = render(
+      <AccountChoiceSheet {...makeManualDraftChoiceProps("CASH", onCash)} />
+    );
+    fireEvent.press(screen.getByTestId("account-review-create-draft"));
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-cancel"));
+    expect(onCash).not.toHaveBeenCalled();
+    r.rerender(
+      <AccountChoiceSheet
+        {...makeGroupChoiceProps({
+          candidateOptions: [],
+          onEditExistingDraft,
+        })}
+      />
+    );
+    expect(screen.queryByTestId("account-review-create-draft")).toBeNull();
+    fireEvent.press(screen.getByTestId("account-review-edit-existing-draft"));
+    expect(onEditExistingDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("a chosen account and its USD currency require clear confirmation; Back commits nothing", () => {
+    const onUseSelected = jest.fn();
+    renderAccounts(makeExplicitCurrencyConsentChoiceProps(onUseSelected));
+    fireEvent.press(screen.getByTestId("account-review-account-use"));
+    expect(
+      screen.getByTestId("account-review-confirm-account-currency")
+    ).toBeTruthy();
+    expect(screen.getByText("USD")).toBeTruthy();
+    expect(screen.getByText("Not confirmed")).toBeTruthy();
+    expect(onUseSelected).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-confirm-account-back"));
+    expect(onUseSelected).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-account-use"));
+    fireEvent.press(screen.getByTestId("account-review-confirm-account-use"));
+    expect(onUseSelected).toHaveBeenCalledTimes(1);
   });
 });

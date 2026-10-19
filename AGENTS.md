@@ -307,15 +307,20 @@ the true domain model.
   pattern, icon, placement, size, and accessibility behavior unless the approved
   mockup explicitly calls for a difference. Check both visible and empty states.
 
-- **Responsive mockup implementation**: Treat the approved mockup as the
-  normal-width composition, then validate it at compact-phone, ordinary-phone,
-  tablet, orientation, RTL, and enlarged-font sizes before shipping. Keep
-  controls and related metrics on the approved row whenever the shared layout
-  contract fits; stack only when measured space or text scale requires it. Use
-  the centralized `apps/mobile/constants/ui.ts` responsive breakpoints and
-  helpers instead of component-specific device-width magic numbers. Add focused
-  layout tests for the ordinary phone and compact-phone breakpoints, and never
-  optimize for one handset at the expense of other supported devices.
+- **Responsive mockup implementation**: Preserve the approved mockup at its
+  declared binding context and its semantic hierarchy everywhere else. Size
+  layouts from the **actual available component/container space**, not a blanket
+  viewport-width cutoff; centralized `apps/mobile/constants/ui.ts` breakpoints
+  are hints, not mandatory wrap decisions or permission to add device lists.
+  Reserve stable 44/48 dp action hit areas first, then give identity/labels
+  bounded, shrinkable, readable space. When space is tight, use modest approved
+  typography/icon/control/spacing variants (without disabling font scaling or
+  hiding financial identity); stack only when the real content cannot fit or
+  accessibility scaling requires it. Respect RTL, theme, rotation, keyboard,
+  scrolling and safe-area insets. Run existing applicable checks; owner manually
+  reviews representative small/ordinary/wide widths and enlarged text (plus
+  relevant RTL/keyboard states). Do not add cosmetic className/breakpoint test
+  matrices or claim a visual pass without rendered evidence.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).

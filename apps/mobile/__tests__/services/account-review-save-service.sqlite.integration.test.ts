@@ -36,6 +36,7 @@ import {
   FINGERPRINT_A,
   FINGERPRINT_C,
   makeSaveFixture,
+  makeAtmCashDraftSaveFixture,
   selectedSmsFingerprint,
   testUuid,
   type SaveFixture,
@@ -209,6 +210,54 @@ beforeEach(async (): Promise<void> => {
 });
 
 describe("T043 physical SQLite selected-save and immutable action", () => {
+  it("a selected ATM Cash draft creates a real Cash account/transfer only at atomic Save, then replays once", async (): Promise<void> => {
+    const { fixture, createdId } = await makeAtmCashDraftSaveFixture();
+    await clearAndSeed(database, { onlyCategories: true });
+    await seedOwnedBankWithoutDefault(database);
+    await seedSmsReviewDrafts(database, fixture.session);
+    const before = await ledgerState(database);
+    expect(before.accounts.map((account) => account.id)).toEqual([BANK]);
+    expect(before.counts).toMatchObject({ transfers: 0, actions: 0 });
+    expect(before.accounts.some((account) => account.id === createdId)).toBe(
+      false
+    );
+    await expect(save(fixture)).resolves.toMatchObject({ kind: "committed" });
+    const fresh = await reopenSqliteLedger(ledger);
+    const committed = await ledgerState(fresh);
+    expect(committed.counts).toMatchObject({ transfers: 1, transactions: 0 });
+    expect(committed.counts).toMatchObject({ actions: 1, effects: 2 });
+    expect(
+      committed.accounts.find((account) => account.id === createdId)
+    ).toMatchObject({
+      balance: 25.05,
+      financialRevision: "1",
+      deleted: false,
+    });
+    expect(committed.counts.accounts).toBe(before.counts.accounts + 1);
+    expect(
+      committed.accounts.find((account) => account.id === BANK)
+    ).toMatchObject({
+      balance: 74.95,
+      financialRevision: "1",
+      deleted: false,
+    });
+    const [transfer] = await fresh
+      .get<import("@monyvi/db").Transfer>("transfers")
+      .query()
+      .fetch();
+    expect(transfer).toMatchObject({
+      fromAccountId: BANK,
+      toAccountId: createdId,
+      amount: 25.05,
+    });
+    await expect(save(fixture, fresh)).resolves.toMatchObject({
+      kind: "replay",
+    });
+    expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(
+      committed
+    );
+  });
+
   it("S25 commits Bank, bank child, sender, two SMS records, effects and draft cleanup together", async (): Promise<void> => {
     const f = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, f.session);

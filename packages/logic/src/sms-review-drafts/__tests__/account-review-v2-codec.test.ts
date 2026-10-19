@@ -15,11 +15,11 @@ import {
 import {
   makeT025ConfirmedSession,
   makeT025ReviewSession,
+  makeT025SmsAtmCodecInput,
   makeT025SmsOriginal,
   makeT025StoredReview,
   T025_IDS,
 } from "./account-review-v2-t025-fixtures";
-
 function encodedV2(): {
   readonly transaction: ReturnType<typeof makeT025SmsOriginal>;
   readonly session: ReturnType<typeof makeT025ReviewSession>;
@@ -69,6 +69,28 @@ function expectClosedCodecFailure(action: () => unknown): void {
   if (!(error instanceof SmsReviewDraftCodecError)) return;
   expect(error.message).not.toContain("QNB purchase");
   expect(error.message).not.toContain(T025_IDS.fingerprintOne);
+}
+
+/** Retain the real codec under test; the in-memory ATM graph lives in T025 fixtures. */
+function encodedAtmV2(
+  sourceGroupActive: boolean
+): ReturnType<typeof encodeSmsReviewDraftV2> {
+  return encodeSmsReviewDraftV2(makeT025SmsAtmCodecInput(sourceGroupActive));
+}
+
+type V2Payload = ReturnType<typeof smsReviewDraftPayloadV2Schema.parse>;
+function rejectAlteredAtm(
+  encoded: ReturnType<typeof encodeSmsReviewDraftV2>,
+  corrupt: (payload: V2Payload) => unknown
+): void {
+  const parsed = smsReviewDraftPayloadV2Schema.parse(
+    JSON.parse(encoded.json) as unknown
+  );
+  const invalid = corrupt(parsed);
+  expect(smsReviewDraftPayloadV2Schema.safeParse(invalid).success).toBe(false);
+  expectClosedCodecFailure(() =>
+    decodeV2({ ...encoded, json: JSON.stringify(invalid) })
+  );
 }
 
 describe("#395 T025 real V2 codec and unchanged V1 wire compatibility", () => {
@@ -483,6 +505,173 @@ describe("#395 T025 real V2 codec and unchanged V1 wire compatibility", () => {
       group.evidenceKey
     );
     expect(decodeV2(encodedRemoved).review?.row.assignment.state).toBe(
+      "unresolved"
+    );
+  });
+
+  it("round-trips one Cash destination-only group on an ATM Bank source", () => {
+    const encoded = encodedAtmV2(false);
+    const decoded = decodeV2(encoded);
+    expect(decoded.review?.groups).toHaveLength(1);
+    expect(decoded.review?.groups[0]).toMatchObject({
+      type: "CASH",
+      status: "confirmed",
+    });
+    expect(decoded.review?.row.assignment.state).toBe("existing");
+    expect(decoded.review?.row.toAssignment).toMatchObject({
+      state: "suggested",
+      groupId: T025_IDS.alternateQueue,
+      groupRevision: "0",
+      confirmation: "confirmed",
+    });
+    expect(decoded.transaction.isAtmWithdrawal).toBe(true);
+    expect(decoded.transaction.amount).toBe(50);
+    expect(decoded.review?.row.sourceFingerprint).toBe(T025_IDS.fingerprintOne);
+    expect(decoded.review?.row.amountDecimal).toBe("50");
+  });
+
+  it("round-trips one active source group AND one active Cash destination group", () => {
+    const decoded = decodeV2(encodedAtmV2(true));
+    expect(decoded.review?.groups.map((group) => group.type)).toEqual([
+      "BANK",
+      "CASH",
+    ]);
+    expect(decoded.review?.row.assignment).toMatchObject({
+      state: "suggested",
+      groupId: T025_IDS.group,
+      confirmation: "pending",
+    });
+    expect(decoded.review?.row.toAssignment).toMatchObject({
+      state: "suggested",
+      groupId: T025_IDS.alternateQueue,
+      confirmation: "confirmed",
+    });
+    expect(
+      decoded.review?.groups.every((group) =>
+        group.linkedRowIds.includes(T025_IDS.rowOne)
+      )
+    ).toBe(true);
+    expect(decoded.review?.removedEvidenceKeys).toEqual([]);
+  });
+
+  it("rejects Cash source, wrong destination role, non-ATM Cash and broken reciprocity", () => {
+    const { encoded: regularSms } = encodedV2();
+    rejectAlteredAtm(regularSms, (p) => ({
+      ...p,
+      review: {
+        ...p.review,
+        groups: p.review.groups.map((g) => ({ ...g, type: "CASH" })),
+      },
+    }));
+    const atm = encodedAtmV2(false);
+    rejectAlteredAtm(atm, (p) => ({
+      ...p,
+      review: {
+        ...p.review,
+        groups: p.review.groups.map((g) => ({ ...g, type: "BANK" })),
+      },
+    }));
+    rejectAlteredAtm(atm, (p) => ({
+      ...p,
+      transaction: { ...p.transaction, isAtmWithdrawal: false },
+      review: {
+        ...p.review,
+        row: {
+          ...p.review.row,
+          transaction: { ...p.review.row.transaction, isAtmWithdrawal: false },
+        },
+      },
+    }));
+    rejectAlteredAtm(atm, (p) => ({
+      ...p,
+      review: {
+        ...p.review,
+        row: {
+          ...p.review.row,
+          toAssignment: {
+            state: "unresolved",
+            accountId: null,
+            reasonCode: "cash_transfer_review",
+            candidateAccountIds: [],
+          },
+        },
+      },
+    }));
+  });
+
+  it("rejects stale destination revision, wrong currency and two Cash groups", () => {
+    const atm = encodedAtmV2(true);
+    rejectAlteredAtm(atm, (p) => ({
+      ...p,
+      review: {
+        ...p.review,
+        groups: p.review.groups.map((g) =>
+          g.type === "CASH"
+            ? { ...g, revision: "2", confirmedIdentityRevision: "2" }
+            : g
+        ),
+      },
+    }));
+    rejectAlteredAtm(atm, (p) => ({
+      ...p,
+      review: {
+        ...p.review,
+        groups: p.review.groups.map((g) =>
+          g.type === "CASH" ? { ...g, currency: "USD" } : g
+        ),
+      },
+    }));
+    rejectAlteredAtm(atm, (p) => {
+      const cash = p.review.groups.find((g) => g.type === "CASH");
+      if (!cash) throw new Error("Missing Cash group");
+      return {
+        ...p,
+        review: {
+          ...p.review,
+          groups: [
+            ...p.review.groups,
+            {
+              ...cash,
+              groupId: "00000000-0000-4000-8000-000000002507",
+              evidenceKey: "c".repeat(64),
+              suggestionRefs: ["second-cash"],
+            },
+          ],
+        },
+      };
+    });
+  });
+
+  it("preserves a removed Cash destination tombstone without a live destination", () => {
+    const atm = encodedAtmV2(false);
+    const p = smsReviewDraftPayloadV2Schema.parse(
+      JSON.parse(atm.json) as unknown
+    );
+    const cash = p.review.groups[0];
+    if (!cash) throw new Error("Missing Cash group");
+    const tombstone = encodeSmsReviewDraftV2({
+      transaction: { ...makeT025SmsOriginal(), isAtmWithdrawal: true },
+      review: {
+        ...p.review,
+        row: {
+          ...p.review.row,
+          selected: false,
+          toAssignment: {
+            state: "unresolved",
+            accountId: null,
+            reasonCode: "account_group_removed",
+            candidateAccountIds: [],
+          },
+        },
+        groups: [{ ...cash, status: "removed" }],
+        removedEvidenceKeys: [cash.evidenceKey],
+      },
+    });
+    expect(decodeV2(tombstone).review?.groups[0]?.status).toBe("removed");
+    expect(decodeV2(tombstone).review?.removedEvidenceKeys).toEqual([
+      cash.evidenceKey,
+    ]);
+    expect(decodeV2(tombstone).review?.row.toAssignment?.state).toBe(
       "unresolved"
     );
   });

@@ -321,7 +321,8 @@ function resolveExistingDestination(
 
 function resolveAtmDestination(
   row: ReviewRow,
-  snapshots: AccountReviewOwnedContext
+  snapshots: AccountReviewOwnedContext,
+  groups: AccountReviewSession["groups"]
 ): ReviewRow {
   if (row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true)
     return row;
@@ -337,7 +338,23 @@ function resolveAtmDestination(
       row.assignment.state !== "existing" ||
       item.id !== row.assignment.accountId
   );
-  if (row.toAssignment?.state === "suggested") return row;
+  const destinationAssignment = row.toAssignment;
+  if (destinationAssignment?.state === "suggested") {
+    const linked = groups.find(
+      (group) => group.groupId === destinationAssignment.groupId
+    );
+    if (
+      !linked ||
+      linked.type !== "CASH" ||
+      linked.status !== destinationAssignment.confirmation ||
+      linked.currency !== code ||
+      linked.revision !== destinationAssignment.groupRevision ||
+      !linked.linkedRowIds.includes(row.rowId)
+    )
+      throw new Error("account_review_cash_destination_group_invalid");
+    // A confirmed local draft is an assignment, not an existing Cash account.
+    return row;
+  }
   const previousDestination = row.toAssignment;
   if (previousDestination?.state === "existing") {
     return resolveExistingDestination(
@@ -374,10 +391,11 @@ function resolveAtmDestination(
 
 function resolveRow(
   row: ReviewRow,
-  context: AccountReviewOwnedContext
+  context: AccountReviewOwnedContext,
+  groups: AccountReviewSession["groups"]
 ): ReviewRow {
   const sourceResolved = resolveSource(row, context);
-  return resolveAtmDestination(sourceResolved, context);
+  return resolveAtmDestination(sourceResolved, context, groups);
 }
 
 /** Pure: no DB, provider, time, IDs, UI, automatic confirmations or Save. */
@@ -387,7 +405,7 @@ export function resolveAccountReviewSession(
   const session = accountReviewSessionSchema.parse(input.session);
   assertOwnedResolutionContext(session, input.accountSnapshots);
   const rows = session.rows.map((row) =>
-    resolveRow(row, input.accountSnapshots)
+    resolveRow(row, input.accountSnapshots, session.groups)
   );
   return accountReviewSessionSchema.parse({ ...session, rows });
 }

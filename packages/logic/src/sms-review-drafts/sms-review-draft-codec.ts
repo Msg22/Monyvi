@@ -265,14 +265,34 @@ const storedReviewRowSchema = z.preprocess(
   accountReviewRowSchema
 );
 
-/** An active group stored beside one row must reciprocally name that row. */
-function isReciprocalActiveGroup(
+/** V2 SMS ATM Cash drafts occupy the destination, never the source endpoint. */
+type SmsReviewGroupEndpoint = "source" | "destination";
+
+function groupEndpoint(
   group: AccountReviewGroup,
   row: AccountReviewRow
+): SmsReviewGroupEndpoint {
+  return row.source === "SMS" &&
+    row.transaction.isAtmWithdrawal === true &&
+    group.type === "CASH"
+    ? "destination"
+    : "source";
+}
+
+/** One stored row may reference one active group at each distinct endpoint. */
+function isReciprocalActiveGroup(
+  group: AccountReviewGroup,
+  row: AccountReviewRow,
+  endpoint: SmsReviewGroupEndpoint
 ): boolean {
-  const assignment = row.assignment;
+  const assignment =
+    endpoint === "destination" ? row.toAssignment : row.assignment;
   return (
-    assignment.state === "suggested" &&
+    row.source === "SMS" &&
+    (endpoint === "source"
+      ? group.type !== "CASH"
+      : row.transaction.isAtmWithdrawal === true && group.type === "CASH") &&
+    assignment?.state === "suggested" &&
     assignment.groupId === group.groupId &&
     assignment.groupRevision === group.revision &&
     assignment.confirmation === group.status &&
@@ -308,7 +328,10 @@ const storedSmsReviewSchema = z
       });
     }
     const ids = new Set<string>();
-    let activeMembershipCount = 0;
+    const activeMemberships: Record<SmsReviewGroupEndpoint, number> = {
+      source: 0,
+      destination: 0,
+    };
     for (const [index, group] of review.groups.entries()) {
       if (ids.has(group.groupId)) {
         ctx.addIssue({
@@ -327,34 +350,39 @@ const storedSmsReviewSchema = z
         });
       }
       if (group.status === "removed") continue;
-      activeMembershipCount += 1;
-      if (activeMembershipCount > 1 || !isReciprocalActiveGroup(group, row)) {
+      const endpoint = groupEndpoint(group, row);
+      activeMemberships[endpoint] += 1;
+      if (
+        activeMemberships[endpoint] > 1 ||
+        !isReciprocalActiveGroup(group, row, endpoint)
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["groups", index],
-          message: "Active group must reciprocally match its one stored row",
+          message: "Active group must reciprocally match its stored endpoint",
         });
       }
     }
-    const assignment = row.assignment;
-    if (assignment.state !== "suggested") return;
-    const group = review.groups.find(
-      (item) => item.groupId === assignment.groupId
-    );
-    if (
-      !group ||
-      group.status === "removed" ||
-      group.revision !== assignment.groupRevision ||
-      group.status !== assignment.confirmation ||
-      group.currency !==
-        (row.currency.state === "known" ? row.currency.code : null) ||
-      !group.linkedRowIds.includes(row.rowId)
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["row", "assignment"],
-        message: "Incompatible referenced group snapshot",
-      });
+    for (const [endpoint, assignment] of [
+      ["source", row.assignment],
+      ["destination", row.toAssignment],
+    ] as const) {
+      if (assignment?.state !== "suggested") continue;
+      const group = review.groups.find(
+        (item) => item.groupId === assignment.groupId
+      );
+      if (
+        !group ||
+        group.status === "removed" ||
+        groupEndpoint(group, row) !== endpoint ||
+        !isReciprocalActiveGroup(group, row, endpoint)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["row", endpoint === "source" ? "assignment" : "toAssignment"],
+          message: "Incompatible referenced endpoint group snapshot",
+        });
+      }
     }
   });
 

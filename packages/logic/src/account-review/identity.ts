@@ -1,6 +1,7 @@
 import type { Sha256Provider } from "../financial-actions/action-contracts";
 import type {
   AccountReviewGroup,
+  AccountReviewRow,
   AccountReviewSession,
 } from "./review-schemas";
 import {
@@ -129,4 +130,50 @@ export async function deriveAccountReviewRowIdentity(
     input.occurrence,
   ]);
   return uuidV8FromSha256(await input.hashProvider.digestUtf8(preimage));
+}
+
+/** Manually named row drafts cannot alias parser-derived group evidence. */
+const MANUAL_ROW_DRAFT_DOMAIN = "monyvi.account-review.manual-row-account";
+export function manualRowAccountDraftRef(rowId: string, nonce: string): string {
+  return [
+    "manual-row-account/v1",
+    canonicalUuid.parse(rowId),
+    canonicalUuid.parse(nonce),
+  ].join(":");
+}
+
+export interface ManualRowAccountReviewGroupIdentityInput {
+  readonly ownerId: AccountReviewSession["ownerId"];
+  readonly sessionId: AccountReviewSession["sessionId"];
+  readonly source: AccountReviewSession["source"];
+  readonly rowId: AccountReviewRow["rowId"];
+  readonly nonce: string;
+  readonly role: "source" | "destination";
+  readonly identity: {
+    readonly name: AccountReviewGroup["name"];
+    readonly type: NonNullable<AccountReviewGroup["type"]>;
+    readonly currency: AccountReviewGroup["currency"];
+  };
+  readonly hashProvider: Sha256Provider;
+}
+
+/** Domain-separated local SHA-256, including explicit row/currency and nonce. */
+export async function deriveManualRowAccountReviewGroupIdentity(
+  input: ManualRowAccountReviewGroupIdentityInput
+): Promise<Pick<AccountReviewGroup, "groupId" | "evidenceKey">> {
+  const preimage = JSON.stringify([
+    MANUAL_ROW_DRAFT_DOMAIN,
+    IDENTITY_VERSION,
+    canonicalUuid.parse(input.ownerId),
+    canonicalUuid.parse(input.sessionId),
+    reviewSource.parse(input.source),
+    canonicalUuid.parse(input.rowId),
+    input.role,
+    canonicalUuid.parse(input.nonce),
+    normalizeGroundedIdentity(input.identity.name),
+    accountType.parse(input.identity.type),
+    currencyCode.parse(input.identity.currency),
+  ]);
+  const evidenceKey = hash.parse(await input.hashProvider.digestUtf8(preimage));
+  return { evidenceKey, groupId: uuidV8FromSha256(evidenceKey) };
 }

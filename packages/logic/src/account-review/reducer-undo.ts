@@ -40,11 +40,25 @@ function hasMatchingScope(
  * removal's row revision/selection/assignment effects. */
 function touchedRowMatchesRemoval(
   now: AccountReviewRow,
-  old: AccountReviewRow
+  old: AccountReviewRow,
+  group: AccountReviewGroup
 ): boolean {
+  const destination =
+    old.source === "SMS" &&
+    old.transaction.isAtmWithdrawal === true &&
+    group.type === "CASH";
+  const oldEndpoint = destination ? old.toAssignment : old.assignment;
+  const nowEndpoint = destination ? now.toAssignment : now.assignment;
   if (
-    now.assignment.state !== "unresolved" ||
-    now.assignment.reasonCode !== "account_group_removed" ||
+    oldEndpoint?.state !== "suggested" ||
+    oldEndpoint.groupId !== group.groupId ||
+    nowEndpoint?.state !== "unresolved" ||
+    nowEndpoint.reasonCode !==
+      (destination ? "cash_transfer_review" : "account_group_removed") ||
+    (destination &&
+      JSON.stringify(now.assignment) !== JSON.stringify(old.assignment)) ||
+    (!destination &&
+      JSON.stringify(now.toAssignment) !== JSON.stringify(old.toAssignment)) ||
     now.selected ||
     now.revision !== incrementReviewRevision(old.revision)
   )
@@ -79,7 +93,7 @@ function unchangedOutsideRemoval(
       return (
         now !== undefined &&
         (linked.has(row.rowId)
-          ? touchedRowMatchesRemoval(now, row)
+          ? touchedRowMatchesRemoval(now, row, group)
           : JSON.stringify(row) === JSON.stringify(now))
       );
     }) &&
@@ -138,15 +152,25 @@ function restoredRows(
     if (!linked.has(row.rowId)) return row;
     const before = previous.rows.find((item) => item.rowId === row.rowId);
     if (!before) throw new Error("account_review_reducer_undo_missing_row");
+    const destination =
+      before.source === "SMS" &&
+      before.transaction.isAtmWithdrawal === true &&
+      group.type === "CASH";
+    const restoredAssignment = {
+      state: "suggested" as const,
+      accountId: null,
+      groupId: group.groupId,
+      groupRevision: group.revision,
+      confirmation:
+        group.status === "confirmed"
+          ? ("confirmed" as const)
+          : ("pending" as const),
+    };
     return revisedRow({
       ...before,
-      assignment: {
-        state: "suggested",
-        accountId: null,
-        groupId: group.groupId,
-        groupRevision: group.revision,
-        confirmation: group.status === "confirmed" ? "confirmed" : "pending",
-      },
+      ...(destination
+        ? { toAssignment: restoredAssignment }
+        : { assignment: restoredAssignment }),
       revision: row.revision,
     });
   });

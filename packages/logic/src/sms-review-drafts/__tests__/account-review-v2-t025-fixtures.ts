@@ -217,3 +217,66 @@ export function makeT025StoredReview(
     removedEvidenceKeys: [...session.removedEvidenceKeys],
   };
 }
+
+/** One-row SMS ATM V2 input with optional source and reciprocal Cash destination. */
+export function makeT025SmsAtmCodecInput(sourceGroupActive: boolean): {
+  readonly transaction: ParsedSmsTransaction;
+  readonly review: ReturnType<typeof makeT025StoredReview>;
+} {
+  const session = makeT025ReviewSession();
+  const row = session.rows[0];
+  const source = session.groups[0];
+  if (!source || row?.source !== "SMS")
+    throw new Error("Missing SMS row/group");
+  // Preserve canonical mutable review reasons when crossing from parsed SMS.
+  const transaction = {
+    ...row.transaction,
+    reviewReasons: row.transaction.reviewReasons
+      ? [...row.transaction.reviewReasons]
+      : undefined,
+    isAtmWithdrawal: true,
+  };
+  const cash: AccountReviewGroup = {
+    ...source,
+    groupId: T025_IDS.alternateQueue,
+    evidenceKey: "b".repeat(64),
+    suggestionRefs: ["t025-cash-destination"],
+    name: "TEST Cash destination",
+    type: "CASH",
+    providerDisplayName: null,
+    cardLast4: null,
+    senderNames: [],
+    status: "confirmed",
+    confirmedIdentityRevision: "0",
+  };
+  const atmRow: AccountReviewRow = {
+    ...row,
+    transaction,
+    assignment: sourceGroupActive
+      ? row.assignment
+      : {
+          state: "existing",
+          accountId: "00000000-0000-4000-8000-000000000102",
+          origin: "user",
+          currency: "EGP",
+          identityRevision: "0",
+        },
+    toAssignment: {
+      state: "suggested",
+      accountId: null,
+      groupId: cash.groupId,
+      groupRevision: cash.revision,
+      confirmation: "confirmed",
+    },
+    reviewReasons: sourceGroupActive ? ["account_group_unconfirmed"] : [],
+    selected: false,
+  };
+  return {
+    transaction,
+    review: {
+      ...makeT025StoredReview(session, row.rowId),
+      row: atmRow,
+      groups: sourceGroupActive ? [source, cash] : [cash],
+    },
+  };
+}

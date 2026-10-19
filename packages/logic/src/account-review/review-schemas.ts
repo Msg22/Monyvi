@@ -421,14 +421,25 @@ export const accountReviewSaveIntentSchema = z
     }
   });
 
+/** Only genuine SMS ATM Cash can occupy the transfer destination endpoint. */
+function isDestinationGroup(
+  row: z.infer<typeof accountReviewRowSchema>,
+  group: z.infer<typeof accountReviewGroupSchema>
+): boolean {
+  return (
+    row.source === "SMS" &&
+    row.transaction.isAtmWithdrawal === true &&
+    group.type === "CASH"
+  );
+}
+
 function validateSessionRows(
   rows: ReadonlyArray<z.infer<typeof accountReviewRowSchema>>,
   groups: ReadonlyArray<z.infer<typeof accountReviewGroupSchema>>,
   source: "VOICE" | "SMS",
   ctx: z.RefinementCtx
 ): void {
-  const groupById = new Map<string, z.infer<typeof accountReviewGroupSchema>>();
-  for (const group of groups) groupById.set(group.groupId, group);
+  const groupById = new Map(groups.map((group) => [group.groupId, group]));
   for (const [index, row] of rows.entries()) {
     if (row.source !== source) {
       addIssue(
@@ -437,78 +448,85 @@ function validateSessionRows(
         "Review row has wrong session source"
       );
     }
-    if (row.assignment.state !== "suggested") continue;
-    const assignment = row.assignment;
-    const group = groupById.get(assignment.groupId);
-    if (
-      !group ||
-      !group.linkedRowIds.includes(row.rowId) ||
-      group.revision !== assignment.groupRevision ||
-      group.status !== assignment.confirmation
-    ) {
-      addIssue(
-        ctx,
-        ["rows", index, "assignment"],
-        "Stale or missing linked group"
-      );
+    for (const [role, assignment] of [
+      ["source", row.assignment],
+      ["destination", row.toAssignment],
+    ] as const) {
+      if (assignment?.state !== "suggested") continue;
+      const group = groupById.get(assignment.groupId);
+      if (
+        !group ||
+        !group.linkedRowIds.includes(row.rowId) ||
+        group.revision !== assignment.groupRevision ||
+        group.status !== assignment.confirmation ||
+        (role === "destination" && !isDestinationGroup(row, group)) ||
+        (role === "source" && isDestinationGroup(row, group)) ||
+        (row.source === "SMS" && role === "source" && group.type === "CASH")
+      ) {
+        addIssue(
+          ctx,
+          ["rows", index, role === "source" ? "assignment" : "toAssignment"],
+          "Stale, incompatible or missing linked group"
+        );
+      }
     }
   }
 }
 
-/** Removed tombstones retain provenance, but never own current live rows. */
-function validateActiveGroupRow(
-  row: z.infer<typeof accountReviewRowSchema> | undefined,
-  group: z.infer<typeof accountReviewGroupSchema>,
-  ctx: z.RefinementCtx,
-  groupIndex: number
-): void {
-  if (
-    !row ||
-    row.assignment.state !== "suggested" ||
-    row.assignment.groupId !== group.groupId ||
-    row.assignment.groupRevision !== group.revision ||
-    row.assignment.confirmation !== group.status
-  ) {
-    addIssue(
-      ctx,
-      ["groups", groupIndex, "linkedRowIds"],
-      "Active group must have reciprocal row assignment"
-    );
-  }
-  if (
-    !row ||
-    row.currency.state !== "known" ||
-    row.currency.code !== group.currency
-  ) {
-    addIssue(
-      ctx,
-      ["groups", groupIndex, "currency"],
-      "Active group requires matching known row currency"
-    );
-  }
-}
-
-/** Only live groups own rows; removed tombstones preserve inert history. */
+/** Removed group tombstones remain inert; active memberships are endpoint-specific. */
 function validateActiveGroupMembership(
   rows: ReadonlyArray<z.infer<typeof accountReviewRowSchema>>,
   groups: ReadonlyArray<z.infer<typeof accountReviewGroupSchema>>,
   ctx: z.RefinementCtx
 ): void {
-  const rowById = new Map<string, z.infer<typeof accountReviewRowSchema>>();
-  for (const row of rows) rowById.set(row.rowId, row);
-  const activeRowIds = new Set<string>();
+  const rowById = new Map(rows.map((row) => [row.rowId, row]));
+  const seenEndpoints = new Set<string>();
   for (const [index, group] of groups.entries()) {
     if (group.status === "removed") continue;
     for (const id of group.linkedRowIds) {
-      if (activeRowIds.has(id)) {
+      const row = rowById.get(id);
+      const role =
+        row && isDestinationGroup(row, group) ? "destination" : "source";
+      const key = id + ":" + role;
+      if (seenEndpoints.has(key)) {
         addIssue(
           ctx,
           ["groups", index, "linkedRowIds"],
-          "Row belongs to multiple active groups"
+          "One review row has multiple active groups for an endpoint"
         );
       }
-      activeRowIds.add(id);
-      validateActiveGroupRow(rowById.get(id), group, ctx, index);
+      seenEndpoints.add(key);
+      const assignment = row
+        ? role === "destination"
+          ? row.toAssignment
+          : row.assignment
+        : null;
+      if (
+        !row ||
+        !assignment ||
+        assignment.state !== "suggested" ||
+        assignment.groupId !== group.groupId ||
+        assignment.groupRevision !== group.revision ||
+        assignment.confirmation !== group.status ||
+        (row.source === "SMS" && role === "source" && group.type === "CASH")
+      ) {
+        addIssue(
+          ctx,
+          ["groups", index, "linkedRowIds"],
+          "Active group requires reciprocal role-specific row assignment"
+        );
+      }
+      if (
+        !row ||
+        row.currency.state !== "known" ||
+        row.currency.code !== group.currency
+      ) {
+        addIssue(
+          ctx,
+          ["groups", index, "currency"],
+          "Active group requires matching known row currency"
+        );
+      }
     }
   }
 }
@@ -640,6 +658,41 @@ export const accountReviewCommandSchema = z
         ...rowCommand,
         kind: z.literal("choose_row_account"),
         accountId: canonicalUuid,
+      })
+      .strict(),
+    // Local user-created source draft, not a physical account identity.
+    z
+      .object({
+        ...rowCommand,
+        kind: z.literal("create_row_account_draft"),
+        role: z.enum(["source", "destination"]),
+        identity: z.object({ name: nonblankText, type: accountType }).strict(),
+        manualDraft: z
+          .object({
+            nonce: canonicalUuid,
+            groupId: canonicalUuid,
+            evidenceKey: hash,
+          })
+          .strict(),
+      })
+      .strict(),
+    z
+      .object({
+        ...rowCommand,
+        kind: z.literal("confirm_row_account_and_currency"),
+        role: z.enum(["source", "destination"]),
+        accountId: canonicalUuid,
+        acknowledgedCurrency: currencyCode,
+        expectedAccountIdentity: z
+          .object({
+            name: nonblankText,
+            type: accountType,
+            currency: currencyCode,
+            institutionId: z.string().nullable(),
+            providerDisplayName: z.string().nullable(),
+            cardLast4: cardSuffix.nullable(),
+          })
+          .strict(),
       })
       .strict(),
     z

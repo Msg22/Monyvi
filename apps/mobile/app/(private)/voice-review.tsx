@@ -247,13 +247,11 @@ export default function VoiceReviewScreen(): React.JSX.Element {
         if (result.kind !== "committed" && result.kind !== "replay")
           throw new Error("account_review_voice_save_not_committed");
         router.replace(originTabRoute);
-      } catch (error: unknown) {
+      } catch {
         showToast({
           type: "error",
           title: tCommon("error"),
-          message: t("voice_save_error", {
-            message: error instanceof Error ? error.message : String(error),
-          }),
+          message: t("voice_error_default"),
         });
       } finally {
         saveAdmissionRef.current = false;

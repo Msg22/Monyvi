@@ -188,17 +188,26 @@ export function presentReviewRowIssueKeys(
     "account_evidence_invalid",
     "account_group_unconfirmed",
   ];
+  const missingDestination =
+    row.source === "SMS" &&
+    row.transaction.isAtmWithdrawal === true &&
+    row.toAssignment !== null &&
+    (row.toAssignment.state === "unresolved" ||
+      (row.toAssignment.state === "suggested" &&
+        row.toAssignment.confirmation === "pending"));
   const actualAccountProblem =
     row.assignment.state !== "suggested" &&
-    accountProblemReasons.some((reason) => reasons.has(reason));
+    accountProblemReasons.some(
+      (reason) =>
+        reasons.has(reason) &&
+        (reason !== "cash_transfer_review" || missingDestination)
+    );
   // Currency must be confirmed before account eligibility has meaning.
   // Preserve overlapping actual account issues once that prerequisite is met.
   if (
     row.currency.state !== "unconfirmed" &&
     (row.assignment.state === "unresolved" ||
-      (row.source === "SMS" &&
-        row.transaction.isAtmWithdrawal === true &&
-        row.toAssignment?.state !== "existing") ||
+      missingDestination ||
       actualAccountProblem)
   )
     result.push("account_review_issue_account");
@@ -317,17 +326,19 @@ export function intersectGuardedGroupAccountChoices<
 >(
   linkedRowIds: readonly string[],
   groupType: string | null,
-  getCandidates: (rowId: string, role: "source") => readonly T[]
+  getCandidates: (
+    rowId: string,
+    role: "source" | "destination"
+  ) => readonly T[],
+  role: "source" | "destination" = "source"
 ): readonly T[] {
   const first = linkedRowIds[0];
   if (!first) return [];
-  return getCandidates(first, "source").filter(
+  return getCandidates(first, role).filter(
     (candidate) =>
       candidate.type === groupType &&
       linkedRowIds.every((rowId) =>
-        getCandidates(rowId, "source").some(
-          (other) => other.id === candidate.id
-        )
+        getCandidates(rowId, role).some((other) => other.id === candidate.id)
       )
   );
 }
@@ -433,7 +444,8 @@ export function presentCanonicalRowDetails(
     readonly name: string;
     readonly type: AccountReviewSession["groups"][number]["type"];
   }>,
-  language: ReviewDisplayLanguage
+  language: ReviewDisplayLanguage,
+  destinationGroup: AccountReviewSession["groups"][number] | null = null
 ): CanonicalRowDetails {
   const assigned =
     row.assignment.state === "existing"
@@ -442,16 +454,14 @@ export function presentCanonicalRowDetails(
   const isSmsAtm =
     row.source === "SMS" && row.transaction.isAtmWithdrawal === true;
   const currencyUnknown = row.currency.state === "unconfirmed";
-  const accountActionLabel = currencyUnknown
-    ? null
-    : isSmsAtm
-      ? t("from_account", { ns: "transactions", lng: language })
-      : row.assignment.state === "unresolved"
-        ? t("account_review_issue_account", {
-            ns: "transactions",
-            lng: language,
-          })
-        : reviewCopy("account_review_group_change", language);
+  const accountActionLabel = isSmsAtm
+    ? t("from_account", { ns: "transactions", lng: language })
+    : row.assignment.state === "unresolved"
+      ? t("account_review_issue_account", {
+          ns: "transactions",
+          lng: language,
+        })
+      : reviewCopy("account_review_group_change", language);
   const status =
     assigned?.id &&
     row.assignment.state === "existing" &&
@@ -501,7 +511,15 @@ export function presentCanonicalRowDetails(
       language
     ),
     isSmsAtm,
-    destinationName: destination?.name ?? null,
+    destinationName:
+      destination?.name ??
+      (toAssignment?.state === "suggested" &&
+      destinationGroup?.groupId === toAssignment.groupId &&
+      destinationGroup.status !== "removed"
+        ? destinationGroup.name +
+          " · " +
+          reviewCopy("account_review_group_new_account", language)
+        : null),
   };
 }
 
@@ -538,6 +556,7 @@ export function presentReviewAccountChoices(
       id: account.id,
       displayName: account.name,
       identityDetails,
+      currencyCode: account.currency,
       iconName:
         account.type === "CASH"
           ? "cash-outline"

@@ -259,12 +259,13 @@ export function ControlledReviewTransactionEditModal({
               onPress={dismiss}
               accessibilityRole="button"
               disabled={isBusy || saving}
+              className="min-h-11 min-w-11 shrink-0 justify-center"
             >
               <Text className="text-base font-bold text-slate-500">
                 {t("cancel")}
               </Text>
             </TouchableOpacity>
-            <Text className="text-lg font-bold text-slate-800 dark:text-white">
+            <Text className="min-w-0 shrink text-center text-lg font-bold text-slate-800 dark:text-white">
               {t("edit_transaction")}
             </Text>
             <TouchableOpacity
@@ -272,7 +273,7 @@ export function ControlledReviewTransactionEditModal({
               onPress={() => void submit()}
               disabled={inactive}
               accessibilityRole="button"
-              className="rounded-full bg-nileGreen-500 px-5 py-1.5"
+              className="min-h-12 shrink-0 justify-center rounded-full bg-nileGreen-500 px-5 py-1.5"
             >
               <Text className="text-sm font-semibold text-white">
                 {t("save")}
@@ -441,7 +442,7 @@ export function ControlledReviewTransactionEditModal({
                   className={
                     sms
                       ? "min-h-16 flex-row items-center border-b border-slate-200 px-4 py-3 dark:border-slate-700"
-                      : "mb-4 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60"
+                      : "mb-4 flex-row items-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60"
                   }
                 >
                   {sms && (
@@ -450,22 +451,32 @@ export function ControlledReviewTransactionEditModal({
                       color={palette.violet[500]}
                     />
                   )}
-                  <View className="ms-3 flex-1">
+                  <View className={sms ? "ms-3 flex-1" : "min-w-0 flex-1"}>
                     <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
                       {t("category")}
                     </Text>
                     <Text
-                      numberOfLines={1}
+                      numberOfLines={sms ? 1 : undefined}
                       className="text-base font-semibold text-text-primary dark:text-text-primary-dark"
                     >
                       {categoryLabel}
                     </Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={22}
-                    color={palette.slate[400]}
-                  />
+                  {sms ? (
+                    <Ionicons
+                      name="chevron-forward"
+                      size={22}
+                      color={palette.slate[400]}
+                    />
+                  ) : (
+                    <View className="h-11 w-11 shrink-0 items-center justify-center">
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color={palette.slate[400]}
+                      />
+                    </View>
+                  )}
                 </TouchableOpacity>
               )}
             </View>

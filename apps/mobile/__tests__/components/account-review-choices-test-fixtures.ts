@@ -6,28 +6,13 @@
  * There are no DB/service/parser/reducer/Save calls or persisted DTOs here.
  */
 import manifest from "../../e2e/fixtures/shared-account-review.json";
+import type {
+  AccountChoiceCandidateView,
+  AccountChoiceSheetProps,
+} from "@/components/transaction-review/AccountChoiceSheet";
 
-export interface ChoiceCandidate {
-  readonly id: string;
-  readonly displayName: string;
-  readonly identityDetails: string;
-  readonly accessibilityLabel: string;
-  readonly isEligible: boolean;
-}
-
-export interface AccountChoiceViewProps {
-  readonly visible: boolean;
-  readonly title: string;
-  readonly contextSubtitle?: string;
-  readonly scopeDisclosure: string;
-  readonly candidateOptions: readonly ChoiceCandidate[];
-  readonly selectedCandidateId: string | null;
-  readonly canUseSelection: boolean;
-  readonly isBusy: boolean;
-  readonly onSelectCandidate: (id: string) => void;
-  readonly onUseSelected: () => void;
-  readonly onClose: () => void;
-}
+export type ChoiceCandidate = AccountChoiceCandidateView;
+export type AccountChoiceViewProps = AccountChoiceSheetProps;
 
 export interface CurrencyCandidate {
   readonly code: string;
@@ -157,4 +142,41 @@ export function countEligibleCandidates(
   candidates: readonly ChoiceCandidate[]
 ): number {
   return candidates.filter((candidate) => candidate.isEligible).length;
+}
+
+/** Existing B1 chooser with only one user-created draft type permitted. */
+export function makeManualDraftChoiceProps(
+  type: "BANK" | "CASH",
+  onSubmit: NonNullable<AccountChoiceSheetProps["draftCreation"]>["onSubmit"],
+  overrides: Partial<AccountChoiceViewProps> = {}
+): AccountChoiceViewProps {
+  return makeAccountChoiceProps({
+    candidateOptions: [],
+    isCashDestination: type === "CASH",
+    draftCreation: {
+      lockedCurrencyLabel: "EGP",
+      typeOptions: [
+        {
+          id: type,
+          label: type === "CASH" ? "Cash" : "Bank",
+        },
+      ],
+      onSubmit,
+    },
+    ...overrides,
+  });
+}
+
+/** No phantom selected account; human explicitly confirms the owned USD row. */
+export function makeExplicitCurrencyConsentChoiceProps(
+  onUseSelected: () => void
+): AccountChoiceViewProps {
+  const selected = getQnbCandidate(makeQnbChoiceCandidates(), "0007");
+  return makeAccountChoiceProps({
+    candidateOptions: [{ ...selected, currencyCode: "USD" }],
+    selectedCandidateId: selected.id,
+    canUseSelection: true,
+    explicitCurrencyChoice: { previousConfirmedCurrency: null },
+    onUseSelected,
+  });
 }

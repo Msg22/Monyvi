@@ -161,6 +161,7 @@ function selectedMembersStillEligible(
   });
 }
 
+/** Confirm only the endpoint actually linked to this group. */
 function confirmGroupRows(
   rows: readonly AccountReviewRow[],
   group: AccountReviewGroup,
@@ -169,31 +170,53 @@ function confirmGroupRows(
 ): AccountReviewRow[] {
   const members = new Set(group.linkedRowIds);
   return rows.map((row): AccountReviewRow => {
-    if (!members.has(row.rowId) || row.assignment.state !== "suggested")
+    if (!members.has(row.rowId)) return row;
+    const destination =
+      row.source === "SMS" &&
+      row.transaction.isAtmWithdrawal === true &&
+      group.type === "CASH";
+    const assignment = destination ? row.toAssignment : row.assignment;
+    if (
+      assignment?.state !== "suggested" ||
+      assignment.groupId !== group.groupId
+    )
       return row;
     const retainSelection =
       retainValidSelections &&
       row.selected &&
-      row.assignment.groupId === group.groupId &&
-      row.assignment.groupRevision === group.revision &&
-      row.assignment.confirmation === "confirmed" &&
+      assignment.groupRevision === group.revision &&
+      assignment.confirmation === "confirmed" &&
       row.currency.state === "known" &&
       row.currency.code === group.currency &&
       row.reviewReasons.length === 0 &&
-      (row.source !== "SMS" ||
-        row.transaction.isAtmWithdrawal !== true ||
-        row.toAssignment?.state === "existing");
+      (destination
+        ? row.assignment.state !== "unresolved"
+        : row.source !== "SMS" ||
+          row.transaction.isAtmWithdrawal !== true ||
+          row.toAssignment?.state === "existing" ||
+          (row.toAssignment?.state === "suggested" &&
+            row.toAssignment.confirmation === "confirmed"));
+    const next = {
+      state: "suggested" as const,
+      accountId: null,
+      groupId: group.groupId,
+      groupRevision: revision,
+      confirmation: "confirmed" as const,
+    };
     return revisedRow({
       ...row,
       selected: retainSelection,
-      assignment: {
-        state: "suggested",
-        accountId: null,
-        groupId: group.groupId,
-        groupRevision: revision,
-        confirmation: "confirmed",
-      },
-      reviewReasons: withoutAccountBlocker(row.reviewReasons),
+      ...(destination
+        ? {
+            toAssignment: next,
+            reviewReasons: row.reviewReasons.filter(
+              (reason) => reason !== "cash_transfer_review"
+            ),
+          }
+        : {
+            assignment: next,
+            reviewReasons: withoutAccountBlocker(row.reviewReasons),
+          }),
     });
   });
 }
@@ -223,13 +246,15 @@ function confirmOrEdit(
   command: GroupCommand,
   context: AccountReviewOwnedContext | undefined
 ): GroupTransitionResult {
-  // Active SMS groups always assign the source, never an ATM Cash destination.
-  // A grounded Voice Cash group remains valid.
   const type =
     command.kind === "edit_group" ? command.identity.type : group.type;
-  if (state.source === "SMS" && type === "CASH") {
+  const destination = state.source === "SMS" && group.type === "CASH";
+  // A Cash ATM group is destination-only; source groups must remain non-Cash.
+  if (
+    state.source === "SMS" &&
+    (destination ? type !== "CASH" : type === "CASH")
+  )
     return blocked("account_group_snapshot_conflict");
-  }
   if (
     command.kind === "edit_group" &&
     editedNameConflicts(state, group, command)
@@ -269,19 +294,36 @@ function removedRows(
   const members = new Set(group.linkedRowIds);
   return rows.map((row): AccountReviewRow => {
     if (!members.has(row.rowId)) return row;
+    const destination =
+      row.source === "SMS" &&
+      row.transaction.isAtmWithdrawal === true &&
+      group.type === "CASH";
+    const unresolvedAssignment = {
+      state: "unresolved" as const,
+      accountId: null,
+      reasonCode: destination
+        ? ("cash_transfer_review" as const)
+        : ("account_group_removed" as const),
+      candidateAccountIds: [],
+    };
     return revisedRow({
       ...row,
       selected: false,
-      assignment: {
-        state: "unresolved",
-        accountId: null,
-        reasonCode: "account_group_removed",
-        candidateAccountIds: [],
-      },
-      reviewReasons: uniqueReasons(
-        row.reviewReasons,
-        "account_group_removed"
-      ).filter((reason) => reason !== "account_group_unconfirmed"),
+      ...(destination
+        ? {
+            toAssignment: unresolvedAssignment,
+            reviewReasons: uniqueReasons(
+              row.reviewReasons,
+              "cash_transfer_review"
+            ),
+          }
+        : {
+            assignment: unresolvedAssignment,
+            reviewReasons: uniqueReasons(
+              row.reviewReasons,
+              "account_group_removed"
+            ).filter((reason) => reason !== "account_group_unconfirmed"),
+          }),
     });
   });
 }

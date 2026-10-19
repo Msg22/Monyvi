@@ -28,6 +28,7 @@ import {
 import { loadOrBootstrapOwnedSmsReviewSession } from "../services/account-review-legacy-bootstrap-service";
 import { executeSmsAccountReviewCommand } from "../services/account-review-command-service";
 import { executeVoiceAccountReviewCommand } from "../services/account-review-voice-command-service";
+import { USER_DATA_ACCESS_ERROR_CODES } from "../services/user-data-access-error-codes";
 
 interface CommonReviewInput {
   readonly ownerId: string | null;
@@ -113,6 +114,31 @@ function toReviewError(reason: unknown): Error {
 
 function cancelledError(): Error {
   return new Error("account_review_facade_cancelled");
+}
+
+/** Authentication, queue and projection failures cannot reuse old UI authority. */
+function isFatalCommandError(error: Error): boolean {
+  const code = error.message;
+  return (
+    error.name === "AbortError" ||
+    Object.values(USER_DATA_ACCESS_ERROR_CODES).some(
+      (value) => value === code
+    ) ||
+    code.startsWith("ACCOUNT_REVIEW_") ||
+    code.startsWith("account_review_facade_") ||
+    code.startsWith("account_review_category_") ||
+    [
+      "review_owner_changed",
+      "review_source_changed",
+      "account_review_current_actor_changed",
+      "account_review_voice_command_scope_changed",
+      "account_review_voice_cancelled",
+      "account_review_queue_changed",
+      "account_review_queue_empty",
+      "account_review_draft_missing",
+      "account_review_row_scope_changed",
+    ].includes(code)
+  );
 }
 
 function verifySessionScope(
@@ -651,6 +677,38 @@ export class AccountReviewFacadeController {
     this.publish();
   }
 
+  /** A rejected command cannot invalidate an unchanged, still-owned projection. */
+  private canRetainReadModelAfterCommandError(
+    task: QueuedReviewCommand,
+    error: Error
+  ): boolean {
+    const input = this.input;
+    const session = this.session;
+    const snapshots = this.snapshots;
+    if (
+      !input ||
+      !session ||
+      !snapshots ||
+      !this.readModel ||
+      this.error ||
+      this.loading ||
+      this.active !== task ||
+      !this.isCurrent(task.generation) ||
+      session.ownerId !== input.ownerId ||
+      session.sessionId !== input.sessionId ||
+      session.source !== input.mode ||
+      snapshots.ownerId !== input.ownerId ||
+      task.command.ownerId !== input.ownerId ||
+      task.command.sessionId !== input.sessionId ||
+      (input.mode === "SMS" && input.queueId !== input.sessionId) ||
+      isFatalCommandError(error)
+    )
+      return false;
+    // refreshReadModel already established this projection over this owned
+    // session/snapshot pair; the failed command did not replace either.
+    return true;
+  }
+
   private async runCommand(task: QueuedReviewCommand): Promise<void> {
     try {
       if (!this.isCurrent(task.generation) || !this.session)
@@ -668,7 +726,11 @@ export class AccountReviewFacadeController {
     } catch (reason) {
       const error = toReviewError(reason);
       if (this.isCurrent(task.generation)) {
-        this.error = error;
+        // Leave a previously validated Review visible for an explicit retry.
+        // The rejected Promise still reaches the caller's existing feedback.
+        if (!this.canRetainReadModelAfterCommandError(task, error)) {
+          this.error = error;
+        }
         this.publish();
       }
       task.reject(error);

@@ -484,6 +484,15 @@ export default function SmsReviewScreen(): React.JSX.Element {
           result.kind !== "cleanup_only"
         )
           throw new Error("account_review_sms_save_uncommitted");
+        // A completed canonical review has the same first-scan bookkeeping
+        // gate as the legacy path; unresolved scan candidates stay pending.
+        if (unresolvedCandidates.length === 0) {
+          void markSyncComplete().catch((error: unknown) => {
+            logger.warn("smsReview.markSyncComplete.failed", {
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
+          });
+        }
         clearTransactions();
         setIsLeavingAfterSave(true);
         router.replace("/(private)/(tabs)/transactions");
@@ -509,6 +518,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
       activeUserId,
       isResolvingUser,
       clearTransactions,
+      markSyncComplete,
+      unresolvedCandidates.length,
       router,
       showToast,
       t,

@@ -27,7 +27,34 @@ const fallbackCopy = {
     account_review_choice_close: "Close",
     account_review_choice_use_account: "Use account",
     account_review_choice_use_currency: "Use currency",
-    account_review_choice_empty: "No eligible accounts available.",
+    account_review_choice_empty:
+      "No compatible accounts. You can create a draft for this transaction.",
+    account_review_choice_empty_cash:
+      "No compatible Cash account for this ATM destination.",
+    account_review_choice_empty_replace:
+      "No compatible existing accounts. You can edit or keep this draft.",
+    account_review_choice_empty_requires_currency:
+      "No compatible accounts. Review the transaction currency to continue.",
+    account_review_choice_create_draft: "Create account draft",
+    account_review_choice_draft_title: "New account draft",
+    account_review_choice_draft_name: "Account name",
+    account_review_choice_draft_type: "Account type",
+    account_review_choice_draft_choose_type: "Choose account type",
+    account_review_choice_draft_currency: "Currency",
+    account_review_choice_draft_save_note:
+      "The account is created only when you save this selected transaction.",
+    account_review_choice_confirm_draft: "Confirm draft",
+    account_review_choice_edit_draft: "Edit draft",
+    account_review_choice_keep_draft: "Keep this draft",
+    account_review_choice_confirm_currency_title:
+      "Confirm account and currency",
+    account_review_choice_confirm_account: "Account:",
+    account_review_choice_previous_currency: "Previous currency:",
+    account_review_choice_currency_not_confirmed: "Not confirmed",
+    account_review_choice_no_conversion:
+      "The amount stays the same number. This changes its currency without conversion.",
+    account_review_choice_back: "Back",
+    account_review_choice_use_account_currency: "Use account and currency",
     account_review_choice_preserve_selection:
       "Transaction selections stay unchanged.",
     account_review_currency_title: "Confirm currency",
@@ -39,7 +66,33 @@ const fallbackCopy = {
     account_review_choice_close: "إغلاق",
     account_review_choice_use_account: "استخدام الحساب",
     account_review_choice_use_currency: "استخدام العملة",
-    account_review_choice_empty: "لا توجد حسابات مناسبة متاحة.",
+    account_review_choice_empty:
+      "لا توجد حسابات مناسبة. يمكنك إنشاء مسودة لهذا التعامل.",
+    account_review_choice_empty_cash:
+      "لا يوجد حساب كاش مناسب لاستقبال السحب من ماكينة الصراف.",
+    account_review_choice_empty_replace:
+      "لا توجد حسابات موجودة مناسبة. يمكنك تعديل المسودة أو الاحتفاظ بها.",
+    account_review_choice_empty_requires_currency:
+      "لا توجد حسابات مناسبة. راجع عملة المعاملة للمتابعة.",
+    account_review_choice_create_draft: "إنشاء مسودة حساب",
+    account_review_choice_draft_title: "مسودة حساب جديد",
+    account_review_choice_draft_name: "اسم الحساب",
+    account_review_choice_draft_type: "نوع الحساب",
+    account_review_choice_draft_choose_type: "اختر نوع الحساب",
+    account_review_choice_draft_currency: "العملة",
+    account_review_choice_draft_save_note:
+      "سيُنشأ الحساب فقط عند حفظ هذه المعاملة بعد تحديدها.",
+    account_review_choice_confirm_draft: "تأكيد المسودة",
+    account_review_choice_edit_draft: "تعديل المسودة",
+    account_review_choice_keep_draft: "الاحتفاظ بالمسودة",
+    account_review_choice_confirm_currency_title: "تأكيد الحساب والعملة",
+    account_review_choice_confirm_account: "الحساب:",
+    account_review_choice_previous_currency: "العملة السابقة:",
+    account_review_choice_currency_not_confirmed: "لم تُؤكد",
+    account_review_choice_no_conversion:
+      "سيظل المبلغ بنفس الرقم، وستتغير العملة دون تحويل.",
+    account_review_choice_back: "رجوع",
+    account_review_choice_use_account_currency: "استخدام الحساب والعملة",
     account_review_choice_preserve_selection: "ستبقى المعاملات المحددة كما هي.",
     account_review_currency_title: "تأكيد العملة",
     account_review_currency_choose_another: "اختيار عملة أخرى",
@@ -108,7 +161,7 @@ function ChoiceModalHeader({
           "account_review_choice_close",
           props.language
         )}
-        className="h-11 w-11 items-center justify-center"
+        className="h-11 w-11 shrink-0 items-center justify-center"
         onPress={props.onClose}
       >
         <Ionicons name="close-outline" size={24} color={palette.slate[400]} />
@@ -124,11 +177,12 @@ function ChoiceModalContent({
   const rtl = props.language === "ar";
   return (
     <View
-      className="w-full overflow-hidden rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+      className="w-full min-h-0 shrink overflow-hidden rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
       style={{ maxHeight }}
     >
       <ReviewSheetHandle />
       <ScrollView
+        className="min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
@@ -214,7 +268,7 @@ export function ChoiceModalFrame(
     >
       <KeyboardAvoidingView
         className="flex-1 justify-end"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View
           testID={props.testID}
@@ -261,7 +315,7 @@ export function ChoiceActionButton(
         if (!disabled) props.onPress();
       }}
       className={
-        "min-h-12 flex-1 items-center justify-center rounded-lg px-3 " +
+        "min-h-12 min-w-11 flex-1 items-center justify-center rounded-lg px-3 " +
         (disabled
           ? "bg-slate-300 dark:bg-slate-700 "
           : props.primary
@@ -271,7 +325,7 @@ export function ChoiceActionButton(
     >
       <Text
         className={
-          "text-base font-semibold leading-6 " +
+          "min-w-0 max-w-full shrink text-center text-base font-semibold leading-6 " +
           (disabled
             ? "text-text-muted dark:text-text-muted-dark"
             : props.primary

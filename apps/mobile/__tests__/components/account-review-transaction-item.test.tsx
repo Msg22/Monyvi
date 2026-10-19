@@ -27,6 +27,7 @@ import {
   type ShapedAccountReviewRow,
 } from "./account-review-transaction-item-test-fixtures";
 import { makeSharedPresentation } from "./shared-account-suggestions-test-fixtures";
+import { makeT025ReviewSession } from "../../../../packages/logic/src/sms-review-drafts/__tests__/account-review-v2-t025-fixtures";
 
 let mockLanguage: "en" | "ar" = "en";
 let mockWindow = { width: 390, height: 844, fontScale: 1, scale: 1 };
@@ -196,6 +197,50 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     expect(props.onPress).not.toHaveBeenCalled();
     expect(props.onToggleSelect).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("transaction-review-amount")).toBeTruthy();
+  });
+
+  it("canonical SMS close keeps its original index and selection, and ignores a busy row", () => {
+    const sms = makeT025ReviewSession().rows[0];
+    if (!sms || sms.source !== "SMS")
+      throw new Error("Missing canonical SMS source row");
+    const onDiscard = jest.fn<void, [number, boolean]>();
+    const props = makeDefaultItem({
+      transaction: sms.transaction,
+      index: 4,
+      isSelected: true,
+      isSmsWorkspace: true,
+      onDiscard,
+    });
+    const rendered = renderRow(props);
+    const close = screen.getByTestId("sms-review-discard-4");
+    expect(close).toHaveProp("accessibilityRole", "button");
+    expect(close.props.accessibilityLabel).toEqual(expect.any(String));
+    expect(close).toHaveProp("accessibilityState", { disabled: false });
+    const stopPropagation = jest.fn<void, []>();
+    fireEvent.press(close, { stopPropagation });
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    expect(onDiscard).toHaveBeenCalledWith(4, true);
+    expect(props.onPress).not.toHaveBeenCalled();
+    expect(props.onToggleSelect).not.toHaveBeenCalled();
+
+    rendered.rerender(
+      <TransactionItem
+        {...props}
+        accountReview={{ ...props.accountReview, isBusy: true }}
+      />
+    );
+    const busyClose = screen.getByTestId("sms-review-discard-4");
+    expect(busyClose).toHaveProp("accessibilityState", { disabled: true });
+    fireEvent.press(busyClose, { stopPropagation: jest.fn<void, []>() });
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+
+    rendered.rerender(
+      <TransactionItem
+        {...makeDefaultItem({ isSmsWorkspace: true, onDiscard })}
+      />
+    );
+    expect(screen.queryByTestId("sms-review-discard-4")).toBeNull();
   });
 
   it("canonical account icon is not guessed from Voice or SMS origin", () => {

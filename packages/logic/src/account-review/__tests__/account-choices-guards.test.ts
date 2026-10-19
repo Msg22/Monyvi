@@ -7,11 +7,17 @@ import {
   accountReviewSessionSchema,
 } from "../schemas";
 import { groundedOwnedCandidates } from "../resolution-candidates";
-import { mergeAccountReviewLateRows } from "../reducer";
+import { getExplicitAccountCurrencyOptions } from "../candidates";
+import { deriveManualRowAccountReviewGroupIdentity } from "../identity";
+import {
+  reduceAccountReviewCommand,
+  mergeAccountReviewLateRows,
+} from "../reducer";
+import { syntheticHashProvider, makeSmsInput } from "./normalization-fixtures";
 import { normalizeAccountReviewParserResult } from "../normalization";
-import { makeSmsInput } from "./normalization-fixtures";
 import {
   COMMAND_IDS,
+  availableAccounts,
   canonicalCommand,
   canonicalVoiceReview,
   groupByName,
@@ -453,4 +459,245 @@ describe("#395 T034 follow-up: fresh revisions and Save intent reject immutably"
       expect(result.state.saveIntent).toEqual(locked.saveIntent);
     }
   );
+});
+
+describe("#395 owner manual source/Cash drafts and explicit account currency", () => {
+  it("offers owned alternate currencies only through the opt-in chooser and applies one row-CAS transition without conversion", async () => {
+    const before = await unconfirmedCurrencyReview("ambiguous");
+    const row = before.rows[0];
+    if (!row) throw new Error("Missing ambiguous review row");
+    expect(choiceList(before, row.rowId, "source")).toEqual([]);
+    const context = ownedContext(before);
+    const options = getExplicitAccountCurrencyOptions({
+      session: before,
+      rowId: row.rowId,
+      role: "source",
+      ownedAccounts: context.accounts,
+    });
+    const usd = options.find((item) => item.id === COMMAND_IDS.usdAccount);
+    if (!usd) throw new Error("Missing owned USD option");
+    const command = accountReviewCommandSchema.parse({
+      ...scope(before),
+      kind: "confirm_row_account_and_currency",
+      rowId: row.rowId,
+      expectedRowRevision: row.revision,
+      role: "source",
+      accountId: usd.id,
+      acknowledgedCurrency: usd.currency,
+      expectedAccountIdentity: {
+        name: usd.name,
+        type: usd.type,
+        currency: usd.currency,
+        institutionId: usd.institutionId,
+        providerDisplayName: usd.providerDisplayName,
+        cardLast4: usd.cardLast4,
+      },
+    });
+    if (command.kind !== "confirm_row_account_and_currency")
+      throw new Error("Expected explicit account-and-currency fixture");
+    const accepted = apply(before, command, context);
+    expect(accepted.reasonCodes).toEqual([]);
+    const changed = requireRow(accepted.state, row.rowId);
+    expect(changed.currency).toEqual({
+      state: "known",
+      code: "USD",
+      origin: "user",
+    });
+    expect(changed.assignment).toMatchObject({
+      state: "existing",
+      accountId: usd.id,
+      currency: "USD",
+      origin: "user",
+    });
+    expect(changed.amountDecimal).toBe(row.amountDecimal);
+    expect(changed.transaction.amount).toBe(row.transaction.amount);
+    expect(changed.transaction.categoryId).toBe(row.transaction.categoryId);
+    expect(changed.accountEvidence).toEqual(row.accountEvidence);
+    expect(changed.selected).toBe(false);
+    expect(before.rows[0]).toEqual(row);
+
+    assertUnchangedFailure(
+      apply(
+        before,
+        {
+          ...command,
+          acknowledgedCurrency: "EGP",
+        },
+        context
+      ),
+      before
+    );
+    assertUnchangedFailure(
+      apply(accepted.state, command, context),
+      accepted.state
+    );
+    assertUnchangedFailure(
+      apply(before, command, { ...context, ownerId: COMMAND_IDS.otherOwner }),
+      before
+    );
+  });
+
+  it("a confirmed known EGP row may explicitly choose USD, but SMS source cannot choose Cash", async () => {
+    const known = await reviewWithReadyRow();
+    const row = requireRow(known, COMMAND_IDS.readyRow);
+    const usd = availableAccounts().find(
+      (item) => item.id === COMMAND_IDS.usdAccount
+    );
+    if (!usd) throw new Error("Missing USD account");
+    const changed = apply(
+      known,
+      accountReviewCommandSchema.parse({
+        ...scope(known),
+        kind: "confirm_row_account_and_currency",
+        rowId: row.rowId,
+        expectedRowRevision: row.revision,
+        role: "source",
+        accountId: usd.id,
+        acknowledgedCurrency: usd.currency,
+        expectedAccountIdentity: {
+          name: usd.name,
+          type: usd.type,
+          currency: usd.currency,
+          institutionId: usd.institutionId,
+          providerDisplayName: usd.providerDisplayName,
+          cardLast4: usd.cardLast4,
+        },
+      })
+    );
+    expect(changed.reasonCodes).toEqual([]);
+    expect(requireRow(changed.state, row.rowId).transaction.amount).toBe(
+      row.transaction.amount
+    );
+    expect(requireRow(changed.state, row.rowId).selected).toBe(false);
+    expect(requireRow(changed.state, row.rowId).currency).toMatchObject({
+      code: "USD",
+      origin: "user",
+    });
+
+    const atm = await smsAtmReview();
+    const atmRow = atm.rows[0];
+    const cash = availableAccounts().find(
+      (item) => item.id === COMMAND_IDS.cashAccount
+    );
+    if (!atmRow || !cash) throw new Error("Missing ATM/Cash");
+    const invalid = accountReviewCommandSchema.parse({
+      ...scope(atm),
+      kind: "confirm_row_account_and_currency",
+      rowId: atmRow.rowId,
+      expectedRowRevision: atmRow.revision,
+      role: "source",
+      accountId: cash.id,
+      acknowledgedCurrency: cash.currency,
+      expectedAccountIdentity: {
+        name: cash.name,
+        type: cash.type,
+        currency: cash.currency,
+        institutionId: cash.institutionId,
+        providerDisplayName: cash.providerDisplayName,
+        cardLast4: cash.cardLast4,
+      },
+    });
+    assertUnchangedFailure(apply(atm, invalid), atm);
+  });
+
+  it("Cash destination draft is row-only, preserves ATM bank source, and removes/Undo restores only destination", async () => {
+    const before = await smsAtmReview();
+    const row = before.rows[0];
+    if (!row) throw new Error("Missing ATM row");
+    const bank = apply(
+      before,
+      choose(before, row.rowId, COMMAND_IDS.cibAccount)
+    );
+    expect(bank.reasonCodes).toEqual([]);
+    const chosenRow = requireRow(bank.state, row.rowId);
+    const noCash = ownedContext(
+      bank.state,
+      availableAccounts().filter((account) => account.type !== "CASH")
+    );
+    const nonce = COMMAND_IDS.undoToken;
+    const draft = await deriveManualRowAccountReviewGroupIdentity({
+      ownerId: bank.state.ownerId,
+      sessionId: bank.state.sessionId,
+      source: bank.state.source,
+      rowId: row.rowId,
+      role: "destination",
+      nonce,
+      identity: { name: "ATM cash purse", type: "CASH", currency: "EGP" },
+      hashProvider: syntheticHashProvider,
+    });
+    const command = accountReviewCommandSchema.parse({
+      ...scope(bank.state),
+      kind: "create_row_account_draft",
+      rowId: row.rowId,
+      expectedRowRevision: chosenRow.revision,
+      role: "destination",
+      identity: { name: "ATM cash purse", type: "CASH" },
+      manualDraft: { nonce, ...draft },
+    });
+    const prepared = apply(bank.state, command, noCash);
+    expect(prepared.reasonCodes).toEqual([]);
+    const createdRow = requireRow(prepared.state, row.rowId);
+    expect(createdRow.assignment).toEqual(chosenRow.assignment);
+    expect(createdRow.toAssignment).toMatchObject({
+      state: "suggested",
+      groupId: draft.groupId,
+      confirmation: "confirmed",
+    });
+    expect(createdRow.selected).toBe(false);
+    expect(
+      prepared.state.groups.find((g) => g.groupId === draft.groupId)
+    ).toMatchObject({
+      type: "CASH",
+      currency: "EGP",
+      linkedRowIds: [row.rowId],
+      status: "confirmed",
+    });
+    assertUnchangedFailure(
+      apply(prepared.state, command, noCash),
+      prepared.state
+    );
+    const removed = reduceAccountReviewCommand({
+      state: prepared.state,
+      command: accountReviewCommandSchema.parse({
+        ...scope(prepared.state),
+        kind: "remove_group",
+        groupId: draft.groupId,
+        expectedGroupRevision: "0",
+      }),
+      accountSnapshots: noCash,
+      nextUndoToken: COMMAND_IDS.otherSession,
+      undo: null,
+    });
+    expect(removed.reasonCodes).toEqual([]);
+    expect(requireRow(removed.state, row.rowId).assignment).toEqual(
+      chosenRow.assignment
+    );
+    expect(requireRow(removed.state, row.rowId).toAssignment?.state).toBe(
+      "unresolved"
+    );
+    const undone = reduceAccountReviewCommand({
+      state: removed.state,
+      command: accountReviewCommandSchema.parse({
+        ...scope(removed.state),
+        kind: "undo_removal",
+        undoToken: COMMAND_IDS.otherSession,
+      }),
+      accountSnapshots: noCash,
+      nextUndoToken: null,
+      undo: {
+        token: COMMAND_IDS.otherSession,
+        previousState: prepared.state,
+        afterRemovalGeneration: removed.state.operationGeneration,
+      },
+    });
+    expect(undone.reasonCodes).toEqual([]);
+    expect(requireRow(undone.state, row.rowId).assignment).toEqual(
+      chosenRow.assignment
+    );
+    expect(requireRow(undone.state, row.rowId).toAssignment).toMatchObject({
+      state: "suggested",
+      groupId: draft.groupId,
+      confirmation: "confirmed",
+    });
+  });
 });

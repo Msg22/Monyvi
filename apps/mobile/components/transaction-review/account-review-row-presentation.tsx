@@ -25,7 +25,6 @@ import { CategoryIcon } from "@/components/common/CategoryIcon";
 import { useLocale } from "@/context/LocaleContext";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { ReviewActionButton } from "./shared-account-presentation";
-import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 
 const rowWritingDirectionStyles = StyleSheet.create({
   rtl: { writingDirection: "rtl" },
@@ -95,9 +94,10 @@ interface AccountMetadataProps {
   readonly source: AccountReviewRowPresentationProps;
   readonly name: string | null;
   readonly rtl: boolean;
+  readonly dense: boolean;
 }
 function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
-  const { source, name, rtl } = props;
+  const { source, name, rtl, dense } = props;
   const textAlign = rtl ? "text-right" : "text-left";
   const direction = rtl
     ? rowWritingDirectionStyles.rtl
@@ -108,16 +108,18 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
   const content = (
     <>
       {title !== null || source.accountType ? (
-        <Ionicons
-          testID="account-review-account-type-icon"
-          name={accountTypeIcon(source.accountType)}
-          color={palette.slate[500]}
-          size={20}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        <View className="h-5 w-5 shrink-0 items-center justify-center">
+          <Ionicons
+            testID="account-review-account-type-icon"
+            name={accountTypeIcon(source.accountType)}
+            color={palette.slate[500]}
+            size={dense ? 18 : 20}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        </View>
       ) : null}
-      <View className="min-w-0 flex-1">
+      <View className="min-w-0 grow shrink">
         {title !== null ? (
           <Text
             testID={
@@ -126,7 +128,10 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
                 : "account-review-account-label"
             }
             className={
-              "text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark " +
+              (dense
+                ? "text-[13px] font-semibold leading-[18px] "
+                : "text-sm font-semibold leading-5 ") +
+              "text-text-primary dark:text-text-primary-dark " +
               textAlign
             }
             style={direction}
@@ -150,18 +155,21 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         ) : null}
       </View>
       {action !== null && name !== null ? (
-        <Ionicons
-          name="pencil-outline"
-          size={16}
-          color={palette.slate[500]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        <View className="h-4 w-4 shrink-0 items-center justify-center">
+          <Ionicons
+            name="pencil-outline"
+            size={dense ? 14 : 16}
+            color={palette.slate[500]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        </View>
       ) : null}
     </>
   );
   const classes =
-    "min-w-0 flex-1 items-center gap-1.5 " +
+    "w-full min-w-0 " +
+    (dense ? "items-start gap-1 " : "items-center gap-1.5 ") +
     (rtl ? "flex-row-reverse" : "flex-row");
   if (action === null) {
     return <View className={classes}>{content}</View>;
@@ -197,8 +205,27 @@ export function AccountReviewRowPresentation({
 }: RowPresentationProps): React.JSX.Element | null {
   const { language } = useLocale();
   const { width, fontScale } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
   const rtl = language === "ar";
-  const compact = shouldUseDenseRowCompactLayout(width, fontScale);
+  // Canonical TransactionItem allocates 44 dp for selection, 32 dp gutters,
+  // and a 4 dp gap. Once measured, the actual row takes precedence.
+  const availableWidth = measuredWidth ?? Math.max(0, width - 80);
+  const dense = availableWidth < 288 || fontScale > 1.35;
+  const accountHasContent =
+    accountName !== null ||
+    source.accountActionLabel !== null ||
+    source.accountStatusLabel !== null ||
+    source.accountType !== undefined;
+  const accountMinimum =
+    20 +
+    6 +
+    Math.ceil(78 * fontScale) +
+    (accountName !== null && source.accountActionLabel !== null ? 22 : 0);
+  const categoryMinimum = 20 + 6 + Math.ceil(78 * fontScale);
+  const compact =
+    accountHasContent &&
+    Boolean(categoryDisplayName) &&
+    availableWidth < accountMinimum + categoryMinimum + (dense ? 8 : 12);
   const categoryMap = useCategoryLookup();
   const category = categoryId ? categoryMap.get(categoryId) : null;
   const categoryIcon = category
@@ -222,8 +249,12 @@ export function AccountReviewRowPresentation({
     <View testID="account-review-row-presentation" className="mt-1.5 gap-1.5">
       <View
         testID="account-review-row-metadata"
+        onLayout={(event) => {
+          const next = Math.round(event.nativeEvent.layout.width);
+          setMeasuredWidth((previous) => (previous === next ? previous : next));
+        }}
         className={
-          "gap-x-3 gap-y-2 " +
+          (dense ? "gap-x-2 gap-y-1.5 " : "gap-x-3 gap-y-2 ") +
           (compact
             ? "items-start flex-col"
             : rtl
@@ -236,27 +267,37 @@ export function AccountReviewRowPresentation({
         source.accountStatusLabel !== null ||
         source.accountType ? (
           <View className={compact ? "w-full" : "min-w-0 flex-1"}>
-            <AccountMetadata source={source} name={accountName} rtl={rtl} />
+            <AccountMetadata
+              source={source}
+              name={accountName}
+              rtl={rtl}
+              dense={dense}
+            />
           </View>
         ) : null}
         {categoryDisplayName ? (
           <View
             testID="account-review-row-category"
             className={
-              "min-w-0 items-center gap-1.5 " +
+              "min-w-0 " +
+              (dense ? "items-start gap-1 " : "items-center gap-1.5 ") +
               (compact ? "w-full " : "flex-1 ") +
               (rtl ? "flex-row-reverse" : "flex-row")
             }
           >
-            <CategoryIcon
-              iconName={categoryIcon.iconName}
-              iconLibrary={categoryIcon.iconLibrary}
-              color={categoryIcon.iconColor}
-              size={18}
-            />
+            <View className="h-5 w-5 shrink-0 items-center justify-center">
+              <CategoryIcon
+                iconName={categoryIcon.iconName}
+                iconLibrary={categoryIcon.iconLibrary}
+                color={categoryIcon.iconColor}
+                size={dense ? 16 : 18}
+              />
+            </View>
             <Text
               className={
-                "min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+                "min-w-0 grow shrink " +
+                (dense ? "text-[13px] leading-[18px] " : "text-sm leading-5 ") +
+                "text-text-secondary dark:text-text-secondary-dark " +
                 (rtl ? "text-right" : "text-left")
               }
               style={

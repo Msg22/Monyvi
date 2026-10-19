@@ -320,11 +320,15 @@ and PR #396 for validation status; this decision record does not certify it.
 - Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
   destination resolve separately. Only genuinely absent destination evidence
   permits eligible same-currency default Cash, then sole eligible Cash; explicit
-  or uncertain `toAccountEvidence` requires a compatible owned choice. Current
-  ATM Save uses an existing eligible Cash (default/sole/manual) or a genuine
-  already-canonical confirmed referenced destination group; it never invents a
-  new Cash destination group/account. Regular transfers require reliable proof
-  or explicit choices and distinct endpoints.
+  or uncertain `toAccountEvidence` requires a compatible owned choice. Automatic
+  resolution or AI evidence must **never invent** a Cash destination
+  group/account. An ATM may instead use an existing eligible Cash
+  (default/sole/manual) or a genuine, already-canonical confirmed destination
+  group, including an **explicitly user-prepared, same-currency row-only Cash
+  draft**. Preparing/confirming that draft creates no physical account; only an
+  eligible **selected ATM Save** may create the Cash account and post the
+  transfer atomically. Regular transfers require reliable proof or explicit
+  choices and distinct endpoints.
 - Proven currency omission uses the preferred currency. Ambiguous, conflicting
   or unsupported currency requires confirmation before automatic account
   assignment. Currency correction preserves the numeric amount without
@@ -374,6 +378,47 @@ and PR #396 for validation status; this decision record does not certify it.
 - Reuse the existing currency modal with transaction context and honest
   unconfirmed selection. Opening/cancelling applies nothing; do not build a new
   picker.
+
+#### #395 manual account choice, ATM Cash drafts and explicit currency (owner decisions 2026-10-19)
+
+- Reopening Use/Choose account preselects the row's previously chosen
+  **existing** account only if still owned and eligible for that row, endpoint
+  and confirmed currency; never infer the first candidate or use a display-only
+  currency. The chooser may offer other owned endpoint-eligible accounts across
+  currencies for **deliberate account-and-currency confirmation**, never
+  automatic/default assignment. Automatic/default matching still requires a
+  known matching currency.
+- When an ordinary Voice/SMS source row has **no compatible existing account**
+  and a known currency, the user may supply an account name and type to create
+  one **local, row-only confirmed draft**. This explicitly chosen draft does not
+  select the transaction, link other rows, create a physical account or change
+  balances/defaults. SMS source drafts cannot be Cash. Cancel commits nothing.
+  SMS draft choices survive Review later/restart through the authenticated local
+  review writer; Voice draft choices remain review-session only. Exactly
+  selected transactions referencing a confirmed draft cause account creation
+  only inside the existing guarded atomic/idempotent Save.
+- An existing suggested group with no replacement candidates offers Edit/Keep
+  for that same draft, not a duplicate. A missing Cash destination on an actual
+  SMS ATM withdrawal may instead be prepared as a **row-only user-named Cash
+  draft** at the row's already confirmed currency; its source Bank/Wallet
+  assignment remains distinct and unchanged. The destination draft uses the
+  reciprocal `toAssignment`, never a fake source link, and only a selected ATM
+  Save may create the physical Cash account atomically. Ordinary SMS source
+  accounts still reject Cash. No new Voice/ordinary-transfer workflow is
+  authorized; those broader transfer questions are tracked separately (#404).
+- **Explicit existing-account currency override:** Choosing an owned existing
+  account in a row account chooser requires a separate, clear confirmation
+  naming the account and its actual current owned currency, with the previous
+  currency shown if confirmed and different. When the review currency is
+  missing, ambiguous, conflicting or known-but-different, the user's single
+  explicit `Use account and currency` acceptance atomically applies the chosen
+  account and its authoritative currency under current row/account/owner CAS.
+  The numeric amount remains **exactly unchanged**, with no conversion, AI
+  inference or automatic/default account choice. Cancel/dismiss commits nothing;
+  incompatible opposite ATM endpoints are invalidated safely. Existing currency
+  candidates and the standalone currency picker remain separately usable. Draft
+  account creation still requires a known, separately confirmed review currency
+  first.
 
 #### #395 first-release scope — human decision (2026-10-17)
 

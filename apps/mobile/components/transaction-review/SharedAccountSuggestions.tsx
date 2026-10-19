@@ -18,13 +18,12 @@ import {
 } from "react-native";
 import { useColorScheme } from "nativewind";
 import { palette } from "@/constants/colors";
-import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { DefaultAccountInfo } from "./DefaultAccountInfo";
+import { SharedAccountGroupRow } from "./SharedAccountGroupRow";
 import {
   displayIdentity,
-  presentReviewLinkedCount,
   ReviewActionButton,
   ReviewPointerBackdrop,
   ReviewSheetHandle,
@@ -79,251 +78,6 @@ export interface SharedAccountSuggestionsProps {
   readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }
 type GroupCommandAction = "edit" | "replace" | "remove";
-interface GroupCardProps {
-  readonly group: SharedSuggestedGroupView;
-  readonly language: ReviewDisplayLanguage;
-  readonly compact: boolean;
-  readonly disabled: boolean;
-  readonly onConfirm: () => void;
-  readonly onMenu: () => void;
-  readonly onUndo: () => void;
-}
-function groupIcon(
-  input: string
-):
-  | "business-outline"
-  | "wallet-outline"
-  | "cash-outline"
-  | "help-circle-outline" {
-  if (input === "wallet-outline") return "wallet-outline";
-  if (input === "cash-outline") return "cash-outline";
-  if (input === "business-outline") return "business-outline";
-  return "help-circle-outline";
-}
-function GroupIdentity({
-  group,
-  language,
-  compact,
-}: Pick<GroupCardProps, "group" | "language" | "compact">): React.JSX.Element {
-  const { colorScheme } = useColorScheme();
-  const rtl = language === "ar";
-  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
-  return (
-    <View
-      className={
-        (compact ? "w-full " : "min-w-0 flex-1 ") +
-        (rtl ? "flex-row-reverse " : "flex-row ") +
-        "items-start gap-3"
-      }
-    >
-      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
-        <Ionicons
-          name={groupIcon(group.typeIconName)}
-          size={22}
-          color={
-            colorScheme === "dark" ? palette.slate[300] : palette.slate[600]
-          }
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-      </View>
-      <View className="min-w-0 flex-1 gap-1">
-        <Text
-          className={
-            "text-base font-semibold leading-6 text-text-primary dark:text-text-primary-dark " +
-            (rtl ? "text-right" : "text-left")
-          }
-          style={{ writingDirection: direction }}
-        >
-          {displayIdentity(group.displayName, language)} ·{" "}
-          {displayIdentity(group.currencyLabel, language)}
-        </Text>
-        <View
-          className={
-            (rtl ? "flex-row-reverse " : "flex-row ") +
-            "flex-wrap items-center gap-1"
-          }
-        >
-          <Text
-            testID={"account-review-group-status-" + group.groupId}
-            className={
-              "text-sm font-semibold leading-5 " +
-              (group.isRemoved
-                ? "text-red-600 dark:text-red-500"
-                : group.isConfirmed
-                  ? "text-nileGreen-700 dark:text-nileGreen-400"
-                  : "text-gold-800 dark:text-gold-400")
-            }
-          >
-            {group.statusLabel ||
-              (group.isRemoved
-                ? t("account_review_group_removed", {
-                    lng: language,
-                    ns: "transactions",
-                  })
-                : "")}
-          </Text>
-          <Text className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
-            {" · "}
-            {presentReviewLinkedCount(group.linkedCount, language)}
-          </Text>
-        </View>
-        {group.identitySummary.trim().length > 0 ? (
-          <Text
-            className={
-              "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-              (rtl ? "text-right" : "text-left")
-            }
-            style={{ writingDirection: direction }}
-          >
-            {displayIdentity(group.identitySummary, language)}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-function GroupMenuTrigger({
-  group,
-  language,
-  disabled,
-  onPress,
-}: {
-  readonly group: SharedSuggestedGroupView;
-  readonly language: ReviewDisplayLanguage;
-  readonly disabled: boolean;
-  readonly onPress: () => void;
-}): React.JSX.Element {
-  return (
-    <TouchableOpacity
-      testID={"account-review-group-actions-" + group.groupId}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={
-        reviewCopy("account_review_group_change", language) +
-        " " +
-        group.displayName +
-        ", " +
-        group.linkedCount
-      }
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      activeOpacity={0.75}
-      className="h-11 w-11 items-center justify-center rounded-lg border border-border dark:border-border-dark"
-    >
-      <Ionicons
-        name="ellipsis-vertical"
-        size={22}
-        color={palette.slate[500]}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
-    </TouchableOpacity>
-  );
-}
-function GroupControls(props: GroupCardProps): React.JSX.Element {
-  const { group, language, disabled } = props;
-  const rtl = language === "ar";
-  const canAct = !disabled && !group.isRemoved;
-  return (
-    <View
-      className={
-        rtl
-          ? "flex-row-reverse flex-wrap items-center gap-2"
-          : "flex-row flex-wrap items-center gap-2"
-      }
-    >
-      {!group.isRemoved && group.canConfirm && !group.isConfirmed ? (
-        <ReviewActionButton
-          testID={"account-review-group-confirm-" + group.groupId}
-          iconName="checkmark-circle-outline"
-          tone="outline"
-          label={reviewCopy("account_review_group_confirm", language)}
-          accessibilityLabel={
-            reviewCopy("account_review_group_confirm", language) +
-            " " +
-            group.displayName +
-            ", " +
-            group.linkedCount
-          }
-          disabled={disabled}
-          onPress={props.onConfirm}
-        />
-      ) : null}
-      {group.isRemoved && group.canUndo ? (
-        <ReviewActionButton
-          testID="account-review-group-undo"
-          iconName="arrow-undo-outline"
-          tone="quiet"
-          label={reviewCopy("account_review_group_undo", language)}
-          accessibilityLabel={
-            reviewCopy("account_review_group_undo", language) +
-            " " +
-            group.displayName +
-            ", " +
-            group.linkedCount
-          }
-          disabled={disabled}
-          onPress={props.onUndo}
-        />
-      ) : null}
-      {!group.isRemoved && group.isConfirmed && group.canEdit ? (
-        <ReviewActionButton
-          testID={"account-review-group-change-" + group.groupId}
-          tone="outline"
-          label={reviewCopy("account_review_group_change", language)}
-          disabled={disabled}
-          onPress={props.onMenu}
-        />
-      ) : null}
-      {!group.isRemoved ? (
-        <GroupMenuTrigger
-          group={group}
-          language={language}
-          disabled={!canAct}
-          onPress={props.onMenu}
-        />
-      ) : null}
-    </View>
-  );
-}
-function GroupCard(props: GroupCardProps): React.JSX.Element {
-  const { group, language, compact } = props;
-  const rtl = language === "ar";
-  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
-  return (
-    <View
-      testID={"account-review-group-card-" + group.groupId}
-      className="min-h-[68px] gap-2 border-b border-border py-3 dark:border-border-dark"
-    >
-      <View
-        className={
-          compact
-            ? "gap-2"
-            : rtl
-              ? "flex-row-reverse flex-wrap items-start gap-2"
-              : "flex-row flex-wrap items-start gap-2"
-        }
-      >
-        <GroupIdentity group={group} language={language} compact={compact} />
-        <GroupControls {...props} />
-      </View>
-      {!group.isRemoved && group.disclosureText.trim().length > 0 ? (
-        <Text
-          testID={"account-review-group-disclosure-" + group.groupId}
-          className={
-            "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-            (rtl ? "text-right" : "text-left")
-          }
-          style={{ writingDirection: direction }}
-        >
-          {group.disclosureText}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
 function GroupActionChoices({
   group,
   language,
@@ -839,7 +593,6 @@ export function SharedAccountSuggestions(
   const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
   const menu =
     props.groups.find((group) => group.groupId === menuGroupId) ?? null;
-  const compact = shouldUseDenseRowCompactLayout(width, fontScale);
   const disabled = props.isBusy || (menu?.isBusy ?? false);
   const perform = (action: GroupCommandAction): void => {
     if (!menu || disabled) return;
@@ -855,10 +608,11 @@ export function SharedAccountSuggestions(
     if (action === "remove" && menu.canRemove) props.onRemove(menu.groupId);
   };
   const renderGroup = (group: SharedSuggestedGroupView): React.JSX.Element => (
-    <GroupCard
+    <SharedAccountGroupRow
       group={group}
       language={language}
-      compact={compact}
+      viewportWidth={width}
+      fontScale={fontScale}
       disabled={props.isBusy || group.isBusy}
       onConfirm={() => props.onConfirm(group.groupId)}
       onMenu={() => setMenuGroupId(group.groupId)}

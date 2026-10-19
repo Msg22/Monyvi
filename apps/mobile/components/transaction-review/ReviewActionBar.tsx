@@ -2,7 +2,12 @@ import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import {
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 
@@ -20,6 +25,19 @@ export interface ReviewActionBarProps {
 
 export const SMS_REVIEW_ACTION_BAR_HEIGHT = 100;
 
+/**
+ * Conservative intrinsic label-width budget for choosing an action layout.
+ * Actual text remains shrinkable/wrappable; neither labels nor font scaling
+ * are constrained to the estimate. The bar uses its measured content width.
+ */
+function labelWidthBudget(
+  label: string,
+  fontSize: number,
+  fontScale: number
+): number {
+  return Array.from(label).length * fontSize * fontScale * 0.48;
+}
+
 export function ReviewActionBar({
   selectedCount,
   isSaving,
@@ -31,6 +49,24 @@ export function ReviewActionBar({
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
+  const { width, fontScale } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
+  const discardLabel = t("discard_all");
+  const saveLabel = t("save_selected_button_count", { count: selectedCount });
+  // The 20 dp outer gutters are already applied by this bar; use its actual
+  // measured inner width after layout, including for tablet/landscape layouts.
+  const available = measuredWidth ?? Math.max(0, width - 40);
+  const standardWidth =
+    Math.max(112, labelWidthBudget(discardLabel, 14, fontScale) + 42) +
+    Math.max(44, labelWidthBudget(saveLabel, 16, fontScale) + 58) +
+    12;
+  const compactWidth =
+    Math.max(44, labelWidthBudget(discardLabel, 13, fontScale) + 32) +
+    Math.max(44, labelWidthBudget(saveLabel, 14, fontScale) + 40) +
+    8;
+  const compact =
+    fontScale > 1.35 || (!hideDiscard && available < standardWidth);
+  const stacked = !hideDiscard && available < compactWidth;
   const isSaveDisabled =
     selectedCount === 0 || isSaving || !isReviewMetadataReady;
 
@@ -51,20 +87,41 @@ export function ReviewActionBar({
       entering={FadeInDown.delay(200).reduceMotion(ReduceMotion.System)}
       className="border-t border-border bg-background px-5 py-2 dark:border-border-dark dark:bg-background-dark"
     >
-      <View testID="review-actions-row" className="h-12 flex-row gap-3">
+      <View
+        testID="review-actions-row"
+        className={
+          (stacked ? "flex-col " : "flex-row ") + (compact ? "gap-2" : "gap-3")
+        }
+        onLayout={(event) => {
+          const next = Math.round(event.nativeEvent.layout.width);
+          setMeasuredWidth((previous) => (previous === next ? previous : next));
+        }}
+      >
         {!hideDiscard && (
           <TouchableOpacity
             onPress={onDiscard}
             disabled={isSaving}
             activeOpacity={0.8}
-            className="min-w-28 flex-row items-center justify-center rounded-lg border border-border px-3 dark:border-border-dark"
+            className={
+              "min-h-12 flex-row items-center justify-center rounded-lg border border-border dark:border-border-dark " +
+              (stacked ? "w-full " : "max-w-[45%] shrink-0 ") +
+              (compact
+                ? "min-w-11 gap-1.5 px-2 py-2"
+                : "min-w-28 gap-2 px-3 py-2")
+            }
           >
-            <Ionicons name="trash-outline" size={18} color={palette.red[500]} />
+            <Ionicons
+              name="trash-outline"
+              size={compact ? 16 : 18}
+              color={palette.red[500]}
+            />
             <Text
-              numberOfLines={1}
-              className="ms-2 text-sm font-semibold text-red-600 dark:text-red-400"
+              className={
+                "min-w-0 shrink text-center font-semibold text-red-600 dark:text-red-400 " +
+                (compact ? "text-[13px] leading-[18px]" : "text-sm leading-5")
+              }
             >
-              {t("discard_all")}
+              {discardLabel}
             </Text>
           </TouchableOpacity>
         )}
@@ -74,22 +131,25 @@ export function ReviewActionBar({
           disabled={isSaveDisabled}
           accessibilityState={{ disabled: isSaveDisabled }}
           activeOpacity={0.85}
-          className={`flex-1 flex-row items-center justify-center rounded-lg px-4 ${
-            isSaveDisabled ? "bg-slate-700" : "bg-nileGreen-600"
-          }`}
+          className={
+            "min-h-12 min-w-11 flex-row items-center justify-center rounded-lg " +
+            (stacked ? "w-full " : "min-w-0 flex-1 ") +
+            (compact ? "gap-1.5 px-2 py-2 " : "gap-2 px-4 py-2 ") +
+            (isSaveDisabled ? "bg-slate-700" : "bg-nileGreen-600")
+          }
         >
           <Ionicons
             name="lock-closed-outline"
-            size={18}
+            size={compact ? 16 : 18}
             color={palette.slate[25]}
           />
           <Text
-            className="ms-2 text-base font-bold text-white"
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
+            className={
+              "min-w-0 shrink text-center font-bold text-white " +
+              (compact ? "text-sm leading-5" : "text-base leading-6")
+            }
           >
-            {t("save_selected_button_count", { count: selectedCount })}
+            {saveLabel}
           </Text>
         </TouchableOpacity>
       </View>
@@ -99,7 +159,7 @@ export function ReviewActionBar({
           onPress={onReviewLater}
           disabled={isSaving}
           activeOpacity={0.7}
-          className="h-9 items-center justify-center"
+          className="min-h-11 items-center justify-center py-2"
         >
           <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
             {t("sms_review_review_later")}

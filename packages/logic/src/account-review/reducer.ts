@@ -73,6 +73,8 @@ function routeCommand(
     case "clear_selection":
       return reduceSelectBatch(state, command, input.accountSnapshots);
     case "choose_row_account":
+    case "create_row_account_draft":
+    case "confirm_row_account_and_currency":
     case "replace_group_account":
     case "confirm_row_currency":
       return reduceChoiceCommand(state, command, input.accountSnapshots);

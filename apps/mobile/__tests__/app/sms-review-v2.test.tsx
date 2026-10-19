@@ -43,6 +43,7 @@ import {
   type AccountReviewSession,
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { HybridSmsUnresolvedCandidate } from "../../services/sms-parser-orchestrator";
 import {
   useAccountReview,
   type UseAccountReviewInput,
@@ -104,6 +105,7 @@ let mockQueueOwner: string | null = OWNER;
 let mockQueueId: string | null = SESSION;
 let mockSession: AccountReviewSession = makeSaveFixture("sms-new-bank").session;
 let mockItems: readonly RevalidatedSmsReviewDraftItem[] = [];
+let mockUnresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] = [];
 
 function queueItems(
   fixture: SaveFixture
@@ -140,7 +142,7 @@ jest.mock("@/services/supabase", () => ({
 }));
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    unresolvedCandidates: [],
+    unresolvedCandidates: mockUnresolvedCandidates,
     safeguardSummary: null,
     parserDiagnostics: null,
     clearTransactions: mockClear,
@@ -304,6 +306,7 @@ beforeEach(() => {
   mockActor = OWNER;
   mockQueueOwner = OWNER;
   mockQueueId = SESSION;
+  mockUnresolvedCandidates = [];
   mockSession = makeSaveFixture("sms-new-bank").session;
   mockItems = queueItems(makeSaveFixture("sms-new-bank"));
   mockOwnedRead.mockResolvedValue({
@@ -379,6 +382,73 @@ describe("#395 T054 SMS review owned queue-to-facade route", () => {
     });
     expect(mockReplace).toHaveBeenCalledWith("/(private)/(tabs)/transactions");
     expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockMarkComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["replay", "cleanup_only"] as const)(
+    "SR02 completion bookkeeping runs after canonical %s without using legacy Save",
+    async (kind): Promise<void> => {
+      const fixture = startV2();
+      const boundary = v2Boundary();
+      mockSave.mockResolvedValueOnce(
+        kind === "cleanup_only" ? { kind, resolvedSmsDraftCount: 1 } : { kind }
+      );
+      await act(async () => {
+        await boundary.onSaveSelected(fixture.session);
+      });
+      expect(mockSave).toHaveBeenCalledTimes(1);
+      expect(mockMarkComplete).toHaveBeenCalledTimes(1);
+      expect(mockClear).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/(private)/(tabs)/transactions"
+      );
+      expect(mockLegacySave).not.toHaveBeenCalled();
+    }
+  );
+
+  it("SR02 preserves unresolved scan candidates without falsely marking sync complete", async (): Promise<void> => {
+    mockUnresolvedCandidates = [
+      {
+        candidate: {
+          message: {
+            id: "pending-review-sms",
+            address: "TEST_SMS",
+            body: "TEST unresolved scan candidate",
+            date: Date.parse("2026-10-15T12:00:00.000Z"),
+            read: true,
+          },
+          smsFingerprint: "test-pending-sms-fingerprint",
+        },
+        reason: "capacity_limited",
+        isRetryable: false,
+      },
+    ];
+    const fixture = startV2();
+    mockSave.mockResolvedValueOnce({ kind: "committed" });
+    await act(async () => {
+      await v2Boundary().onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockMarkComplete).not.toHaveBeenCalled();
+    expect(mockClear).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/(private)/(tabs)/transactions");
+  });
+
+  it("SR02 completion bookkeeping failure never undoes durable canonical success", async (): Promise<void> => {
+    mockMarkComplete.mockRejectedValueOnce(
+      new Error("local_prompt_flag_write_failed")
+    );
+    const fixture = startV2();
+    await act(async () => {
+      await v2Boundary().onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockMarkComplete).toHaveBeenCalledTimes(1);
+    expect(mockClear).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/(private)/(tabs)/transactions");
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" })
+    );
   });
 
   it("SR03 rolls back UI saving feedback without clearing durable choices after Save failure", async () => {
@@ -393,6 +463,7 @@ describe("#395 T054 SMS review owned queue-to-facade route", () => {
     expect(mockLegacySave).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockClear).not.toHaveBeenCalled();
+    expect(mockMarkComplete).not.toHaveBeenCalled();
     expect(mockItems).toEqual(before);
     expect(mockToast).toHaveBeenCalled();
   });

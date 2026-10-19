@@ -309,7 +309,14 @@ describe("#395 T054 Voice route boundary (real page, financial writer mocked)", 
     expect(mockSave).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockLegacyBatch).not.toHaveBeenCalled();
-    expect(mockToast).toHaveBeenCalled();
+    // Exact one friendly localized-key toast: never the injected private
+    // rollback code, its error text or an untranslated missing-key fallback.
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith({
+      type: "error",
+      title: "error",
+      message: "voice_error_default",
+    });
     expect(v2Boundary().input).toMatchObject({
       ownerId: OWNER,
       sessionId: fixture.session.sessionId,

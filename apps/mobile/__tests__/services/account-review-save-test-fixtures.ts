@@ -4,7 +4,11 @@
  * These are synthetic owners/accounts, NOT runtime seeded T015 financial data.
  */
 import { createHash } from "node:crypto";
-import { uuidV8FromSha256 } from "../../../../packages/logic/src/account-review/identity";
+import {
+  deriveManualRowAccountReviewGroupIdentity,
+  manualRowAccountDraftRef,
+  uuidV8FromSha256,
+} from "../../../../packages/logic/src/account-review/identity";
 import { normalizeAccountSmsSender } from "../../services/account-sms-sender-service";
 import {
   accountReviewGroupSchema,
@@ -589,6 +593,98 @@ export function makeSaveFixture(
     intent,
   };
 }
+/** Actual SMS ATM source with a separate, row-only deferred Cash destination.
+ * The frozen intent includes the future Cash account ID; this never writes DB. */
+export async function makeAtmCashDraftSaveFixture(): Promise<{
+  readonly fixture: SaveFixture;
+  readonly createdId: string;
+}> {
+  const existing = makeSaveFixture("sms-atm");
+  const row = existing.session.rows[0];
+  const donor = makeSaveFixture("voice-cash").session.groups[0];
+  if (!row || !donor || row.source !== "SMS")
+    throw new Error("Missing canonical ATM and Cash group fixtures");
+  // Drop the legacy existing-Cash destination from the synthetic ATM row:
+  // the owner has no eligible Cash and will create one only on selected Save.
+  const {
+    toAccountId: originalDestinationId,
+    toAccountName: originalDestinationName,
+    ...atmTransaction
+  } = row.transaction;
+  if (originalDestinationId !== CASH || originalDestinationName !== undefined)
+    throw new Error("Expected fixture's original existing Cash endpoint");
+  const nonce = testUuid(811);
+  const manual = await deriveManualRowAccountReviewGroupIdentity({
+    ownerId: existing.session.ownerId,
+    sessionId: existing.session.sessionId,
+    source: "SMS",
+    rowId: row.rowId,
+    role: "destination",
+    nonce,
+    identity: { name: "ATM Cash purse", type: "CASH", currency: "EGP" },
+    hashProvider: {
+      digestUtf8: (text: string): Promise<string> =>
+        Promise.resolve(
+          createHash("sha256").update(text, "utf8").digest("hex")
+        ),
+    },
+  });
+  const group = accountReviewGroupSchema.parse({
+    ...donor,
+    ...manual,
+    name: "ATM Cash purse",
+    suggestionRefs: [manualRowAccountDraftRef(row.rowId, nonce)],
+    institutionId: null,
+    providerDisplayName: null,
+    cardLast4: null,
+    senderNames: [],
+    linkedRowIds: [row.rowId],
+  });
+  const session = accountReviewSessionSchema.parse({
+    ...existing.session,
+    saveIntent: null,
+    groups: [group],
+    rows: [
+      {
+        ...row,
+        transaction: atmTransaction,
+        toAssignment: {
+          state: "suggested",
+          accountId: null,
+          groupId: group.groupId,
+          groupRevision: group.revision,
+          confirmation: "confirmed",
+        },
+      },
+    ],
+  });
+  const createdId = testUuid(812);
+  const intent = accountReviewSaveIntentSchema.parse({
+    ...existing.intent,
+    confirmedGroups: [
+      {
+        groupId: group.groupId,
+        revision: group.revision,
+        evidenceKey: group.evidenceKey,
+      },
+    ],
+    plannedEntityIds: [
+      ...existing.intent.plannedEntityIds,
+      { entity: "account", localRef: group.groupId, id: createdId },
+    ],
+  });
+  return {
+    fixture: {
+      session: accountReviewSessionSchema.parse({
+        ...session,
+        saveIntent: intent,
+      }),
+      intent,
+    },
+    createdId,
+  };
+}
+
 export function changeSession(
   fixture: SaveFixture,
   mutate: (session: AccountReviewSession) => AccountReviewSession

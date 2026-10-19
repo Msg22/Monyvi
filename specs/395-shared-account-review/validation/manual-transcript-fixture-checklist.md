@@ -98,13 +98,94 @@ Notes:
    to the catalogue without tapping the real Review "Try again", which opens the
    actual recorder.
 
+## Newly approved feedback cases — expected behavior; owner QA pending
+
+These are **owner-approved expected behaviors for manual acceptance**, not
+assertions of implemented or passed behavior. Consult final PR #396 verification
+for the current automated results and owner/device acceptance status; the fixed
+Voice catalog does not automatically produce every prerequisite. The 19 fixed
+Voice cases remain unchanged. Use an appropriate disposable **TEST**
+owner/account context when eligibility matters; if a case is unreachable with
+current owned accounts, report the missing prerequisite. **Never delete personal
+accounts, change a real default, or reset financial data just to force an empty
+account list.**
+
+- [ ] **Existing-account chooser / current eligibility** — Open
+      `voice-bank-card-expense-egp` or `voice-shared-bank-ambiguous`; use
+      **Change account**. Preselect the previously chosen existing account
+      **only if** it remains owned, eligible for this endpoint and consistent
+      with the row's currently confirmed currency; never guess the first account
+      or preselect a stale/foreign/incompatible account. The chooser may list
+      current owned endpoint-eligible accounts **of all currencies** for
+      deliberate selection. Choosing a different currency requires explicit
+      combined account-and-currency confirmation; cancel retains both original
+      choices. Automatic/default matching still requires a **known, matching**
+      currency. Actual candidates depend on current owned accounts.
+- [ ] **No eligible account / manual row draft** — Use `voice-split-currency`
+      (unmatched QNB USD) or `voice-mixed-uncertain` to enter the real account
+      chooser; for the _empty same-currency candidate_ branch, use a TEST owner
+      genuinely lacking such an eligible account. Other-currency owned choices
+      may still appear for explicit combined confirmation, not automatic
+      matching. Explicitly prepare a **row-scoped account draft**; preparation
+      must not create a persisted account or change any balance. A real account
+      can be created only if the draft is confirmed/referenced by a **selected
+      Save**. If replacing an already prepared/edited draft while the eligible
+      existing-account list is empty, keep that draft editable rather than
+      losing it. Cancel must preserve the prior choice/draft. Fixture names
+      alone do not guarantee the empty-candidate precondition.
+- [ ] **Account first when currency is uncertain or conflicts** — On
+      `voice-ambiguous-currency`, `voice-unsupported-xyz`, or
+      `voice-split-currency`, choose the account _before_ confirming an
+      unconfirmed currency, or choose an account whose currency conflicts with a
+      currently known row currency. Require **one explicit combined
+      confirmation** displaying the chosen account, currency and proposed
+      change. Accept only that confirmed account/currency change; preserve the
+      original numeric amount, **do not apply FX**, and retain other independent
+      review reasons. Cancel changes neither account nor currency; no silent
+      account-first bypass of currency confirmation. Show current owned
+      endpoint-eligible accounts across currencies even before currency is
+      confirmed; selecting one requires this explicit combined acceptance.
+      Eligibility and available currency choices remain current-owner-dependent.
+- [ ] **SMS ATM with missing same-currency Cash destination** — **Actual SMS
+      Review manual path only, NOT the Voice catalog.** With a genuine eligible
+      Bank/Wallet source and no owned eligible Cash destination in the ATM
+      currency, prepare a **row-scoped Cash draft**. Confirmation alone creates
+      neither Cash nor a transfer. Save only a selected, fully confirmed ATM
+      transfer through the existing guarded writer; expected effect is one debit
+      from the source and one credit to Cash, with no duplicate effect on
+      same-intent retry. If an eligible Cash already exists, this missing-Cash
+      branch is not reachable on that profile; report the prerequisite instead
+      of deleting or modifying personal data. This fixture guide does **not**
+      synthesize SMS, create an SMS namespace, or prove transfer Save.
+- [ ] **Owner device responsive acceptance** — On `voice-shared-drafts-qnb-cib`
+      and `voice-draft-identity-split`, inspect Confirm/Change/Remove/Undo
+      button grouping and accessible touch targets; on
+      `voice-absent-evidence-default`, check default-account explanation; on
+      `voice-bulk-long-decimals`, scroll **all nine rows**, long labels, partial
+      selection and bottom controls; on `voice-arabic-junaih-salary-rent`, check
+      Arabic RTL. Repeat with large font, keyboard visible, narrow/wide device,
+      light/dark theme and bottom navigation inset. Device screenshots, keyboard
+      reachability and owner acceptance require separate owner sign-off; consult
+      final PR #396 verification for their current status. A static Voice
+      fixture is not device proof.
+
+General own-account transfers in Voice are **deferred**, tracked by
+[issue #404](https://github.com/Msg22/Monyvi/issues/404); this checklist adds no
+Voice transfer or fabricated SMS fixture. These checks cover post-parsing Review
+interactions only where the prerequisites are genuinely present, **not fully
+automatic coverage of all possible owner/account states**.
+
 ## Automated coverage
 
-- Final local validation passed: 11 suites / 252 tests, including launcher,
+- **Historical cd8 baseline only (not the new feedback checks):** Local
+  validation previously passed **11 suites / 252 tests**, including launcher,
   catalog, Settings, and both recorder suites; whole-mobile TypeScript, affected
-  lint (zero errors), formatting, whitespace, and generated Edge parity all
-  passed. Exact-head CI awaits publication; manual/device acceptance remains
-  pending. No emulator testing was performed.
+  lint (zero errors), formatting, whitespace, and generated Edge parity also
+  passed. That baseline reported no emulator testing and did not establish
+  owner/device acceptance. For the **new feedback implementation and checks**,
+  consult [final PR #396 verification](https://github.com/Msg22/Monyvi/pull/396)
+  rather than treating this historical count as the current result. No new pass
+  count or sign-off is asserted here.
 - `__tests__/services/review-transcript-fixtures-launcher.test.ts`: scenario
   grounding over all fixtures with the real normalizer/resolver, `[TEST]`
   labels, fresh request keys/session per launch, global in-flight and

@@ -15,7 +15,9 @@ invariants, privacy, sync protection and worker authorization still apply.
    boundary, run TypeScript, lint and relevant existing automated tests
    together, plus applicable repository hooks and required safety checks. Do not
    run checks after every file edit. Report exact results, known gaps and manual
-   steps.
+   steps. Responsive UI follows `AGENTS.md`'s available-container rule; use
+   existing checks and owner manual review of representative small, ordinary,
+   wide and enlarged-text states, not mandatory cosmetic layout-test matrices.
 3. **Owner manual testing.** Mohamed tests the implemented behavior. Capture his
    feedback, fix confirmed defects, and repeat affected manual scenarios until
    he accepts the behavior. Agents must not invent a manual pass. No emulator or

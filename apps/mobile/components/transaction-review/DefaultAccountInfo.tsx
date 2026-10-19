@@ -21,10 +21,7 @@ import { useColorScheme } from "nativewind";
 
 import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
-import {
-  shouldUseCompactLayout,
-  shouldUseDenseRowCompactLayout,
-} from "@/constants/ui";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 export interface DefaultAccountInfoProps {
@@ -75,7 +72,8 @@ export function DefaultAccountInfo({
       })}
       whyLabel={t("account_review_default_why_trigger")}
       onWhyPress={onWhyPress}
-      compact={shouldUseDenseRowCompactLayout(width, fontScale)}
+      fallbackViewportWidth={width}
+      fontScale={fontScale}
       rtl={language === "ar"}
       iconColor={
         colorScheme === "dark" ? palette.slate[400] : palette.slate[500]
@@ -88,7 +86,8 @@ interface QuietDefaultDisclosureProps {
   readonly label: string;
   readonly whyLabel: string;
   readonly onWhyPress: () => void;
-  readonly compact: boolean;
+  readonly fallbackViewportWidth: number;
+  readonly fontScale: number;
   readonly rtl: boolean;
   readonly iconColor: string;
 }
@@ -96,24 +95,36 @@ interface QuietDefaultDisclosureProps {
 function QuietDefaultDisclosure(
   props: QuietDefaultDisclosureProps
 ): React.JSX.Element {
-  const { compact, rtl, whyLabel, onWhyPress } = props;
+  const { rtl, whyLabel, onWhyPress, fontScale } = props;
+  const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
+  // R3-07 keeps Why beside the quiet note while it fits. A real measured
+  // content width takes precedence over the 20+16 dp gutter fallback.
+  const available =
+    measuredWidth ??
+    Math.max(0, Math.min(350, props.fallbackViewportWidth - 2 * (20 + 16)));
+  const compact = available < 22 + 16 + Math.ceil((140 + 64) * fontScale);
+  const tight = available < 288;
   return (
     <View
       testID="account-review-default-info"
       className="w-full max-w-[350px] self-center py-2 dark:bg-transparent"
+      onLayout={(event) => {
+        const next = Math.round(event.nativeEvent.layout.width);
+        setMeasuredWidth((previous) => (previous === next ? previous : next));
+      }}
     >
       <View
         className={
           compact
             ? "items-start gap-1"
             : rtl
-              ? "flex-row-reverse items-center gap-2"
-              : "flex-row items-center gap-2"
+              ? "flex-row-reverse items-center " + (tight ? "gap-1" : "gap-2")
+              : "flex-row items-center " + (tight ? "gap-1" : "gap-2")
         }
       >
         <Ionicons
           name="information-circle-outline"
-          size={22}
+          size={compact ? 20 : 22}
           color={props.iconColor}
           accessibilityElementsHidden
           importantForAccessibility="no"
@@ -146,7 +157,7 @@ function QuietDefaultNote({
       className={`${rtl ? "text-right" : "text-left"} ${
         compact
           ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-          : "min-w-0 flex-1 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+          : "min-w-0 grow shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
       }`}
     >
       {label}
