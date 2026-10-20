@@ -1,6 +1,6 @@
 import { palette } from "@/constants/colors";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
-import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { formatAccountBalance } from "@/utils/financial-display";
 import type { Account } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
@@ -116,8 +116,9 @@ export function AccountCard({
       <View className="flex-row items-center p-4">
         {/* Icon Container with subtle background */}
         <View className="me-4">
-          <InstitutionLogoMark
-            logo={institutionLogo}
+          <AccountIdentityMark
+            account={account}
+            resolvedLogo={institutionLogo}
             size="account-list"
             testID={
               institutionLogo

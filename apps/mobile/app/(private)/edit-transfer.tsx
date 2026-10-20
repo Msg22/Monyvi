@@ -18,6 +18,7 @@ import {
 import { TypeTabs } from "@/components/add-transaction/TypeTabs";
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { palette } from "@/constants/colors";
@@ -667,16 +668,11 @@ export default function EditTransfer(): React.ReactNode {
                         : undefined,
                     }}
                   >
-                    <Ionicons
-                      name={
-                        selectedAccount?.type === "BANK"
-                          ? "business-outline"
-                          : selectedAccount?.type === "DIGITAL_WALLET"
-                            ? "card-outline"
-                            : "wallet-outline"
-                      }
-                      size={18}
-                      color={
+                    <AccountIdentityMark
+                      account={selectedAccount ?? null}
+                      size="field"
+                      testID="edit-transfer-transaction-account-identity"
+                      fallbackColor={
                         selectedCategory?.color ||
                         (isDark ? palette.slate[400] : palette.slate[500])
                       }

@@ -4,14 +4,16 @@ import React from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import type { CurrencyType } from "@monyvi/db";
+import type { AccountType, CurrencyType } from "@monyvi/db";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 
 export interface AccountOption {
   readonly id: string;
   readonly name: string;
   readonly currency: CurrencyType;
   readonly isPending: boolean;
-  readonly type?: string;
+  readonly type?: AccountType;
+  readonly institutionId?: string | null;
 }
 
 export interface AccountSelectorProps {
@@ -82,6 +84,7 @@ export function AccountSelector({
 }: AccountSelectorProps): React.JSX.Element {
   const hasOptions = options.length > 0;
   const { t } = useTranslation("transactions");
+  const selectedOption = options.find((option) => option.id === selectedId);
 
   // Tailwind dynamic mappings
   const themeClasses = {
@@ -214,14 +217,32 @@ export function AccountSelector({
             }`}
           >
             <View className="flex-row items-center flex-1">
-              {iconName && (
+              {(iconName ||
+                selectedOption?.type ||
+                selectedOption?.institutionId) && (
                 <View
                   className={`w-6 h-6 rounded-full items-center justify-center me-2 ${themeClasses.pillBg}`}
                 >
-                  <Ionicons
-                    name={iconName}
-                    size={12}
-                    color={themeClasses.hintIcon}
+                  <AccountIdentityMark
+                    account={
+                      selectedOption
+                        ? {
+                            type: selectedOption.type ?? null,
+                            institutionId: selectedOption.institutionId,
+                          }
+                        : null
+                    }
+                    size="micro"
+                    testID="sms-edit-selected-account-identity"
+                    fallback={
+                      iconName ? (
+                        <Ionicons
+                          name={iconName}
+                          size={12}
+                          color={themeClasses.hintIcon}
+                        />
+                      ) : undefined
+                    }
                   />
                 </View>
               )}
@@ -267,14 +288,26 @@ export function AccountSelector({
                     }`}
                   >
                     <View className="flex-row items-center flex-1">
-                      {iconName && (
+                      {(iconName || opt.type || opt.institutionId) && (
                         <View
                           className={`w-5 h-5 rounded-full items-center justify-center me-2 ${themeClasses.pillBg}`}
                         >
-                          <Ionicons
-                            name={iconName}
-                            size={10}
-                            color={themeClasses.hintIcon}
+                          <AccountIdentityMark
+                            account={{
+                              type: opt.type ?? null,
+                              institutionId: opt.institutionId,
+                            }}
+                            size="micro"
+                            testID={"sms-edit-account-identity-" + opt.id}
+                            fallback={
+                              iconName ? (
+                                <Ionicons
+                                  name={iconName}
+                                  size={10}
+                                  color={themeClasses.hintIcon}
+                                />
+                              ) : undefined
+                            }
                           />
                         </View>
                       )}
@@ -331,14 +364,26 @@ export function AccountSelector({
                           }`}
                         >
                           <View className="flex-row items-center flex-1">
-                            {iconName && (
+                            {(iconName || opt.type || opt.institutionId) && (
                               <View
                                 className={`w-5 h-5 rounded-full items-center justify-center me-2 ${themeClasses.pillBg}`}
                               >
-                                <Ionicons
-                                  name={iconName}
-                                  size={10}
-                                  color={themeClasses.hintIcon}
+                                <AccountIdentityMark
+                                  account={{
+                                    type: opt.type ?? null,
+                                    institutionId: opt.institutionId,
+                                  }}
+                                  size="micro"
+                                  testID={"sms-edit-account-identity-" + opt.id}
+                                  fallback={
+                                    iconName ? (
+                                      <Ionicons
+                                        name={iconName}
+                                        size={10}
+                                        color={themeClasses.hintIcon}
+                                      />
+                                    ) : undefined
+                                  }
                                 />
                               </View>
                             )}

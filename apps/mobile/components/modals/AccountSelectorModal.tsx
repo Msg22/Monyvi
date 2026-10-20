@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { palette } from "@/constants/colors";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { useTheme } from "@/context/ThemeContext";
 import type { Account, AccountType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
@@ -112,12 +113,6 @@ export function AccountSelectorModal({
                   {accounts.map((account) => {
                     const isSelected = account.id === selectedId;
 
-                    let iconName: keyof typeof Ionicons.glyphMap =
-                      "wallet-outline";
-                    if (account.type === "BANK") iconName = "business-outline";
-                    if (account.type === "DIGITAL_WALLET")
-                      iconName = "card-outline";
-
                     return (
                       <TouchableOpacity
                         key={account.id}
@@ -139,10 +134,11 @@ export function AccountSelectorModal({
                               : "bg-slate-200 dark:bg-slate-700"
                           }`}
                         >
-                          <Ionicons
-                            name={iconName}
-                            size={24}
-                            color={
+                          <AccountIdentityMark
+                            account={account}
+                            size="group"
+                            testID={"account-selector-identity-" + account.id}
+                            fallbackColor={
                               isSelected
                                 ? "white"
                                 : isDark

@@ -9,6 +9,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useColorScheme } from "nativewind";
+import type { AccountIdentitySource } from "@/components/institutions/AccountIdentityMark";
 import { CompactReviewSummary } from "./CompactReviewSummary";
 import { DefaultAccountInfo } from "./DefaultAccountInfo";
 import { SharedAccountGroupRow } from "./SharedAccountGroupRow";
@@ -22,6 +23,10 @@ export interface SharedSuggestedGroupView {
   readonly displayName: string;
   readonly identitySummary: string;
   readonly currencyLabel: string;
+  /** Canonical institution identity only; no nickname or sender inference. */
+  readonly accountType?: AccountIdentitySource["type"];
+  readonly institutionId?: string | null;
+  readonly providerDisplayName?: string | null;
   readonly typeIconName: string;
   readonly linkedCount: number;
   /** Live linked transactions from the full canonical source-order review. */

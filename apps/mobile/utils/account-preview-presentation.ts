@@ -1,15 +1,10 @@
 import type { Ionicons } from "@expo/vector-icons";
 import type { AccountType } from "@monyvi/db";
-import {
-  getInstitutionById,
-  type SelectableEgyptianInstitutionId,
-} from "@monyvi/logic";
+import { getInstitutionById } from "@monyvi/logic";
 
 import { palette } from "@/constants/colors";
-import {
-  getEgyptianInstitutionAsset,
-  type InstitutionLogo,
-} from "@/constants/egyptian-institution-assets";
+import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
+import { resolveAccountInstitutionPresentation } from "./account-institution-presentation";
 
 export function getAccountPreviewFallbackIcon(
   accountType: AccountType
@@ -21,16 +16,6 @@ export function getAccountPreviewFallbackIcon(
     return "phone-portrait-outline";
   }
   return "cash-outline";
-}
-
-function getInstitutionKind(accountType: AccountType): "bank" | "wallet" | null {
-  if (accountType === "BANK") {
-    return "bank";
-  }
-  if (accountType === "DIGITAL_WALLET") {
-    return "wallet";
-  }
-  return null;
 }
 
 export function getAccountPreviewProviderName(
@@ -62,21 +47,11 @@ export function getAccountPreviewInstitutionLogo(
   accountType: AccountType,
   institutionId: string | null
 ): InstitutionLogo | null {
-  const kind = getInstitutionKind(accountType);
-  const institution =
-    institutionId === null ? null : getInstitutionById(institutionId);
-  const selectableInstitutionId =
-    institutionId !== null &&
-    institution?.selectable &&
-    institution.type === kind
-      ? (institutionId as SelectableEgyptianInstitutionId)
-      : null;
-
-  if (kind === null) {
-    return null;
-  }
-
-  return getEgyptianInstitutionAsset(selectableInstitutionId, kind).logo;
+  const institution = resolveAccountInstitutionPresentation({
+    type: accountType,
+    institutionId,
+  });
+  return institution?.institutionId ? institution.asset.logo : null;
 }
 
 export function getAccountPreviewCardGradient({

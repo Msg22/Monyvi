@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import type { Account, Category } from "@monyvi/db";
 import React, { type RefObject } from "react";
 import { Text, View } from "react-native";
@@ -6,9 +5,8 @@ import { Text, View } from "react-native";
 import { CategoryIconFromModel } from "@/components/common/CategoryIcon";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
-import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
-import { useTheme } from "@/context/ThemeContext";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { useTranslation } from "react-i18next";
 
 interface ManualAccountCategoryRowProps {
@@ -39,7 +37,6 @@ export function ManualAccountCategoryRow({
   onAddAccount,
 }: ManualAccountCategoryRowProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
-  const { isDark } = useTheme();
   const { fontFamily } = useLocale();
 
   const accountItems: ReadonlyArray<DropdownItem<string>> = selectedAccount
@@ -85,16 +82,10 @@ export function ManualAccountCategoryRow({
             selectedAdornment={
               selectedAccount ? (
                 <View className="h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-                  <Ionicons
-                    name={
-                      selectedAccount.type === "BANK"
-                        ? "business-outline"
-                        : selectedAccount.type === "DIGITAL_WALLET"
-                          ? "card-outline"
-                          : "wallet-outline"
-                    }
-                    size={18}
-                    color={isDark ? palette.slate[300] : palette.slate[600]}
+                  <AccountIdentityMark
+                    account={selectedAccount}
+                    size="field"
+                    testID="manual-selected-account-identity"
                   />
                 </View>
               ) : undefined

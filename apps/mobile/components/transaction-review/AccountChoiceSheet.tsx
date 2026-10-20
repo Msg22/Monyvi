@@ -4,6 +4,10 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
+import {
+  AccountIdentityMark,
+  type AccountIdentitySource,
+} from "@/components/institutions/AccountIdentityMark";
 import { t } from "i18next";
 import React, { useEffect, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -40,6 +44,10 @@ export interface AccountChoiceCandidateView {
   readonly displayName: string;
   readonly identityDetails: string;
   readonly currencyCode?: string;
+  /** Canonical owned-account identity; no account-name or SMS-sender guessing. */
+  readonly accountType?: AccountIdentitySource["type"];
+  readonly institutionId?: string | null;
+  readonly providerDisplayName?: string | null;
   readonly accessibilityLabel: string;
   readonly isEligible: boolean;
   readonly iconName?:
@@ -142,15 +150,26 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
       }
     >
       <AccountOptionBackground selected={props.selected} />
-      <View className="h-7 w-7 shrink-0 items-center justify-center">
-        <Ionicons
-          name={props.option.iconName ?? "help-circle-outline"}
-          size={22}
-          color={props.selected ? "white" : palette.slate[500]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-      </View>
+      <AccountIdentityMark
+        account={{
+          type: props.option.accountType ?? null,
+          institutionId: props.option.institutionId,
+          providerDisplayName: props.option.providerDisplayName,
+        }}
+        size="metadata"
+        surfaceContext={props.selected ? "colored-card" : "default"}
+        containerClassName="shrink-0"
+        testID={"account-review-choice-mark-" + props.option.id}
+        fallback={
+          <Ionicons
+            name={props.option.iconName ?? "help-circle-outline"}
+            size={22}
+            color={props.selected ? "white" : palette.slate[500]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        }
+      />
       <View className="min-w-0 flex-1 gap-1">
         <Text
           className={

@@ -13,6 +13,7 @@ import type { SharedSuggestedGroupView } from "./SharedAccountSuggestions";
 import { getCurrencyName } from "@/utils/currency-localization";
 import { currencyCode } from "../../../../packages/logic/src/account-review/schema-primitives";
 import type { AccountChoiceCandidateView } from "./AccountChoiceSheet";
+import type { AccountIdentitySource } from "@/components/institutions/AccountIdentityMark";
 import { t } from "i18next";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -109,6 +110,9 @@ export function presentReviewGroup(
       .filter((part) => part !== null && part.length > 0)
       .join(" · "),
     currencyLabel: group.currency,
+    accountType: group.type,
+    institutionId: group.institutionId,
+    providerDisplayName: group.providerDisplayName,
     typeIconName:
       group.type === "CASH"
         ? "cash-outline"
@@ -469,6 +473,7 @@ export function presentReviewCurrencyLabel(
 export interface CanonicalRowDetails {
   readonly accountName: string | null;
   readonly accountType: AccountReviewSession["groups"][number]["type"];
+  readonly accountIdentity: AccountIdentitySource;
   readonly accountActionLabel: string | null;
   readonly accountStatusLabel: string | null;
   readonly accountStatusTone?: "pending" | "confirmed" | "removed";
@@ -484,6 +489,8 @@ export function presentCanonicalRowDetails(
     readonly id: string;
     readonly name: string;
     readonly type: AccountReviewSession["groups"][number]["type"];
+    readonly institutionId?: string | null;
+    readonly providerDisplayName?: string | null;
   }>,
   language: ReviewDisplayLanguage,
   destinationGroup: AccountReviewSession["groups"][number] | null = null
@@ -531,6 +538,12 @@ export function presentCanonicalRowDetails(
   return {
     accountName: assigned?.name ?? group?.name ?? null,
     accountType: assigned?.type ?? group?.type ?? null,
+    accountIdentity: {
+      type: assigned?.type ?? group?.type ?? null,
+      institutionId: assigned?.institutionId ?? group?.institutionId ?? null,
+      providerDisplayName:
+        assigned?.providerDisplayName ?? group?.providerDisplayName ?? null,
+    },
     accountActionLabel,
     accountStatusLabel: status,
     accountStatusTone:
@@ -598,6 +611,14 @@ export function presentReviewAccountChoices(
       displayName: account.name,
       identityDetails,
       currencyCode: account.currency,
+      accountType:
+        account.type === "BANK" ||
+        account.type === "DIGITAL_WALLET" ||
+        account.type === "CASH"
+          ? account.type
+          : null,
+      institutionId: account.institutionId ?? null,
+      providerDisplayName: account.providerDisplayName,
       iconName:
         account.type === "CASH"
           ? "cash-outline"

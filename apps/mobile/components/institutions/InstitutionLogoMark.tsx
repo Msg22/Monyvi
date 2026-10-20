@@ -14,6 +14,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 export type InstitutionLogoMarkSize =
   | "compact"
+  | "micro"
+  | "metadata"
+  | "field"
+  | "group"
   | "row"
   | "account-list"
   | "dashboard"
@@ -130,6 +134,14 @@ export function InstitutionLogoMark({
 
 function getSkeletonHeight(size: InstitutionLogoMarkSize): number {
   switch (size) {
+    case "micro":
+      return 20;
+    case "metadata":
+      return 28;
+    case "field":
+      return 32;
+    case "group":
+      return 40;
     case "row":
     case "account-list":
       return 48;
@@ -147,6 +159,13 @@ function getSkeletonBorderRadius(size: InstitutionLogoMarkSize): number {
     case "account-list":
     case "preview":
       return 16;
+    case "micro":
+    case "metadata":
+      return 6;
+    case "field":
+      return 8;
+    case "group":
+      return 20;
     case "row":
     case "dashboard":
     case "compact":
@@ -165,7 +184,11 @@ function getImageSource(
 
   if (
     logo.appSource &&
-    (size === "row" ||
+    (size === "micro" ||
+      size === "metadata" ||
+      size === "field" ||
+      size === "group" ||
+      size === "row" ||
       size === "account-list" ||
       size === "dashboard" ||
       size === "preview" ||
@@ -272,6 +295,14 @@ function getLogoSurface({
 
 function getContainerSizeClassName(size: InstitutionLogoMarkSize): string {
   switch (size) {
+    case "micro":
+      return "h-5 w-5 rounded-md";
+    case "metadata":
+      return "h-7 w-7 rounded-md";
+    case "field":
+      return "h-8 w-8 rounded-lg";
+    case "group":
+      return "h-10 w-10 rounded-full";
     case "row":
       return "h-12 w-16 rounded-xl";
     case "account-list":
@@ -291,6 +322,10 @@ function getAppLogoViewport(
   size: InstitutionLogoMarkSize
 ): AppLogoViewport {
   if (
+    size !== "micro" &&
+    size !== "metadata" &&
+    size !== "field" &&
+    size !== "group" &&
     size !== "row" &&
     size !== "compact" &&
     size !== "account-list" &&
@@ -312,6 +347,29 @@ function getLogoDimensions(
   size: InstitutionLogoMarkSize,
   appLogoViewport: AppLogoViewport
 ): LogoDimensions {
+  if (
+    size === "micro" ||
+    size === "metadata" ||
+    size === "field" ||
+    size === "group"
+  ) {
+    const dimension = {
+      micro: 18,
+      metadata: 26,
+      field: 30,
+      group: 38,
+    }[size];
+    if (
+      appLogoViewport === "wide" ||
+      appLogoViewport === "inset" ||
+      appLogoViewport === "safeInset"
+    ) {
+      return { width: dimension, height: Math.round(dimension * 0.7) };
+    }
+    const inset = appLogoViewport === "safeSquare" ? 2 : 0;
+    return { width: dimension - inset, height: dimension - inset };
+  }
+
   if (size === "row") {
     if (appLogoViewport === "square") {
       return { width: 42, height: 42 };
@@ -425,6 +483,27 @@ function getImageSizeClassName(
   appLogoViewport: AppLogoViewport
 ): string {
   const imageResizeMode = logo?.presentation?.rowImageResizeMode ?? "contain";
+  if (
+    size === "micro" ||
+    size === "metadata" ||
+    size === "field" ||
+    size === "group"
+  ) {
+    const wide =
+      appLogoViewport === "wide" ||
+      appLogoViewport === "inset" ||
+      appLogoViewport === "safeInset";
+    switch (size) {
+      case "micro":
+        return wide ? "h-3 w-[18px]" : "h-4 w-4";
+      case "metadata":
+        return wide ? "h-5 w-[26px]" : "h-6 w-6";
+      case "field":
+        return wide ? "h-6 w-[30px]" : "h-7 w-7";
+      case "group":
+        return wide ? "h-7 w-9" : "h-9 w-9";
+    }
+  }
 
   if (size === "row" && imageResizeMode === "cover") {
     return "h-12 w-16 rounded-xl";
