@@ -13,6 +13,7 @@ import type { AccountChoiceSheetProps } from "@/components/transaction-review/Ac
 import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 import type { AccountReviewSession } from "../../../../../packages/logic/src/account-review/review-schemas";
 import { projectAccountReviewSession } from "../../../../../packages/logic/src/account-review/read-model";
+import { currentReviewUndoGroupId } from "@/hooks/account-review-facade-removed-state";
 import { makeOwnedContext } from "../../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
 import {
   TransactionReview,
@@ -46,6 +47,7 @@ const mockCandidates = jest.fn<
   Parameters<UseAccountReviewResult["getAccountCandidates"]>
 >();
 const mockUndoRemoval = jest.fn();
+const mockDiscardRemovedSuggestion = jest.fn<Promise<void>, [string]>();
 
 jest.mock("@/hooks/useAccountReview", () => ({
   useAccountReview: jest.fn(),
@@ -78,107 +80,60 @@ jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: () => null,
 }));
 jest.mock("@/components/transaction-review/AccountReviewPanel", () => ({
-  // Only the presentation boundary is replaced. All group eligibility,
-  // undo leases, issue labels and callbacks are shaped by the real container.
-  AccountReviewPanel: (props: {
-    groups: ReadonlyArray<{
-      groupId: string;
-      isRemoved: boolean;
-      canUndo: boolean;
-      canRemove: boolean;
-    }>;
-    summary: {
-      readonly issueLabels: readonly string[];
-      readonly distinctNeedsReviewCount: number;
-    };
-    onUndo: (groupId: string) => void;
-    onRemove: (groupId: string) => void;
-    onIssuePress?: (key: "account_review_issue_account") => void;
-  }) => {
-    const ReactActual = jest.requireActual<typeof import("react")>("react");
-    const RN =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    const groupAction = (
-      kind: "remove" | "undo",
-      groupId: string,
-      onPress: () => void
-    ): React.JSX.Element => {
-      const id = kind + "-" + groupId;
-      const label = kind === "remove" ? "Remove" : "Undo";
-      return ReactActual.createElement(
-        RN.TouchableOpacity,
-        { key: id, testID: "pr-" + id, onPress },
-        ReactActual.createElement(RN.Text, null, label)
-      );
-    };
-    return ReactActual.createElement(
-      RN.View,
-      { testID: "canonical-review-panel" },
-      ...props.summary.issueLabels.map((label) =>
-        ReactActual.createElement(
-          RN.Text,
-          { key: label, testID: "pr-localized-row-issue" },
-          label
-        )
-      ),
-      ReactActual.createElement(
-        RN.TouchableOpacity,
-        {
-          testID: "pr-account-issue",
-          onPress: () => props.onIssuePress?.("account_review_issue_account"),
-        },
-        ReactActual.createElement(RN.Text, null, "Choose accounts")
-      ),
-      ...props.groups.flatMap((group) => [
-        group.canRemove &&
-          groupAction("remove", group.groupId, () =>
-            props.onRemove(group.groupId)
-          ),
-        group.canUndo &&
-          groupAction("undo", group.groupId, () => props.onUndo(group.groupId)),
-      ])
-    );
-  },
+  // Actual panel tabs are tested separately; this host forwards current
+  // canonical parent values and callbacks without simulating selection.
+  AccountReviewPanel: jest.requireActual<
+    typeof import("./TransactionReview.canonical-edit-fixtures")
+  >("./TransactionReview.canonical-edit-fixtures")
+    .renderCanonicalAccountReviewPanel,
 }));
-jest.mock("@/components/transaction-review/AccountChoiceSheet", () => ({
-  AccountChoiceSheet: (props: AccountChoiceSheetProps) => {
-    mockChoiceProps(props);
-    if (!props.visible) return null;
-    const ReactActual = jest.requireActual<typeof import("react")>("react");
-    const RN =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return ReactActual.createElement(
-      RN.View,
-      { testID: "canonical-account-choice" },
-      ...props.candidateOptions.map((candidate) =>
+jest.mock("@/components/transaction-review/AccountChoiceSheet", () => {
+  // Retain the REAL linked-row Context/Provider used by the canonical
+  // container. Only the painted sheet is mocked so command semantics stay real.
+  const actual = jest.requireActual<
+    typeof import("@/components/transaction-review/AccountChoiceSheet")
+  >("@/components/transaction-review/AccountChoiceSheet");
+  return {
+    ...actual,
+    AccountChoiceSheet: (props: AccountChoiceSheetProps) => {
+      mockChoiceProps(props);
+      if (!props.visible) return null;
+      const ReactActual = jest.requireActual<typeof import("react")>("react");
+      const RN =
+        jest.requireActual<typeof import("react-native")>("react-native");
+      return ReactActual.createElement(
+        RN.View,
+        { testID: "canonical-account-choice" },
+        ...props.candidateOptions.map((candidate) =>
+          ReactActual.createElement(
+            RN.TouchableOpacity,
+            {
+              key: candidate.id,
+              testID: "pr-choose-option-" + candidate.id,
+              disabled: !candidate.isEligible,
+              onPress: () => props.onSelectCandidate(candidate.id),
+            },
+            ReactActual.createElement(RN.Text, null, candidate.displayName)
+          )
+        ),
         ReactActual.createElement(
           RN.TouchableOpacity,
           {
-            key: candidate.id,
-            testID: "pr-choose-option-" + candidate.id,
-            disabled: !candidate.isEligible,
-            onPress: () => props.onSelectCandidate(candidate.id),
+            testID: "canonical-use-account",
+            disabled: !props.canUseSelection,
+            onPress: props.onUseSelected,
           },
-          ReactActual.createElement(RN.Text, null, candidate.displayName)
+          ReactActual.createElement(RN.Text, null, "Use account and currency")
+        ),
+        ReactActual.createElement(
+          RN.TouchableOpacity,
+          { testID: "pr-account-cancel", onPress: props.onClose },
+          ReactActual.createElement(RN.Text, null, "Cancel")
         )
-      ),
-      ReactActual.createElement(
-        RN.TouchableOpacity,
-        {
-          testID: "canonical-use-account",
-          disabled: !props.canUseSelection,
-          onPress: props.onUseSelected,
-        },
-        ReactActual.createElement(RN.Text, null, "Use account and currency")
-      ),
-      ReactActual.createElement(
-        RN.TouchableOpacity,
-        { testID: "pr-account-cancel", onPress: props.onClose },
-        ReactActual.createElement(RN.Text, null, "Cancel")
-      )
-    );
-  },
-}));
+      );
+    },
+  };
+});
 jest.mock("@/components/transaction-review/EditSuggestedAccountSheet", () => ({
   EditSuggestedAccountSheet: () => null,
 }));
@@ -186,15 +141,26 @@ jest.mock("@/components/transaction-review/ReviewActionBar", () => ({
   ReviewActionBar: (props: {
     onDiscard: () => void;
     hideDiscard?: boolean;
+    selectedCount: number;
   }) => {
-    if (props.hideDiscard) return null;
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const RN =
       jest.requireActual<typeof import("react-native")>("react-native");
     return ReactActual.createElement(
-      RN.TouchableOpacity,
-      { testID: "canonical-discard-all", onPress: props.onDiscard },
-      ReactActual.createElement(RN.Text, null, "Discard all")
+      RN.View,
+      { testID: "pr-action-bar" },
+      ReactActual.createElement(
+        RN.Text,
+        { testID: "pr-global-save-selected-count" },
+        String(props.selectedCount)
+      ),
+      props.hideDiscard
+        ? null
+        : ReactActual.createElement(
+            RN.TouchableOpacity,
+            { testID: "canonical-discard-all", onPress: props.onDiscard },
+            ReactActual.createElement(RN.Text, null, "Discard all")
+          )
     );
   },
 }));
@@ -300,10 +266,13 @@ function fakeHook(
     choiceAccounts: [],
     isBusy: busy,
     undoToken: null,
+    undoGroupId: null,
+    discardedGroupIds: [],
     error: null,
     dispatch: mockDispatch,
     reload: jest.fn(),
     undoRemoval: mockUndoRemoval,
+    discardRemovedSuggestion: mockDiscardRemovedSuggestion,
     getAccountCandidates: mockCandidates,
   };
 }
@@ -372,6 +341,8 @@ beforeEach(() => {
   mockHook.mockImplementation(() => fakeHook());
   mockCandidates.mockReturnValue([]);
   mockUndoRemoval.mockReset();
+  mockDiscardRemovedSuggestion.mockReset();
+  mockDiscardRemovedSuggestion.mockResolvedValue(undefined);
   mockDispatch.mockImplementation(() =>
     Promise.resolve({
       reasonCodes: [],
@@ -593,24 +564,54 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
                 identityRevision: "0",
               },
               reviewReasons: [],
+              selected: true,
             }
       ),
     });
     mockHook.mockImplementation(() => fakeHook(filtered));
     const screen = render(review());
     expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
-    fireEvent.press(screen.getByTestId("pr-account-issue"));
-    expect(
-      screen.getByTestId("account-review-account-needed-only")
-    ).toBeTruthy();
-    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(1);
-    expect(mockDispatch).not.toHaveBeenCalled();
-    fireEvent.press(
-      screen.getByTestId("account-review-account-needed-show-all")
+    expect(screen.getByTestId("pr-account-needed-count")).toHaveTextContent(
+      "1"
     );
+    expect(
+      screen.getByTestId("pr-global-save-selected-count")
+    ).toHaveTextContent("1");
+    fireEvent.press(screen.getByTestId("pr-account-needed-tab"));
+    expect(screen.getByTestId("pr-account-needed-tab")).toHaveProp(
+      "accessibilityState",
+      { selected: true }
+    );
+    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(1);
+    expect(
+      screen.getByTestId("pr-global-save-selected-count")
+    ).toHaveTextContent("1");
+    expect(screen.queryByTestId("canonical-discard-all")).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("pr-show-all"));
+    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
+    expect(
+      screen.getByTestId("pr-global-save-selected-count")
+    ).toHaveTextContent("1");
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+  it("linked group temporary scope preserves original row identity and returns to full list", () => {
+    const linked = twoGroupSession();
+    mockHook.mockImplementation(() => fakeHook(linked));
+    const screen = render(review());
+    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
+    fireEvent.press(screen.getByTestId("pr-linked-" + SECOND_GROUP_ID));
+    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(1);
+    expect(screen.getByTestId("pr-source-account-0")).toHaveTextContent(
+      "QNB Two"
+    );
+    expect(screen.queryByTestId("canonical-discard-all")).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("pr-show-all"));
     expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
     expect(mockDispatch).not.toHaveBeenCalled();
   });
+
   it("real removals A then B expose Undo only on B; B restoration never restores A", async () => {
     const before = twoGroupSession();
     const first = removeActualGroup(
@@ -641,25 +642,12 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
       previousState: first.state,
       afterRemovalGeneration: second.state.operationGeneration,
     };
-    // Match the facade's actual transient lease identity: only the group
-    // newly removed between this lease's previous/current canonical states.
-    const latestRemovedIds = latestLease.previousState.groups
-      .filter(
-        (prior) =>
-          prior.status !== "removed" &&
-          !latestLease.previousState.removedEvidenceKeys.includes(
-            prior.evidenceKey
-          ) &&
-          second.state.removedEvidenceKeys.includes(prior.evidenceKey) &&
-          second.state.groups.some(
-            (current) =>
-              current.groupId === prior.groupId &&
-              current.status === "removed" &&
-              current.evidenceKey === prior.evidenceKey
-          )
-      )
-      .map((group) => group.groupId);
-    expect(latestRemovedIds).toEqual([SECOND_GROUP_ID]);
+    // Exercise the shared pure lease identity, rather than copying its logic.
+    const latestRemovedGroupId = currentReviewUndoGroupId(
+      second.state,
+      latestLease
+    );
+    expect(latestRemovedGroupId).toBe(SECOND_GROUP_ID);
     const undoB = reduceAccountReviewCommand({
       state: second.state,
       command: accountReviewCommandSchema.parse({
@@ -685,10 +673,17 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     mockHook.mockImplementation(() => ({
       ...fakeHook(second.state),
       undoToken: latestLease.token,
-      undoGroupId: latestRemovedIds[0] ?? null,
+      undoGroupId: latestRemovedGroupId,
     }));
     const screen = render(review());
     expect(screen.queryByTestId("pr-undo-" + T025_IDS.group)).toBeNull();
+    fireEvent.press(screen.getByTestId("pr-discard-" + SECOND_GROUP_ID));
+    await waitFor(() =>
+      expect(mockDiscardRemovedSuggestion).toHaveBeenCalledWith(SECOND_GROUP_ID)
+    );
+    expect(mockDispatch).not.toHaveBeenCalled();
+    // Presentation callback alone is NOT evidence that the real Undo lease
+    // was revoked. Keep the existing independent Undo scope assertion.
     fireEvent.press(screen.getByTestId("pr-undo-" + SECOND_GROUP_ID));
     await waitFor(() => expect(mockUndoRemoval).toHaveBeenCalledTimes(1));
     expect(undoB.affectedGroupIds).toContain(SECOND_GROUP_ID);
@@ -737,50 +732,29 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     );
   });
 
-  it("compact details preserve localized row blockers even with zero suggestions", () => {
-    const row = sourceSession.rows[0];
-    if (!row) throw new Error("missing_row_for_compact_blockers");
-    const blocked = accountReviewSessionSchema.parse({
-      ...sourceSession,
-      groups: [],
-      rows: [
-        {
-          ...row,
-          selected: false,
-          assignment: {
-            state: "unresolved",
-            accountId: null,
-            reasonCode: "account_unavailable",
-            candidateAccountIds: [],
-          },
-          reviewReasons: [
-            "account_unavailable",
-            "currency_confirmation_needed",
-          ],
-          currency: {
-            state: "unconfirmed",
-            reason: "conflicting",
-            candidateCodes: ["EGP", "USD"],
-            statedCode: "EGP",
-            evidenceSpans: [],
-          },
-        },
-      ],
-    });
+  it("currency/account blockers appear in the distinct Account needed tab, not duplicate card actions", () => {
+    const blocked = makeUnconfirmedCurrencyReview(sourceSession);
     mockHook.mockImplementation(() => fakeHook(blocked));
-    const screen = render(review());
-    const labels = screen
-      .getAllByTestId("pr-localized-row-issue")
-      .map((node) => String(node.props.children));
-    expect(labels.length).toBeGreaterThan(0);
-    expect(labels.some((label) => /account|currency/i.test(label))).toBe(true);
+    const rendered = render(review());
+    expect(rendered.getByTestId("pr-account-needed-count")).toHaveTextContent(
+      "1"
+    );
+    expect(rendered.queryAllByTestId("pr-localized-row-issue")).toHaveLength(0);
+    expect(rendered.getByTestId("pr-account-needed-tab")).toHaveProp(
+      "accessibilityState",
+      { selected: false }
+    );
+    fireEvent.press(rendered.getByTestId("pr-account-needed-tab"));
+    expect(rendered.getByTestId("pr-account-needed-tab")).toHaveProp(
+      "accessibilityState",
+      { selected: true }
+    );
+    expect(rendered.getAllByTestId("canonical-edit-row")).toHaveLength(1);
     expect(
-      labels.every(
-        (label) =>
-          !label.includes("account_unavailable") &&
-          !label.includes("currency_confirmation_needed")
-      )
-    ).toBe(true);
+      rendered.getByTestId("pr-global-save-selected-count")
+    ).toHaveTextContent("0");
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(blocked.rows[0]?.currency.state).toBe("unconfirmed");
   });
 
   it.each(["exact", "default", "user"] as const)(

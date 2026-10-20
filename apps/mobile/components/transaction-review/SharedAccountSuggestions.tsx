@@ -1,36 +1,20 @@
 /**
- * #395 T031 B1 — shaped, independent shared-account group presentation.
- * Counts, permissions, statuses, selection and mutations are parent-owned.
- * Local state owns only a visible menu, never account/reducer state.
+ * #395 compact inline account-review presentation. The canonical session owns
+ * status, selection and all mutations; only disclosure/menu state is local.
  */
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import { t } from "i18next";
-import {
-  FlatList,
-  Modal,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-  type TextStyle,
-} from "react-native";
-import { useColorScheme } from "nativewind";
-import { palette } from "@/constants/colors";
+import React, { useEffect, useState } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 import { useLocale } from "@/context/LocaleContext";
-import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { useTranslation } from "react-i18next";
+import { palette } from "@/constants/colors";
+import { useColorScheme } from "nativewind";
+import { CompactReviewSummary } from "./CompactReviewSummary";
 import { DefaultAccountInfo } from "./DefaultAccountInfo";
 import { SharedAccountGroupRow } from "./SharedAccountGroupRow";
-import {
-  displayIdentity,
-  ReviewActionButton,
-  ReviewPointerBackdrop,
-  ReviewSheetHandle,
-  reviewCopy,
-  type ReviewDisplayLanguage,
-  type ReviewIssueEntry,
-  type ReviewIssueKey,
+import type {
+  ReviewIssueEntry,
+  ReviewIssueKey,
 } from "./shared-account-presentation";
 
 export interface SharedSuggestedGroupView {
@@ -64,603 +48,214 @@ export interface SharedReviewSummaryView {
 export interface SharedAccountSuggestionsProps {
   readonly groups: readonly SharedSuggestedGroupView[];
   readonly summary: SharedReviewSummaryView;
-  readonly isAllGroupsSheetOpen: boolean;
+  /** Authoritative distinct source-row union from the same temporary filter. */
+  readonly accountNeededCount?: number;
   readonly isBusy: boolean;
   readonly onConfirm: (groupId: string) => void;
   readonly onEdit: (groupId: string) => void;
   readonly onReplace: (groupId: string) => void;
   readonly onRemove: (groupId: string) => void;
   readonly onUndo: (groupId: string) => void;
-  readonly onViewAll: () => void;
-  readonly onCloseAllGroups: () => void;
+  readonly onDiscardRemoved?: (groupId: string) => void;
+  readonly onViewLinked?: (groupId: string) => void;
+  readonly revealGroupsKey?: number;
   readonly defaultAccountName?: string | null;
   readonly onDefaultWhyPress?: () => void;
   readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }
-type GroupCommandAction = "edit" | "replace" | "remove";
-type RenderGroupRow = (
-  group: SharedSuggestedGroupView,
-  showDivider: boolean
-) => React.JSX.Element;
-function GroupActionChoices({
-  group,
-  language,
+
+function InlineReviewIssues({
+  issues,
   disabled,
-  onAction,
+  onIssuePress,
 }: {
-  readonly group: SharedSuggestedGroupView;
-  readonly language: ReviewDisplayLanguage;
+  readonly issues: readonly ReviewIssueEntry[];
   readonly disabled: boolean;
-  readonly onAction: (action: GroupCommandAction) => void;
-}): React.JSX.Element {
+  readonly onIssuePress?: (key: ReviewIssueKey) => void;
+}): React.JSX.Element | null {
+  const { language } = useLocale();
+  const { t } = useTranslation("transactions");
+  if (issues.length === 0) return null;
   return (
-    <View className="gap-3">
-      <ReviewActionButton
-        testID="account-review-group-edit"
-        tone="outline"
-        iconName="pencil-outline"
-        label={reviewCopy("account_review_group_edit", language)}
-        disabled={disabled || !group.canEdit}
-        onPress={() => onAction("edit")}
-      />
-      <ReviewActionButton
-        testID="account-review-group-replace"
-        tone="outline"
-        iconName="swap-horizontal-outline"
-        label={reviewCopy("account_review_group_replace", language)}
-        disabled={disabled || !group.canReplace}
-        onPress={() => onAction("replace")}
-      />
-      <ReviewActionButton
-        testID="account-review-group-remove"
-        tone="danger"
-        iconName="trash-outline"
-        label={reviewCopy("account_review_group_remove", language)}
-        disabled={disabled || !group.canRemove}
-        onPress={() => onAction("remove")}
-      />
-    </View>
-  );
-}
-function GroupMenuContent({
-  group,
-  language,
-  disabled,
-  onAction,
-}: {
-  readonly group: SharedSuggestedGroupView;
-  readonly language: ReviewDisplayLanguage;
-  readonly disabled: boolean;
-  readonly onAction: (action: GroupCommandAction) => void;
-}): React.JSX.Element {
-  const rtl = language === "ar";
-  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
-  return (
-    <View
-      testID="account-review-group-action-sheet"
-      className="w-full max-w-[350px] self-center gap-3 px-5 pb-3"
-    >
-      <Text
-        accessibilityRole="header"
-        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
-      >
-        {reviewCopy("account_review_group_actions_title", language)}
-      </Text>
-      <Text
-        style={{ writingDirection: direction }}
-        className={
-          "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-          (rtl ? "text-right" : "text-left")
-        }
-      >
-        {displayIdentity(group.displayName, language)} · {group.linkedCount}{" "}
-        {reviewCopy("account_review_group_linked", language)}
-      </Text>
-      <GroupActionChoices
-        group={group}
-        language={language}
-        disabled={disabled}
-        onAction={onAction}
-      />
+    <View testID="account-review-compact-issues" className="gap-1">
+      {issues.map((issue) => (
+        <View
+          key={issue.key}
+          className={
+            "min-h-11 min-w-0 flex-wrap items-center gap-2 border-t border-border py-2 dark:border-border-dark " +
+            (language === "ar" ? "flex-row-reverse" : "flex-row")
+          }
+        >
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color={palette.gold[600]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+          <Text
+            className={
+              "min-w-0 flex-1 text-sm text-text-primary dark:text-text-primary-dark " +
+              (language === "ar" ? "text-right" : "text-left")
+            }
+          >
+            {issue.label}
+          </Text>
+          {onIssuePress ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={issue.label}
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              onPress={() => onIssuePress(issue.key)}
+              className="min-h-11 min-w-11 items-center justify-center px-1"
+            >
+              <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                {t("account_review_issue_review")}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ))}
     </View>
   );
 }
 
-interface GroupMenuModalProps {
-  readonly group: SharedSuggestedGroupView;
-  readonly language: ReviewDisplayLanguage;
-  readonly disabled: boolean;
-  readonly onAction: (action: GroupCommandAction) => void;
-  readonly onClose: () => void;
-}
-function GroupMenuModal(props: GroupMenuModalProps): React.JSX.Element {
-  const bottomInset = useModalBottomInset();
-  const { height } = useWindowDimensions();
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={props.onClose}
-    >
-      <View className="flex-1 justify-end">
-        <ReviewPointerBackdrop onPress={props.onClose} />
-        <View
-          accessibilityViewIsModal
-          importantForAccessibility="yes"
-          className="w-full rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
-          style={{
-            maxHeight: Math.max(0, (height - bottomInset) * 0.8),
-            paddingBottom: bottomInset,
-          }}
-        >
-          <ReviewSheetHandle />
-          <ScrollView keyboardShouldPersistTaps="handled">
-            <GroupMenuContent
-              group={props.group}
-              language={props.language}
-              disabled={props.disabled}
-              onAction={props.onAction}
-            />
-            <View className="mx-5 mb-3">
-              <ReviewActionButton
-                tone="quiet"
-                label={reviewCopy("account_review_group_close", props.language)}
-                onPress={props.onClose}
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+export function SharedAccountSuggestions(
+  props: SharedAccountSuggestionsProps
+): React.JSX.Element {
+  const { language } = useLocale();
+  const { t } = useTranslation("transactions");
+  const { colorScheme } = useColorScheme();
+  const [expanded, setExpanded] = useState(false);
+  const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
+  useEffect(() => {
+    if (props.revealGroupsKey && props.revealGroupsKey > 0) {
+      setExpanded(true);
+    }
+  }, [props.revealGroupsKey]);
+  const accountNeededCount =
+    props.accountNeededCount ??
+    props.summary.issues?.find(
+      (issue) => issue.key === "account_review_issue_account"
+    )?.count ??
+    props.summary.issues?.find(
+      (issue) => issue.key === "account_review_issue_currency"
+    )?.count ??
+    0;
+  const reviewed =
+    props.summary.pendingGroupCount === 0 && accountNeededCount === 0;
+  // Account/currency-needed rows have their own truthful temporary filter tab.
+  // Keep category/amount recovery in details without duplicating that action.
+  const issues = (props.summary.issues ?? []).filter(
+    (issue) =>
+      issue.key !== "account_review_issue_account" &&
+      issue.key !== "account_review_issue_currency"
   );
-}
-interface AllGroupsSheetProps {
-  readonly open: boolean;
-  readonly groups: readonly SharedSuggestedGroupView[];
-  readonly language: ReviewDisplayLanguage;
-  readonly renderGroup: RenderGroupRow;
-  readonly onClose: () => void;
-  readonly activeMenu: SharedSuggestedGroupView | null;
-  readonly onMenuAction: (action: GroupCommandAction) => void;
-  readonly disabled: boolean;
-}
-function AllGroupsHeader({
-  language,
-  onClose,
-}: {
-  readonly language: ReviewDisplayLanguage;
-  readonly onClose: () => void;
-}): React.JSX.Element {
   return (
     <View
-      className={
-        language === "ar"
-          ? "mx-5 mb-2 flex-row-reverse items-center justify-between"
-          : "mx-5 mb-2 flex-row items-center justify-between"
-      }
+      testID="account-review-details-panel"
+      className="w-full overflow-hidden rounded-xl border border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
     >
-      <Text
-        accessibilityRole="header"
-        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
-      >
-        {reviewCopy("account_review_group_view_all", language)}
-      </Text>
-      <ReviewActionButton
-        tone="quiet"
-        label={reviewCopy("account_review_group_close", language)}
-        onPress={onClose}
+      <CompactReviewSummary
+        expanded={expanded}
+        pendingCount={props.summary.pendingGroupCount}
+        accountNeededCount={accountNeededCount}
+        isReviewed={reviewed}
+        onToggle={() => {
+          setExpanded((current) => !current);
+          setMenuGroupId(null);
+        }}
       />
-    </View>
-  );
-}
-function FullGroupsList({
-  groups,
-  renderGroup,
-}: {
-  readonly groups: readonly SharedSuggestedGroupView[];
-  readonly renderGroup: RenderGroupRow;
-}): React.JSX.Element {
-  return (
-    <FlatList
-      data={groups}
-      keyExtractor={(group) => group.groupId}
-      className="shrink"
-      renderItem={({ item, index }) =>
-        renderGroup(item, index < groups.length - 1)
-      }
-      initialNumToRender={10}
-      removeClippedSubviews={false}
-      contentContainerClassName="px-5 pb-3"
-      showsVerticalScrollIndicator={false}
-    />
-  );
-}
-function AllGroupsSheet(props: AllGroupsSheetProps): React.JSX.Element | null {
-  const bottomInset = useModalBottomInset();
-  const { height } = useWindowDimensions();
-  if (!props.open) return null;
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={props.onClose}
-    >
-      <View className="flex-1 justify-end">
-        <ReviewPointerBackdrop onPress={props.onClose} />
-        <View
-          testID="account-review-group-all-sheet"
-          accessibilityViewIsModal
-          importantForAccessibility="yes"
-          className="w-full rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
-          style={{
-            maxHeight: Math.max(0, (height - bottomInset) * 0.8),
-            paddingBottom: bottomInset,
-          }}
-        >
-          <ReviewSheetHandle />
-          <AllGroupsHeader language={props.language} onClose={props.onClose} />
-          <FullGroupsList
-            groups={props.groups}
-            renderGroup={props.renderGroup}
+      {expanded ? (
+        <View className="gap-1 px-3 pb-3">
+          {props.groups.map((group, index) => (
+            <SharedAccountGroupRow
+              key={group.groupId}
+              group={group}
+              language={language}
+              showDivider={index < props.groups.length - 1}
+              disabled={props.isBusy || group.isBusy}
+              isMenuOpen={menuGroupId === group.groupId}
+              onMenu={() =>
+                setMenuGroupId((current) =>
+                  current === group.groupId ? null : group.groupId
+                )
+              }
+              onConfirm={() => props.onConfirm(group.groupId)}
+              onEdit={() => {
+                setMenuGroupId(null);
+                props.onEdit(group.groupId);
+              }}
+              onReplace={() => {
+                setMenuGroupId(null);
+                props.onReplace(group.groupId);
+              }}
+              onRemove={() => {
+                setMenuGroupId(null);
+                props.onRemove(group.groupId);
+              }}
+              onUndo={() => props.onUndo(group.groupId)}
+              onDiscard={
+                props.onDiscardRemoved
+                  ? () => props.onDiscardRemoved?.(group.groupId)
+                  : undefined
+              }
+              onViewLinked={
+                props.onViewLinked
+                  ? () => props.onViewLinked?.(group.groupId)
+                  : undefined
+              }
+            />
+          ))}
+          <InlineReviewIssues
+            issues={issues}
+            disabled={props.isBusy}
+            onIssuePress={props.onIssuePress}
           />
-          {props.activeMenu ? (
-            <GroupMenuContent
-              group={props.activeMenu}
-              language={props.language}
-              disabled={props.disabled}
-              onAction={props.onMenuAction}
+          {props.defaultAccountName &&
+          props.summary.defaultAssignmentCount > 0 &&
+          props.onDefaultWhyPress &&
+          (props.groups.length > 0 || issues.length > 0) ? (
+            <DefaultAccountInfo
+              defaultAccountName={props.defaultAccountName}
+              assignmentCount={props.summary.defaultAssignmentCount}
+              onWhyPress={props.onDefaultWhyPress}
             />
           ) : null}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-interface OverviewPanelProps {
-  readonly groups: readonly SharedSuggestedGroupView[];
-  readonly summary: SharedReviewSummaryView;
-  readonly language: ReviewDisplayLanguage;
-  readonly renderGroup: RenderGroupRow;
-  readonly onViewAll: () => void;
-  readonly disabled: boolean;
-  readonly defaultAccountName?: string | null;
-  readonly onDefaultWhyPress?: () => void;
-  readonly onIssuePress?: (key: ReviewIssueKey) => void;
-}
-function GroupIssues({
-  labels,
-  issues,
-  language,
-  disabled,
-  onIssuePress,
-  hasFollowingSection,
-}: {
-  readonly labels: readonly string[];
-  readonly issues?: readonly ReviewIssueEntry[];
-  readonly language: ReviewDisplayLanguage;
-  readonly disabled: boolean;
-  readonly onIssuePress?: (key: ReviewIssueKey) => void;
-  readonly hasFollowingSection: boolean;
-}): React.JSX.Element | null {
-  const { colorScheme } = useColorScheme();
-  const rtl = language === "ar";
-  const displayed: ReadonlyArray<{
-    readonly key: ReviewIssueKey | null;
-    readonly label: string;
-    readonly count: number | null;
-  }> = issues ?? labels.map((label) => ({ key: null, label, count: null }));
-  if (displayed.length === 0) return null;
-  return (
-    <View className="mt-3 gap-2">
-      {displayed.map((issue, index) => {
-        const viewTransactions =
-          issue.key === "account_review_issue_account" ||
-          issue.key === "account_review_issue_currency";
-        const actionLabel = viewTransactions
-          ? t("account_review_issue_view_transactions", {
-              ns: "transactions",
-              lng: language,
-              defaultValue:
-                language === "ar" ? "عرض المعاملات" : "View transactions",
-            })
-          : t(
-              issue.key === "account_review_issue_category"
-                ? "account_review_issue_choose"
-                : "account_review_issue_review",
-              { ns: "transactions", lng: language }
-            );
-        const inactive = disabled || issue.key === null || !onIssuePress;
-        return (
-          <View
-            key={issue.key ?? String(index)}
-            testID={"account-review-issue-" + (issue.key ?? index)}
-            className={
-              "min-h-[68px] flex-wrap items-center gap-2 py-3 " +
-              (index < displayed.length - 1 || hasFollowingSection
-                ? "border-b border-border dark:border-border-dark "
-                : "") +
-              (rtl ? "flex-row-reverse" : "flex-row")
-            }
-          >
-            <View className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-50 dark:bg-surface-dark">
-              <Ionicons
-                name="alert-circle-outline"
-                size={22}
-                color={
-                  colorScheme === "dark" ? palette.gold[400] : palette.gold[800]
-                }
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              />
-            </View>
-            <View className="min-w-0 flex-1 gap-1">
-              <Text
-                className={
-                  "text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark " +
-                  (rtl ? "text-right" : "text-left")
-                }
-              >
-                {issue.label}
-              </Text>
-              {issue.count !== null ? (
-                <Text
-                  testID="account-review-issue-count"
-                  className={
-                    "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-                    (rtl ? "text-right" : "text-left")
-                  }
-                >
-                  {t("account_review_issue_count", {
-                    ns: "transactions",
-                    lng: language,
-                    count: issue.count,
-                  })}
-                </Text>
-              ) : null}
-            </View>
-            {issue.key !== null && onIssuePress ? (
-              <TouchableOpacity
-                testID={"account-review-issue-action-" + issue.key}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel={actionLabel + ", " + issue.label}
-                accessibilityState={{ disabled: inactive }}
-                disabled={inactive}
-                onPress={() => {
-                  if (!inactive && issue.key) onIssuePress(issue.key);
-                }}
-                className={
-                  "min-h-12 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-border px-3 dark:border-border-dark " +
-                  (rtl ? "flex-row-reverse" : "flex-row")
-                }
-              >
-                <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-                  {actionLabel}
-                </Text>
+          {props.groups.some((group) => !group.isRemoved) ? (
+            <View
+              testID="account-review-compact-save-explanation"
+              className={
+                "w-full max-w-[350px] self-center items-center gap-2 py-1 " +
+                (language === "ar" ? "flex-row-reverse" : "flex-row")
+              }
+            >
+              <View className="h-6 w-6 shrink-0 items-center justify-center">
                 <Ionicons
-                  name={
-                    rtl ? "chevron-back-outline" : "chevron-forward-outline"
-                  }
-                  size={18}
+                  name="information-circle-outline"
+                  size={20}
                   color={
                     colorScheme === "dark"
-                      ? palette.nileGreen[400]
-                      : palette.nileGreen[700]
+                      ? palette.slate[400]
+                      : palette.slate[500]
                   }
                   accessibilityElementsHidden
                   importantForAccessibility="no"
                 />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
-  const { summary, groups, language } = props;
-  const rtl = language === "ar";
-  const displayedGroups = groups.slice(0, 2);
-  const hasDefaultDisclosure =
-    Boolean(props.defaultAccountName) &&
-    summary.defaultAssignmentCount > 0 &&
-    props.onDefaultWhyPress !== undefined;
-  const hasFollowingSection =
-    summary.issueLabels.length > 0 || hasDefaultDisclosure || groups.length > 1;
-  return (
-    <View
-      testID="account-review-details-panel"
-      className="w-full self-center rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark"
-    >
-      <Text
-        accessibilityRole="header"
-        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
-      >
-        {reviewCopy("account_review_details_title", language)}
-      </Text>
-      <Text
-        className={
-          "mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-          (rtl ? "text-right" : "text-left")
-        }
-      >
-        {groups.length === 0
-          ? t("account_review_details_needs", {
-              ns: "transactions",
-              lng: language,
-              count: summary.distinctNeedsReviewCount,
-            })
-          : [
-              summary.pendingGroupCount > 0
-                ? t("account_review_details_pending", {
-                    ns: "transactions",
-                    lng: language,
-                    count: summary.pendingGroupCount,
-                  })
-                : null,
-              (summary.issues?.find(
-                (issue) => issue.key === "account_review_issue_currency"
-              )?.count ?? 0) > 0
-                ? t("account_review_details_currency", {
-                    ns: "transactions",
-                    lng: language,
-                    count:
-                      summary.issues?.find(
-                        (issue) => issue.key === "account_review_issue_currency"
-                      )?.count ?? 0,
-                  })
-                : null,
-              summary.confirmedGroupCount > 0
-                ? t("account_review_details_confirmed", {
-                    ns: "transactions",
-                    lng: language,
-                    count: summary.confirmedGroupCount,
-                  })
-                : null,
-            ]
-              .filter((part): part is string => part !== null)
-              .join(" · ")}{" "}
-      </Text>
-      <View className="mt-3">
-        {displayedGroups.map((group, index) => (
-          <React.Fragment key={group.groupId}>
-            {props.renderGroup(
-              group,
-              index < displayedGroups.length - 1 || hasFollowingSection
-            )}
-          </React.Fragment>
-        ))}
-      </View>
-      <GroupIssues
-        labels={summary.issueLabels}
-        issues={summary.issues}
-        language={language}
-        disabled={props.disabled}
-        onIssuePress={props.onIssuePress}
-        hasFollowingSection={hasDefaultDisclosure || groups.length > 1}
-      />
-      {hasDefaultDisclosure &&
-      props.defaultAccountName &&
-      props.onDefaultWhyPress ? (
-        <DefaultAccountInfo
-          defaultAccountName={props.defaultAccountName}
-          assignmentCount={summary.defaultAssignmentCount}
-          onWhyPress={props.onDefaultWhyPress}
-        />
-      ) : null}
-      {groups.length > 1 ? (
-        <View
-          className={"self-center " + (hasDefaultDisclosure ? "mt-1" : "mt-2")}
-        >
-          <ReviewActionButton
-            testID="account-review-group-view-all"
-            tone="quiet"
-            label={reviewCopy("account_review_group_view_all", language)}
-            disabled={props.disabled}
-            onPress={props.onViewAll}
-          />
+              </View>
+              <Text
+                className={
+                  "min-w-0 flex-1 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+                  (language === "ar" ? "text-right" : "text-left")
+                }
+              >
+                {t("compact_review_creation_explanation")}
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </View>
-  );
-}
-interface GroupSurfaceCompositionProps {
-  readonly source: SharedAccountSuggestionsProps;
-  readonly renderGroup: RenderGroupRow;
-  readonly menu: SharedSuggestedGroupView | null;
-  readonly language: ReviewDisplayLanguage;
-  readonly disabled: boolean;
-  readonly onAction: (action: GroupCommandAction) => void;
-  readonly dismissMenu: () => void;
-}
-function GroupSurfaceComposition(
-  p: GroupSurfaceCompositionProps
-): React.JSX.Element {
-  const source = p.source;
-  return (
-    <>
-      <OverviewPanel
-        groups={source.groups}
-        summary={source.summary}
-        language={p.language}
-        renderGroup={p.renderGroup}
-        disabled={source.isBusy}
-        onViewAll={source.onViewAll}
-        defaultAccountName={source.defaultAccountName}
-        onDefaultWhyPress={source.onDefaultWhyPress}
-        onIssuePress={source.onIssuePress}
-      />
-      <AllGroupsSheet
-        open={source.isAllGroupsSheetOpen}
-        groups={source.groups}
-        language={p.language}
-        renderGroup={p.renderGroup}
-        onClose={source.onCloseAllGroups}
-        activeMenu={p.menu}
-        onMenuAction={p.onAction}
-        disabled={p.disabled}
-      />
-      {p.menu && !source.isAllGroupsSheetOpen ? (
-        <GroupMenuModal
-          group={p.menu}
-          language={p.language}
-          disabled={p.disabled}
-          onAction={p.onAction}
-          onClose={p.dismissMenu}
-        />
-      ) : null}
-    </>
-  );
-}
-export function SharedAccountSuggestions(
-  props: SharedAccountSuggestionsProps
-): React.JSX.Element | null {
-  const { language } = useLocale();
-  const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
-  const menu =
-    props.groups.find((group) => group.groupId === menuGroupId) ?? null;
-  const disabled = props.isBusy || (menu?.isBusy ?? false);
-  const perform = (action: GroupCommandAction): void => {
-    if (!menu || disabled) return;
-    setMenuGroupId(null);
-    if (action === "edit" && menu.canEdit) {
-      if (props.isAllGroupsSheetOpen) props.onCloseAllGroups();
-      props.onEdit(menu.groupId);
-    }
-    if (action === "replace" && menu.canReplace) {
-      if (props.isAllGroupsSheetOpen) props.onCloseAllGroups();
-      props.onReplace(menu.groupId);
-    }
-    if (action === "remove" && menu.canRemove) props.onRemove(menu.groupId);
-  };
-  const renderGroup: RenderGroupRow = (group, showDivider) => (
-    <SharedAccountGroupRow
-      group={group}
-      language={language}
-      showDivider={showDivider}
-      disabled={props.isBusy || group.isBusy}
-      onConfirm={() => props.onConfirm(group.groupId)}
-      onMenu={() => setMenuGroupId(group.groupId)}
-      onUndo={() => props.onUndo(group.groupId)}
-    />
-  );
-  if (props.groups.length === 0 && props.summary.issueLabels.length === 0)
-    return null;
-  return (
-    <GroupSurfaceComposition
-      source={props}
-      renderGroup={renderGroup}
-      menu={menu}
-      language={language}
-      disabled={disabled}
-      onAction={perform}
-      dismissMenu={() => setMenuGroupId(null)}
-    />
   );
 }

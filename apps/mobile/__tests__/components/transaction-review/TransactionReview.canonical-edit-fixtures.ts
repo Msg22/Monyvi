@@ -1,6 +1,6 @@
 /**
  * #395 PR396 canonical component tests: genuine reciprocal group/removal fixtures.
- * Pure canonical reducer transitions; no test mocks or alternate review authority.
+ * Pure reducer fixtures and a scoped presentation-only test host; no alternate review authority.
  */
 import {
   accountReviewCommandSchema,
@@ -10,6 +10,7 @@ import type React from "react";
 import i18next from "i18next";
 import enTransactions from "@/locales/en/transactions.json";
 import type { UseAccountReviewResult } from "@/hooks/useAccountReview";
+import type { AccountReviewPanelProps } from "@/components/transaction-review/AccountReviewPanel";
 import {
   reduceAccountReviewCommand,
   type ReviewUndoLease,
@@ -292,4 +293,88 @@ export function makeSelectedSecondT025Review(): {
       })),
     }),
   };
+}
+
+/**
+ * Presentation-only test host for the canonical container integration suite.
+ * The separate AccountReviewPanel component suite renders the REAL panel.
+ * This host forwards parent-provided counts and callbacks without reproducing
+ * selection, review-filter, Save or Undo/Discard domain decisions.
+ */
+export function renderCanonicalAccountReviewPanel(
+  props: AccountReviewPanelProps
+): React.JSX.Element {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const RN = jest.requireActual<typeof import("react-native")>("react-native");
+  const touch = (
+    testID: string,
+    label: string,
+    onPress: () => void,
+    selected?: boolean
+  ): React.JSX.Element =>
+    ReactActual.createElement(
+      RN.TouchableOpacity,
+      {
+        key: testID,
+        testID,
+        onPress,
+        ...(selected === undefined ? {} : { accessibilityState: { selected } }),
+      },
+      ReactActual.createElement(RN.Text, null, label)
+    );
+  return ReactActual.createElement(
+    RN.View,
+    { testID: "canonical-review-panel" },
+    // The real compact card omits account/currency action rows: those belong
+    // to the dedicated Account needed tab. Only other issue labels remain.
+    ...(props.summary.issues ?? [])
+      .filter(
+        (issue) =>
+          issue.key !== "account_review_issue_account" &&
+          issue.key !== "account_review_issue_currency"
+      )
+      .map((issue) =>
+        ReactActual.createElement(
+          RN.Text,
+          { key: issue.key, testID: "pr-localized-row-issue" },
+          issue.label
+        )
+      ),
+    ReactActual.createElement(
+      RN.Text,
+      { testID: "pr-account-needed-count" },
+      String(props.accountNeededCount)
+    ),
+    touch(
+      "pr-account-needed-tab",
+      "Account needed",
+      props.onAccountNeededPress,
+      props.accountNeededActive
+    ),
+    ...(props.temporaryScopeActive
+      ? [touch("pr-show-all", "Show all", props.onShowAll)]
+      : []),
+    ...props.groups.flatMap((group) => [
+      group.canRemove
+        ? touch("pr-remove-" + group.groupId, "Remove", () =>
+            props.onRemove(group.groupId)
+          )
+        : null,
+      group.canUndo
+        ? touch("pr-undo-" + group.groupId, "Undo", () =>
+            props.onUndo(group.groupId)
+          )
+        : null,
+      group.isRemoved && props.onDiscardRemoved
+        ? touch("pr-discard-" + group.groupId, "Discard", () =>
+            props.onDiscardRemoved?.(group.groupId)
+          )
+        : null,
+      group.linkedCount > 0 && props.onViewLinked
+        ? touch("pr-linked-" + group.groupId, "View linked", () =>
+            props.onViewLinked?.(group.groupId)
+          )
+        : null,
+    ])
+  );
 }

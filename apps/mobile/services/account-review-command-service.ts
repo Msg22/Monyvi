@@ -7,6 +7,7 @@ import {
 import { Q } from "@nozbe/watermelondb";
 import {
   reduceAccountReviewCommand,
+  autoSelectReadyReviewSession,
   type AccountReviewCommandResult,
   type ReviewUndoLease,
 } from "../../../packages/logic/src/account-review/reducer";
@@ -153,6 +154,7 @@ async function persistReviewTransition(
   result: AccountReviewCommandResult,
   graph: OwnedReviewGraph,
   guard: () => void,
+  selectionKind: AccountReviewCommand["kind"] | "auto",
   signal?: AbortSignal
 ): Promise<void> {
   throwIfSmsReviewDraftOperationAborted(signal);
@@ -163,11 +165,22 @@ async function persistReviewTransition(
     [queue, ...updates.map(({ record }) => record)],
     () => {
       guard();
-      return updates.map(({ record, row, payload, selectionChanged }) =>
+      return updates.map(({ record, payload, selectionChanged }) =>
         record.prepareUpdate((item) => {
           item.payloadVersion = payload.version;
           item.payloadJson = payload.json;
-          if (selectionChanged) item.selectionOverride = row.selected;
+          if (selectionChanged) {
+            // Existing nullable override is explicit manual intent, not a
+            // marker for forced group edits or newly ready automatic rows.
+            item.selectionOverride =
+              selectionKind === "set_row_selected" ||
+              selectionKind === "clear_selection"
+                ? false
+                : selectionKind === "select_ready" ||
+                    selectionKind === "select_row"
+                  ? true
+                  : null;
+          }
           item.updatedAt = now;
         })
       );
@@ -246,6 +259,12 @@ async function executeReviewCommandInWriter(
     categorySnapshots,
     nextUndoToken: input.nextUndoToken ?? null,
     undo: currentAccountReviewUndo(lifetime, queue),
+    autoSelectReady: true,
+    manuallyDeselectedRowIds: new Set(
+      [...graph.recordsByRow]
+        .filter(([, record]) => record.selectionOverride === false)
+        .map(([rowId]) => rowId)
+    ),
   });
   if (result.effect !== "persist_sms") return result;
   try {
@@ -259,6 +278,7 @@ async function executeReviewCommandInWriter(
         if (!isAccountReviewUndoLifetimeCurrent(lifetime))
           throw new AccountReviewUndoLifetimeInvalidatedError();
       },
+      input.command.kind,
       input.signal
     );
   } catch (error) {
@@ -279,6 +299,146 @@ export async function executeSmsAccountReviewCommand(
     return await database.write(() =>
       executeReviewCommandInWriter(input, lifetime)
     );
+  } finally {
+    endAccountReviewUndoLifetime();
+  }
+}
+
+/** Bootstrap readiness within one owned writer, without a public command.
+ * Existing false selection overrides are explicit manual opt-outs. */
+export async function initializeSmsAccountReviewReadySelection(input: {
+  readonly ownerId: string;
+  readonly queueId: string;
+  readonly expectedSession: AccountReviewSession;
+  readonly signal?: AbortSignal;
+}): Promise<AccountReviewSession> {
+  throwIfSmsReviewDraftOperationAborted(input.signal);
+  const lifetime = beginAccountReviewUndoLifetime(input.ownerId);
+  try {
+    return await database.write(async (): Promise<AccountReviewSession> => {
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      await assertExpectedCurrentUser(input.ownerId);
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      const queue = await loadCurrentQueue(input.ownerId, input.queueId);
+      const records = await loadCurrentDrafts(input.ownerId, queue.id);
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      const graph = rehydrateOwnedSmsReviewGraph(
+        records,
+        input.ownerId,
+        queue.id
+      );
+      if (
+        JSON.stringify(graph.session) !==
+          JSON.stringify(input.expectedSession) ||
+        !isAccountReviewUndoLifetimeCurrent(lifetime)
+      )
+        throw new Error("review_revision_stale");
+      // An unconsumed removal lease must remain usable; do not mutate the
+      // generation or any other rows behind its strict undo preimage.
+      if (currentAccountReviewUndo(lifetime, queue)) return graph.session;
+      const snapshots = await loadAccountReviewAccountSnapshots();
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      await assertExpectedCurrentUser(input.ownerId);
+      if (snapshots.ownerId !== input.ownerId)
+        throw new Error("review_owner_changed");
+      const manual = new Set(
+        [...graph.recordsByRow]
+          .filter(([, record]) => record.selectionOverride === false)
+          .map(([rowId]) => rowId)
+      );
+      const result = autoSelectReadyReviewSession(
+        graph.session,
+        snapshots,
+        manual
+      );
+      if (result.effect === "persist_sms") {
+        await persistReviewTransition(
+          input.ownerId,
+          queue,
+          result,
+          graph,
+          () => {
+            throwIfSmsReviewDraftOperationAborted(input.signal);
+            if (!isAccountReviewUndoLifetimeCurrent(lifetime))
+              throw new AccountReviewUndoLifetimeInvalidatedError();
+          },
+          "auto",
+          input.signal
+        );
+      }
+      return result.state;
+    });
+  } finally {
+    endAccountReviewUndoLifetime();
+  }
+}
+
+/** Revoke only the matching transient SMS Undo, never delete durable drafts. */
+export async function discardSmsAccountReviewRemovedSuggestion(input: {
+  readonly ownerId: string;
+  readonly queueId: string;
+  readonly sessionId: string;
+  readonly groupId: string;
+  readonly expectedReviewRevision: string;
+  readonly expectedOperationGeneration: string;
+  readonly undoToken: string | null;
+  readonly signal?: AbortSignal;
+}): Promise<void> {
+  throwIfSmsReviewDraftOperationAborted(input.signal);
+  const lifetime = beginAccountReviewUndoLifetime(input.ownerId);
+  try {
+    await database.write(async (): Promise<void> => {
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      await assertExpectedCurrentUser(input.ownerId);
+      const queue = await loadCurrentQueue(input.ownerId, input.queueId);
+      const records = await loadCurrentDrafts(input.ownerId, queue.id);
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      const session = rehydrateOwnedSmsReviewGraph(
+        records,
+        input.ownerId,
+        queue.id
+      ).session;
+      if (
+        !isAccountReviewUndoLifetimeCurrent(lifetime) ||
+        session.sessionId !== input.sessionId ||
+        session.revision !== input.expectedReviewRevision ||
+        session.operationGeneration !== input.expectedOperationGeneration ||
+        !session.groups.some(
+          (group) =>
+            group.groupId === input.groupId &&
+            group.status === "removed" &&
+            session.removedEvidenceKeys.includes(group.evidenceKey)
+        )
+      )
+        throw new Error("review_undo_invalid");
+      const lease = currentAccountReviewUndo(lifetime, queue);
+      const targetGroup = session.groups.find(
+        (group) => group.groupId === input.groupId
+      );
+      const matchesLease =
+        lease !== null &&
+        lease.afterRemovalGeneration === session.operationGeneration &&
+        lease.previousState.ownerId === input.ownerId &&
+        lease.previousState.sessionId === input.sessionId &&
+        lease.previousState.groups.some(
+          (before) =>
+            before.groupId === input.groupId &&
+            before.status !== "removed" &&
+            before.evidenceKey === targetGroup?.evidenceKey
+        );
+      if (
+        input.undoToken !== null &&
+        (!matchesLease || lease?.token !== input.undoToken)
+      )
+        throw new Error("review_undo_invalid");
+      await assertExpectedCurrentUser(input.ownerId);
+      throwIfSmsReviewDraftOperationAborted(input.signal);
+      if (!isAccountReviewUndoLifetimeCurrent(lifetime))
+        throw new AccountReviewUndoLifetimeInvalidatedError();
+      // Even a freshly mounted view without the old token must revoke a
+      // matching lease. A different group's lease survives this discard.
+      if (matchesLease) retainAccountReviewUndo(lifetime, queue, null);
+    });
   } finally {
     endAccountReviewUndoLifetime();
   }

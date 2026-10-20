@@ -24,6 +24,7 @@ export interface ExecuteVoiceAccountReviewCommandInput {
   readonly accountSnapshots: AccountReviewOwnedContext;
   readonly nextUndoToken: string | null;
   readonly undo: ReviewUndoLease | null;
+  readonly manuallyDeselectedRowIds?: ReadonlySet<string>;
   readonly signal?: AbortSignal;
 }
 
@@ -67,5 +68,7 @@ export async function executeVoiceAccountReviewCommand(
     categorySnapshots,
     nextUndoToken: input.nextUndoToken,
     undo: input.undo,
+    autoSelectReady: true,
+    manuallyDeselectedRowIds: input.manuallyDeselectedRowIds,
   });
 }

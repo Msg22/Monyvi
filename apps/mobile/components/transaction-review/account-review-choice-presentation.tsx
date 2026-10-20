@@ -9,6 +9,7 @@ import { t } from "i18next";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +24,15 @@ import { ReviewInlineNotice } from "./ReviewInlineNotice";
 import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 
 export type ChoiceLanguage = "en" | "ar";
+
+/** Only modal-scroll visibility, never a form or account command. */
+type ChoiceFocusedInputReporter = (nativeTarget: number | null) => void;
+const ChoiceFocusedInputContext =
+  React.createContext<ChoiceFocusedInputReporter>(() => undefined);
+
+export function useChoiceFocusedInputReveal(): ChoiceFocusedInputReporter {
+  return React.useContext(ChoiceFocusedInputContext);
+}
 const fallbackCopy = {
   en: {
     account_review_choice_cancel: "Cancel",
@@ -30,24 +40,25 @@ const fallbackCopy = {
     account_review_choice_use_account: "Use account",
     account_review_choice_use_currency: "Use currency",
     account_review_choice_empty:
-      "No compatible accounts. You can create a draft for this transaction.",
+      "No compatible accounts. You can create an account for this transaction.",
     account_review_choice_empty_cash:
       "No compatible Cash account for this ATM destination.",
     account_review_choice_empty_replace:
-      "No compatible existing accounts. You can edit or keep this draft.",
+      "No compatible existing accounts. You can edit or keep this account.",
     account_review_choice_empty_requires_currency:
       "No compatible accounts. Review the transaction currency to continue.",
-    account_review_choice_create_draft: "Create account draft",
-    account_review_choice_draft_title: "New account draft",
+    account_review_choice_create_draft: "Create account",
+    account_review_choice_draft_title: "New account",
     account_review_choice_draft_name: "Account name",
     account_review_choice_draft_type: "Account type",
     account_review_choice_draft_choose_type: "Choose account type",
     account_review_choice_draft_currency: "Currency",
+    account_review_choice_choose_currency: "Choose currency",
     account_review_choice_draft_save_note:
       "The account is created only when you save this selected transaction.",
-    account_review_choice_confirm_draft: "Confirm draft",
-    account_review_choice_edit_draft: "Edit draft",
-    account_review_choice_keep_draft: "Keep this draft",
+    account_review_choice_confirm_draft: "Confirm",
+    account_review_choice_edit_draft: "Edit account",
+    account_review_choice_keep_draft: "Keep account",
     account_review_choice_confirm_currency_title:
       "Confirm account and currency",
     account_review_choice_confirm_account: "Account:",
@@ -69,24 +80,25 @@ const fallbackCopy = {
     account_review_choice_use_account: "استخدام الحساب",
     account_review_choice_use_currency: "استخدام العملة",
     account_review_choice_empty:
-      "لا توجد حسابات مناسبة. يمكنك إنشاء مسودة لهذا التعامل.",
+      "لا توجد حسابات مناسبة. يمكنك إنشاء حساب لهذه المعاملة.",
     account_review_choice_empty_cash:
       "لا يوجد حساب كاش مناسب لاستقبال السحب من ماكينة الصراف.",
     account_review_choice_empty_replace:
-      "لا توجد حسابات موجودة مناسبة. يمكنك تعديل المسودة أو الاحتفاظ بها.",
+      "لا توجد حسابات حالية مناسبة. يمكنك تعديل هذا الحساب أو الاحتفاظ به.",
     account_review_choice_empty_requires_currency:
       "لا توجد حسابات مناسبة. راجع عملة المعاملة للمتابعة.",
-    account_review_choice_create_draft: "إنشاء مسودة حساب",
-    account_review_choice_draft_title: "مسودة حساب جديد",
+    account_review_choice_create_draft: "إنشاء حساب",
+    account_review_choice_draft_title: "حساب جديد",
     account_review_choice_draft_name: "اسم الحساب",
     account_review_choice_draft_type: "نوع الحساب",
     account_review_choice_draft_choose_type: "اختر نوع الحساب",
     account_review_choice_draft_currency: "العملة",
+    account_review_choice_choose_currency: "اختر العملة",
     account_review_choice_draft_save_note:
       "سيُنشأ الحساب فقط عند حفظ هذه المعاملة بعد تحديدها.",
-    account_review_choice_confirm_draft: "تأكيد المسودة",
-    account_review_choice_edit_draft: "تعديل المسودة",
-    account_review_choice_keep_draft: "الاحتفاظ بالمسودة",
+    account_review_choice_confirm_draft: "تأكيد",
+    account_review_choice_edit_draft: "تعديل الحساب",
+    account_review_choice_keep_draft: "الاحتفاظ بالحساب",
     account_review_choice_confirm_currency_title: "تأكيد الحساب والعملة",
     account_review_choice_confirm_account: "الحساب:",
     account_review_choice_previous_currency: "العملة السابقة:",
@@ -178,39 +190,115 @@ function ChoiceModalContent({
   maxHeight,
 }: ChoiceModalContentProps): React.JSX.Element {
   const rtl = props.language === "ar";
+  const scrollRef = React.useRef<ScrollView>(null);
+  const focusedTarget = React.useRef<number | null>(null);
+  const [handleHeight, setHandleHeight] = React.useState(0);
+  const [headerHeight, setHeaderHeight] = React.useState(0);
+  const [footerHeight, setFooterHeight] = React.useState(0);
+  // The actual available keyboard-adjusted height is passed by the frame.
+  // When the fixed furniture would hide a 48dp input, move the footer into
+  // the scrolling content rather than sacrificing the input viewport.
+  const footerInScroll =
+    handleHeight > 0 &&
+    headerHeight > 0 &&
+    footerHeight > 0 &&
+    maxHeight - handleHeight - headerHeight - footerHeight < 48;
+  const revealFocusedInput = React.useCallback((): void => {
+    if (Platform.OS !== "android" || focusedTarget.current === null) return;
+    // ScrollView measures the focused native input against the actual
+    // keyboard frame. The offset is breathing room, not a keyboard estimate.
+    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+      focusedTarget.current,
+      12,
+      true
+    );
+  }, []);
+  React.useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const listener = Keyboard.addListener(
+      "keyboardDidShow",
+      revealFocusedInput
+    );
+    return () => listener.remove();
+  }, [revealFocusedInput]);
+  const reportFocus = React.useCallback<ChoiceFocusedInputReporter>(
+    (target) => {
+      focusedTarget.current = target;
+      if (target !== null) revealFocusedInput();
+    },
+    [revealFocusedInput]
+  );
+  const footer = (
+    <View
+      testID="account-review-choice-footer-region"
+      className="pb-3"
+      onLayout={(event) => {
+        if (footerInScroll) return;
+        const measured = Math.round(event.nativeEvent.layout.height);
+        setFooterHeight((previous) =>
+          previous === measured ? previous : measured
+        );
+      }}
+    >
+      {props.footer}
+    </View>
+  );
   return (
     <View
       className="w-full min-h-0 shrink overflow-hidden rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
       style={{ maxHeight }}
     >
-      <ReviewSheetHandle />
-      <View className="gap-1 px-5">
-        <ChoiceModalHeader props={props} />
-        {props.contextSubtitle ? (
-          <Text
-            className={
-              "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-              (rtl ? "text-right" : "text-left")
-            }
-          >
-            {props.contextSubtitle}
-          </Text>
-        ) : null}
+      <View
+        onLayout={(event) => {
+          const measured = Math.round(event.nativeEvent.layout.height);
+          setHandleHeight((previous) =>
+            previous === measured ? previous : measured
+          );
+        }}
+      >
+        <ReviewSheetHandle />
       </View>
-      <ReviewInlineNotice
-        notice={props.reviewFeedback?.modalNotice ?? null}
-        surface="modal"
-        onDismiss={() => props.reviewFeedback?.dismiss("modal")}
-      />
+      <View
+        onLayout={(event) => {
+          const measured = Math.round(event.nativeEvent.layout.height);
+          setHeaderHeight((previous) =>
+            previous === measured ? previous : measured
+          );
+        }}
+      >
+        <View className="gap-1 px-5">
+          <ChoiceModalHeader props={props} />
+          {props.contextSubtitle ? (
+            <Text
+              className={
+                "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+                (rtl ? "text-right" : "text-left")
+              }
+            >
+              {props.contextSubtitle}
+            </Text>
+          ) : null}
+        </View>
+        <ReviewInlineNotice
+          notice={props.reviewFeedback?.modalNotice ?? null}
+          surface="modal"
+          onDismiss={() => props.reviewFeedback?.dismiss("modal")}
+        />
+      </View>
       <ScrollView
+        ref={scrollRef}
         className="min-h-0 shrink"
+        onLayout={revealFocusedInput}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
       >
-        <View className="w-full gap-3">{props.children}</View>
+        <ChoiceFocusedInputContext.Provider value={reportFocus}>
+          <View className="w-full gap-3">{props.children}</View>
+        </ChoiceFocusedInputContext.Provider>
+        {footerInScroll ? footer : null}
       </ScrollView>
-      <View className="pb-3">{props.footer}</View>
+      {footerInScroll ? null : footer}
     </View>
   );
 }
@@ -265,6 +353,16 @@ export function ChoiceModalFrame(
 ): React.JSX.Element | null {
   const inset = useModalBottomInset();
   const { height } = useWindowDimensions();
+  const [keyboardAreaHeight, setKeyboardAreaHeight] = React.useState<
+    number | null
+  >(null);
+  React.useEffect(() => {
+    if (!props.visible) setKeyboardAreaHeight(null);
+  }, [props.visible]);
+  const maxHeight = Math.min(
+    Math.max(0, (height - inset) * 0.8),
+    Math.max(0, (keyboardAreaHeight ?? height) - inset)
+  );
   if (!props.visible) return null;
   return (
     <Modal
@@ -277,6 +375,12 @@ export function ChoiceModalFrame(
       <KeyboardAvoidingView
         className="flex-1 justify-end"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        onLayout={(event) => {
+          const measured = Math.round(event.nativeEvent.layout.height);
+          setKeyboardAreaHeight((current) =>
+            current === measured ? current : measured
+          );
+        }}
       >
         <View
           testID={props.testID}
@@ -289,10 +393,7 @@ export function ChoiceModalFrame(
             label={props.closeAccessibilityLabel}
             onClose={props.onClose}
           />
-          <ChoiceModalContent
-            props={props}
-            maxHeight={Math.max(0, (height - inset) * 0.8)}
-          />
+          <ChoiceModalContent props={props} maxHeight={maxHeight} />
           <ChoiceBottomInsetBackground inset={inset} />
         </View>
       </KeyboardAvoidingView>

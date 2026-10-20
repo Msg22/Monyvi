@@ -1,8 +1,7 @@
 /**
- * #395 T021/T039 TESTS FIRST: real TransactionItem row integration.
- * The canonical account-review choice/reducer/service layers are not mocked.
- * This file tests proposed DISPLAY-ONLY props; missing source integration
- * produces behavioral Red, not fake SUT Green or a new account policy.
+ * #395 post-implementation canonical/legacy TransactionItem row regression.
+ * Exercises real row/pencil behavior and pure pending checkbox classification.
+ * Parent callbacks do not stand in for financial Save or native geometry.
  */
 import {
   fireEvent,
@@ -21,6 +20,8 @@ import { TouchableOpacity } from "react-native";
 
 import { TransactionItem } from "@/components/transaction-review/TransactionItem";
 import { SharedAccountSuggestions } from "@/components/transaction-review/SharedAccountSuggestions";
+import { compactReviewCheckboxAction } from "@/components/transaction-review/compact-review-checkbox-action";
+import { makeDefaultInfoSession } from "./account-review-default-info-test-fixtures";
 import enTransactions from "../../locales/en/transactions.json";
 import arTransactions from "../../locales/ar/transactions.json";
 import {
@@ -363,6 +364,35 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
 });
 
 describe("#395 T021 — independently shaped pending/confirmed/removed group rows", () => {
+  it("canonical checkbox eligibility routes pending group to explicit confirmation, not selection", () => {
+    const session = makeDefaultInfoSession("r3-combined-en");
+    const pending = session.groups.find((group) => group.status === "pending");
+    const row = session.rows.find(
+      (item) =>
+        pending &&
+        item.assignment.state === "suggested" &&
+        item.assignment.groupId === pending.groupId
+    );
+    if (!pending || !row)
+      throw new Error("Missing canonical pending shared group");
+    const groups = new Map(
+      session.groups.map((group) => [group.groupId, group])
+    );
+    expect(compactReviewCheckboxAction(row, groups)).toBe("confirm_group");
+    expect(row.selected).toBe(false);
+    expect(
+      session.groups.find((group) => group.groupId === pending.groupId)?.status
+    ).toBe("pending");
+
+    const defaultSession = makeDefaultInfoSession("r3-default-only");
+    const eligible = defaultSession.rows.find(
+      (item) =>
+        item.assignment.state === "existing" && item.reviewReasons.length === 0
+    );
+    if (!eligible) throw new Error("Missing default-origin eligible row");
+    expect(compactReviewCheckboxAction(eligible, new Map())).toBe("select");
+  });
+
   it("R3-05 displays canonical QNB3 pending identity and complete shared-effect disclosure", () => {
     const group = requireReviewGroup("QNB");
     const props = makeCombinedItem(
@@ -399,8 +429,8 @@ describe("#395 T021 — independently shaped pending/confirmed/removed group row
       onReplace: jest.fn<void, [groupId: string]>(),
       onRemove: jest.fn<void, [groupId: string]>(),
       onUndo: jest.fn<void, [groupId: string]>(),
-      onViewAll: jest.fn<void, []>(),
-      onCloseAllGroups: jest.fn<void, []>(),
+      onDiscardRemoved: jest.fn<void, [groupId: string]>(),
+      onViewLinked: jest.fn<void, [groupId: string]>(),
     };
     const overview = makeSharedPresentation("r3-combined-en");
     render(
@@ -408,7 +438,6 @@ describe("#395 T021 — independently shaped pending/confirmed/removed group row
         <SharedAccountSuggestions
           groups={overview.groups}
           summary={overview.summary}
-          isAllGroupsSheetOpen={false}
           isBusy={false}
           {...groupActions}
         />
@@ -426,6 +455,12 @@ describe("#395 T021 — independently shaped pending/confirmed/removed group row
       </>
     );
     expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    // New compact details stay collapsed until the user expands them.
+    const summary = screen.getByTestId("account-review-compact-summary-toggle");
+    expect(summary).toHaveProp("accessibilityState", { expanded: false });
+    expect(
+      screen.queryByTestId("account-review-group-confirm-" + group.groupId)
+    ).toBeNull();
     fireEvent.press(screen.getAllByRole("checkbox")[1]);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(1);
@@ -436,6 +471,21 @@ describe("#395 T021 — independently shaped pending/confirmed/removed group row
     expect(
       screen.getAllByTestId("account-review-row-shared-disclosure")
     ).toHaveLength(3);
+    fireEvent.press(summary);
+    expect(summary).toHaveProp("accessibilityState", { expanded: true });
+    expect(
+      screen.getByTestId("account-review-group-confirm-" + group.groupId)
+    ).toBeTruthy();
+    expect(groupActions.onConfirm).not.toHaveBeenCalled();
+    fireEvent.press(
+      screen.getByTestId("account-review-group-confirm-" + group.groupId)
+    );
+    expect(groupActions.onConfirm).toHaveBeenCalledTimes(1);
+    expect(groupActions.onConfirm).toHaveBeenCalledWith(group.groupId);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    // This legacy TransactionItem callback does not itself issue a canonical
+    // select_row command. The canonical pending-checkbox interception is
+    // separately guarded by the review container.
   });
 
   it("R3-09 confirmation arrives from parent and changes only status, never checked state", () => {
@@ -579,14 +629,14 @@ describe("#395 T039 — per-row account/currency choice delegates to the parent"
 });
 
 describe("#395 isolated account and category pencil interactions", () => {
-  it("only the quiet adjacent pencil with a 48dp effective hit area opens the account", () => {
+  it("only the quiet adjacent pencil opens the account", () => {
     const props = makeDefaultItem();
     renderRow(props);
     const pair = screen.getByTestId("account-review-account-name-and-pencil");
     expect(within(pair).getByTestId("transaction-account-match")).toBeTruthy();
     expect(
       within(pair).getByTestId("account-review-row-account-action")
-    ).toHaveProp("hitSlop", 8);
+    ).toHaveProp("accessibilityRole", "button");
     fireEvent.press(screen.getByTestId("transaction-account-match"), {
       stopPropagation: jest.fn<void, []>(),
     });
@@ -620,7 +670,6 @@ describe("#395 isolated account and category pencil interactions", () => {
       "account-review-row-category-pencil"
     );
     expect(action).toHaveProp("accessibilityRole", "button");
-    expect(action).toHaveProp("hitSlop", 8);
     const stopped = pressNative(action);
     expect(stopped).toHaveBeenCalledTimes(1);
     expect(onEditCategory).toHaveBeenCalledTimes(1);

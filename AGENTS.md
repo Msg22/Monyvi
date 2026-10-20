@@ -1,5 +1,39 @@
 # monyvi - Project Instructions
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+- **Global dropdown/picker selected state (owner-approved 2026-10-20):** Reuse
+  shared `Dropdown`, `CurrencyPicker`, and existing selection primitives rather
+  than copying bespoke menus. When opened, the current option MUST have an
+  obvious filled Nile-green selected background with WHITE readable option text
+  in light and dark themes; any selected check/icon MUST contrast in white,
+  never green on green. Preserve the real selected/checked accessibility state,
+  including EN/AR and RTL. Cover the opened selected option with a focused
+  source/render-contract test; visual dark-mode contrast needs actual rendered
+  evidence, not just class-name/string checks.
+- **Global form keyboard reachability:** Every text input, including the last
+  field in a sheet/modal/form, MUST stay visible and reachable above the soft
+  keyboard on Android and iOS, small usable viewports, landscape and enlarged
+  fonts. Reuse shared text fields and keyboard-aware/scrollable form surfaces;
+  determine the ACTUAL available keyboard-adjusted viewport and header/footer/
+  safe-area space from runtime layout measurements, not nominal screen height,
+  guessed keyboard offsets or doubled insets. Scroll the focused field and its
+  label/error into view; keep completion and dismissal reachable. Add focused
+  source/render-contract coverage where deterministic and explicitly obtain
+  native/manual keyboard, font-scale and RTL evidence before claiming device QA.
+  Shared primitive enforcement is being developed separately; apply these
+  standards to new/touched forms and audit older bespoke uses incrementally. Do
+  not claim an app-wide migration or introduce a new mockup/approval or
+  tests-first gate for this established standard.
+
 ## Project Context
 
 monyvi is a personal financial app — a frictionless financial companion that

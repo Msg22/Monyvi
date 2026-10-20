@@ -4,6 +4,20 @@ description: Instructions for implementing mockups
 
 # Mobile UI Mockup Generation Prompt (Stitch MCP)
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- For any form mockup with a dropdown/picker, show the **current selected option
+  when open**: filled Nile-green selection background, readable WHITE selected
+  text in light/dark, and white selected check/icon (never green on green).
+  Reuse installed shared selector components, not a bespoke variant.
+- Specify Android/iOS keyboard-open form behavior at compact usable heights and
+  enlarged fonts: every focused input/label/error, including the LAST field
+  under modal headers/footers, stays scroll-visible with submit/cancel
+  reachable. Implementation measures actual keyboard-adjusted viewport/safe-area
+  space; never prescribe guessed keyboard offsets. Native keyboard, RTL and
+  selected dark-mode fidelity require real evidence, not mockup/Jest assertions.
+  These established standards add NO new binding/approval or TDD ceremony.
+
 The current `.agent/workflows/mockup-implementation.md`, `AGENTS.md`,
 `docs/design/design-system.md` and approved business decisions govern this
 legacy command. Respect current owner-approved scoped amendments: intrinsic

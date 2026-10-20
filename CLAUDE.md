@@ -1,5 +1,33 @@
 # Monyvi - Project Instructions
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+- **Owner-approved global selection state:** Reuse shared `Dropdown`,
+  `CurrencyPicker` and selection primitives. The selected option MUST be obvious
+  immediately on open: filled Nile-green background, WHITE readable text in
+  light/dark mode and a contrasting white check/icon (never green on green).
+  Keep accessible selected/checked state and RTL behavior correct; verify actual
+  bound selected state in a focused source/render test and obtain separately
+  recorded native dark/RTL visual evidence.
+- **Global keyboard-safe forms:** All text inputs in forms, sheets and modals
+  MUST remain visible, focusable and scroll-reachable with the Android/iOS
+  keyboard open, including small screens, large fonts and fixed headers/footers.
+  Derive usable space from measured keyboard-adjusted layout plus safe areas;
+  scroll the focused field/label/error into view without hardcoded offsets,
+  clipping or double insets. Reuse shared fields and keyboard-aware form
+  containers. Native keyboard/font/RTL manual evidence is still required; source
+  tests alone do not prove geometry. Enforce in shared components when owned and
+  adopt incrementally when touching bespoke dropdowns/forms; do not claim every
+  existing screen is migrated or add new approval/TDD ceremony.
+
 ## Project Context
 
 Monyvi is a personal financial app — a frictionless financial companion that

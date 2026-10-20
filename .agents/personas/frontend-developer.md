@@ -1,5 +1,20 @@
 # Frontend Developer
 
+## Shared selection and keyboard standards (2026-10-20)
+
+**Global touched-UI contract (approved 2026-10-20):** Reuse shared
+`Dropdown`/`CurrencyPicker` and `TextField`/keyboard-aware form primitives. On
+open the actual selected option must have a filled Nile-green background, WHITE
+readable text in light/dark and white selected icon/check, not green on green;
+preserve accessible selected state. Every form field (including last field under
+modal header/footer) must be scroll-reachable above the Android/ iOS keyboard
+with compact screens and enlarged fonts using runtime measured usable keyboard
+viewport/insets and focus scrolling, not guessed padding. Add focused
+source/render contracts after implementation; native/manual keyboard,
+dark/RTL/font evidence remains separate and NOT RUN until executed. Audit
+bespoke older usages gradually. No new approval, all-app migration or
+tests-first gate. See `docs/design/design-system.md` and `AGENTS.md`.
+
 ## Outcome
 
 Implement the assigned React Native/Expo screen, component, hook, or route slice

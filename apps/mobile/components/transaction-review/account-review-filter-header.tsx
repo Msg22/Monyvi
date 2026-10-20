@@ -1,53 +1,60 @@
-/** Temporary account-needed list header; JSX ensures NativeWind transforms its styles. */
+/** #395 temporary drilldown header; canonical Save still owns the full session. */
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Text, TouchableOpacity, View } from "react-native";
 
 interface AccountNeededTemporaryHeaderProps {
   readonly count: number;
+  readonly linkedGroupName?: string | null;
   readonly disabled: boolean;
   readonly onShowAll: () => void;
 }
 
-/** Only the temporary list is scoped; Save always receives the full session. */
 export function AccountNeededTemporaryHeader(
   props: AccountNeededTemporaryHeaderProps
 ): React.JSX.Element {
   const { t, i18n } = useTranslation("transactions");
   const rtl = i18n.language.startsWith("ar");
-  const accountNeededLabel = t("account_review_issue_account_needed", {
-    defaultValue: rtl ? "مطلوب اختيار حساب" : "Account needed",
-  });
+  const isLinked = props.linkedGroupName !== undefined;
+  const heading = isLinked
+    ? t("compact_review_linked_scope", {
+        count: props.count,
+        name: props.linkedGroupName ?? "",
+      })
+    : t("account_review_issue_account_needed") + " · " + props.count;
 
   return (
     <View
-      testID="account-review-account-needed-only"
-      className="mx-5 mb-3 gap-2 rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark"
+      testID={
+        isLinked
+          ? "account-review-linked-transactions-only"
+          : "account-review-account-needed-only"
+      }
+      className="mx-4 mb-3 gap-2 rounded-xl border border-border bg-surface px-3 py-2 dark:border-border-dark dark:bg-surface-dark"
     >
       <Text
+        accessibilityRole="header"
         className={
           "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
           (rtl ? "text-right" : "text-left")
         }
       >
-        {accountNeededLabel}
-        {" · "}
-        {props.count}
+        {heading}
       </Text>
       <TouchableOpacity
         testID="account-review-account-needed-show-all"
         accessibilityRole="button"
-        accessibilityLabel={t("account_review_group_view_all")}
+        accessibilityLabel={t("compact_review_show_all")}
         accessibilityState={{ disabled: props.disabled }}
         disabled={props.disabled}
         onPress={props.onShowAll}
         className={
-          "min-h-12 justify-center rounded-lg border border-border px-4 dark:border-border-dark " +
+          "min-h-11 min-w-11 justify-center px-1 " +
           (rtl ? "self-end" : "self-start")
         }
       >
-        <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-          {t("account_review_group_view_all")}
+        <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+          {t("compact_review_show_all")}
         </Text>
       </TouchableOpacity>
     </View>

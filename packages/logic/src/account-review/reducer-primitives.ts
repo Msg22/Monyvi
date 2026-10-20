@@ -50,6 +50,10 @@ export interface ReduceAccountReviewCommandInput {
   readonly categorySnapshots?: AccountReviewCategorySnapshots;
   readonly nextUndoToken: string | null;
   readonly undo: ReviewUndoLease | null;
+  /** Service-authored local readiness reconciliation; never a user command. */
+  readonly autoSelectReady?: boolean;
+  /** Voice volatile intent or SMS's existing nullable selectionOverride=false. */
+  readonly manuallyDeselectedRowIds?: ReadonlySet<AccountReviewRow["rowId"]>;
 }
 
 export interface AccountReviewCommandResult {

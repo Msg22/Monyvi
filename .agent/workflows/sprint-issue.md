@@ -1,5 +1,21 @@
 # Sprint Issue Agent Workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+### Existing global form interaction rules
+
+For new/touched pickers, forms and UI review, enforce the already owner-approved
+2026-10-20 design-system standards in `docs/design/design-system.md`: selected
+option **filled Nile-green** background, WHITE light/dark text and contrasting
+WHITE check/icon on open, with correct accessible/RTL state; all Android/iOS
+text fields reachable above keyboards at compact size and enlarged text via
+measured available keyboard-adjusted viewport, not hardcoded offsets. Reuse
+shared picker/form components, write focused source/render regressions after
+implementation, and collect actual native/manual keyboard/contrast/RTL/font
+evidence before claiming those gates. Existing bespoke usages migrate
+incrementally in scope. This is an established global contract, **not** a new
+binding approval, mandatory redesign, whole-app migration or tests-first phase.
+
 Apply the
 [first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
 before turning a rare edge case or review suggestion into implementation work.

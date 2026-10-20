@@ -282,6 +282,52 @@ export function isAccountReviewRowVisible(
   return row.reviewReasons.length > 0;
 }
 
+/** Reuse exactly the guarded bulk eligibility for automatic readiness. */
+export function readyAccountReviewRowIds(
+  session: AccountReviewSession,
+  context: AccountReviewOwnedContext
+): ReadonlyArray<AccountReviewRow["rowId"]> {
+  const refreshed = resolveAccountReviewSession({
+    session,
+    accountSnapshots: context,
+  });
+  const refreshedById = new Map(refreshed.rows.map((row) => [row.rowId, row]));
+  return session.rows.flatMap((original) => {
+    const current = refreshedById.get(original.rowId);
+    return current &&
+      selectionEvidenceUnchanged(original, current) &&
+      isReady(original, session.groups) &&
+      isReady(current, refreshed.groups)
+      ? [original.rowId]
+      : [];
+  });
+}
+
+/** Automatic selection NEVER confirms groups and honors explicit opt-outs. */
+export function autoSelectReadyTransition(
+  session: AccountReviewSession,
+  context: AccountReviewOwnedContext,
+  manuallyDeselected: ReadonlySet<AccountReviewRow["rowId"]>
+): ReviewTransition | null {
+  const eligible = new Set(readyAccountReviewRowIds(session, context));
+  const newlyReady = session.rows.filter(
+    (row) =>
+      !row.selected &&
+      eligible.has(row.rowId) &&
+      !manuallyDeselected.has(row.rowId)
+  );
+  if (newlyReady.length === 0) return null;
+  const ids = new Set(newlyReady.map((row) => row.rowId));
+  return {
+    rows: session.rows.map((row) =>
+      ids.has(row.rowId) ? revisedRow({ ...row, selected: true }) : row
+    ),
+    groups: session.groups,
+    affectedRowIds: newlyReady.map((row) => row.rowId),
+    affectedGroupIds: [],
+  };
+}
+
 export function reduceSelectBatch(
   session: AccountReviewSession,
   command: SelectBatch,
@@ -291,27 +337,11 @@ export function reduceSelectBatch(
     return blocked("review_revision_stale");
   // Recheck the whole owned snapshot once, then select only ready visible IDs.
   // Ineligible rows are skipped; a wholly ineligible batch remains a no-op.
-  const readyIds = new Set<string>();
-  if (command.kind === "select_ready") {
-    const refreshed = resolveAccountReviewSession({
-      session,
-      accountSnapshots: context,
-    });
-    const refreshedById = new Map(
-      refreshed.rows.map((row) => [row.rowId, row])
-    );
-    for (const original of session.rows) {
-      const current = refreshedById.get(original.rowId);
-      if (
-        current &&
-        selectionEvidenceUnchanged(original, current) &&
-        isReady(original, session.groups) &&
-        isReady(current, refreshed.groups)
-      ) {
-        readyIds.add(original.rowId);
-      }
-    }
-  }
+  const readyIds = new Set(
+    command.kind === "select_ready"
+      ? readyAccountReviewRowIds(session, context)
+      : []
+  );
   const chosen = session.rows.filter(
     (row) =>
       isAccountReviewRowVisible(row, command.filter) &&

@@ -5,6 +5,23 @@ description:
 
 # 🎨 Style Audit Workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+**Global selected-state and keyboard audit (owner-approved 2026-10-20):** For
+every open dropdown/picker check the ACTUAL controlled selected row: solid
+Nile-green selected background, WHITE readable text and white contrasting
+check/icon in light and dark themes (never green on green or only a tinted
+border). Verify its accessible checked/selected semantics, EN/AR and RTL using
+focused source/render-contract evidence. For new/touched forms inspect focus
+scrolling with the Android/iOS soft keyboard at small available heights and
+enlarged fonts: every field/label/error and the last input stays reachable, as
+do submit/cancel beneath modal headers/footers. Check actual measured
+keyboard-adjusted viewport and safe-area handling, not guessed offsets or Jest
+geometry. Record native/manual keyboard, dark contrast, font/RTL evidence
+separately or mark NOT RUN. Shared primitives should be reused; legacy bespoke
+usages are audited in focused changes, not declared migrated. No new binding or
+approval gate is created.
+
 Follow the current `.agent/workflows/style-audit.md`, `AGENTS.md`,
 `docs/design/design-system.md` and `.agent/rules/styling-rules.md` for this
 command's governed UI checks. Compare **actual container/intrinsic** label fit,

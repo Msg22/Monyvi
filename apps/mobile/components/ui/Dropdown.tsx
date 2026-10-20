@@ -69,6 +69,26 @@ type DropdownProps<T> = DropdownInlineProps<T> | DropdownModalProps<T>;
 // Shared Sub-components
 // ---------------------------------------------------------------------------
 
+/**
+ * The selected fill is painted by a noninteractive inner View. All inline and
+ * modal Dropdown rows — including the review account-type pickers — reuse it.
+ */
+export function DropdownSelectedOptionBackground({
+  selected,
+}: {
+  readonly selected: boolean;
+}): React.JSX.Element | null {
+  return selected ? (
+    <View
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      className="absolute inset-0 bg-nileGreen-600 dark:bg-nileGreen-600"
+    />
+  ) : null;
+}
+
 interface DropdownItemRowProps<T> {
   item: DropdownItem<T>;
   isSelected: boolean;
@@ -91,16 +111,11 @@ function DropdownItemRow<T extends string | number>({
       testID={testID}
       onPress={onPress}
       activeOpacity={0.6}
-      className={`relative flex-row items-center p-4 ${
+      className={`relative flex-row items-center overflow-hidden p-4 ${
         !isLast ? "border-b border-slate-50 dark:border-slate-700/50" : ""
       }`}
     >
-      {isSelected ? (
-        <View
-          pointerEvents="none"
-          className="absolute inset-0 bg-nileGreen-50/50 dark:bg-nileGreen-900/10"
-        />
-      ) : null}
+      <DropdownSelectedOptionBackground selected={isSelected} />
       {item.icon && (
         <View className="me-3 w-8 items-center">
           {item.iconType === "ionicons" ? (
@@ -109,7 +124,7 @@ function DropdownItemRow<T extends string | number>({
               size={20}
               color={
                 isSelected
-                  ? palette.nileGreen[600]
+                  ? "white"
                   : isDark
                     ? palette.slate[400]
                     : palette.slate[500]
@@ -124,14 +139,20 @@ function DropdownItemRow<T extends string | number>({
         <Text
           className={`text-base ${
             isSelected
-              ? "font-bold text-nileGreen-700 dark:text-nileGreen-400"
+              ? "font-bold text-white dark:text-white"
               : "text-slate-700 dark:text-slate-300"
           }`}
         >
           {item.label}
         </Text>
         {item.description && (
-          <Text className="text-xs text-slate-500 dark:text-slate-400">
+          <Text
+            className={
+              isSelected
+                ? "text-xs text-white dark:text-white"
+                : "text-xs text-slate-500 dark:text-slate-400"
+            }
+          >
             {item.description}
           </Text>
         )}
@@ -140,7 +161,7 @@ function DropdownItemRow<T extends string | number>({
         <Ionicons
           name="checkmark-circle"
           size={20}
-          style={{ color: palette.nileGreen[600] }}
+          style={{ color: "white" }}
         />
       )}
     </TouchableOpacity>

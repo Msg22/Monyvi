@@ -4,6 +4,9 @@
  * No account/DB/provider/command/Save calls.
  */
 import type { ReviewableTransaction } from "@monyvi/logic";
+import type { ReviewIssueEntry } from "@/components/transaction-review/shared-account-presentation";
+import enTransactions from "@/locales/en/transactions.json";
+import arTransactions from "@/locales/ar/transactions.json";
 import manifest from "../../e2e/fixtures/shared-account-review.json";
 
 type Scenario = (typeof manifest.scenes)[number];
@@ -35,6 +38,7 @@ export interface SharedSummaryFixture {
   readonly defaultAssignmentCount: number;
   readonly selectedCount: number;
   readonly issueLabels: readonly string[];
+  readonly issues?: readonly ReviewIssueEntry[];
 }
 export interface SharedPresentationFixture {
   readonly groups: readonly SharedGroupViewFixture[];
@@ -121,6 +125,42 @@ function toGroupView(
 function countIssues(scene: Scenario): number {
   return scene.rows.filter((row) => row.issueTags.length > 0).length;
 }
+/** Compact issues combine account/currency recovery, not pending group Confirm. */
+function compactIssues(
+  scene: Scenario,
+  locale: "en" | "ar"
+): readonly ReviewIssueEntry[] {
+  const counts = new Map<ReviewIssueEntry["key"], number>();
+  for (const row of scene.rows) {
+    const tags = new Set(row.issueTags);
+    const account =
+      tags.has("account_unavailable") ||
+      tags.has("account_group_removed") ||
+      tags.has("currency_confirmation_needed");
+    const keys: Array<ReviewIssueEntry["key"]> = [
+      ...(tags.has("amount") ? ["account_review_issue_amount" as const] : []),
+      ...(tags.has("category")
+        ? ["account_review_issue_category" as const]
+        : []),
+      ...(account ? ["account_review_issue_account" as const] : []),
+    ];
+    keys.forEach((key) => counts.set(key, (counts.get(key) ?? 0) + 1));
+  }
+  const copy = locale === "ar" ? arTransactions : enTransactions;
+  const labels: Record<ReviewIssueEntry["key"], string> = {
+    account_review_issue_account: copy.account_review_issue_account_needed,
+    account_review_issue_currency: copy.account_review_issue_currency,
+    account_review_issue_amount: copy.account_review_issue_amount,
+    account_review_issue_category: copy.account_review_issue_category,
+    account_review_group_needs_review:
+      locale === "ar" ? "تحتاج إلى مراجعة" : "Needs review",
+  };
+  return [...counts].map(([key, count]) => ({
+    key,
+    label: labels[key],
+    count,
+  }));
+}
 export function makeSharedPresentation(
   id:
     | "r3-combined-en"
@@ -150,6 +190,7 @@ export function makeSharedPresentation(
       issueLabels: [
         ...new Set(scene.rows.flatMap((row) => row.issueTags.map(issueLabel))),
       ],
+      issues: compactIssues(scene, locale),
     },
   };
 }
@@ -210,6 +251,7 @@ export function makeSixGroupViewAll(): SharedPresentationFixture {
       defaultAssignmentCount: 2,
       selectedCount: 2,
       issueLabels: ["Confirm account"],
+      issues: [],
     },
   };
 }

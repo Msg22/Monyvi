@@ -197,25 +197,41 @@ describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
       hasExistingDefault: false,
       hasInvalidPriorAction: false,
       hasPendingMetals: false,
+      editCurrency: false,
     },
     {
       hasExistingDefault: true,
       hasInvalidPriorAction: false,
       hasPendingMetals: false,
+      editCurrency: false,
     },
     {
       hasExistingDefault: true,
       hasInvalidPriorAction: false,
       hasPendingMetals: true,
+      editCurrency: false,
     },
     {
       hasExistingDefault: true,
       hasInvalidPriorAction: true,
       hasPendingMetals: false,
+      editCurrency: false,
+    },
+    {
+      hasExistingDefault: true,
+      hasInvalidPriorAction: false,
+      hasPendingMetals: false,
+      editCurrency: true,
     },
   ])(
-    "selected CIB/Game with default=$hasExistingDefault and invalid prior action=$hasInvalidPriorAction and pending Metals=$hasPendingMetals",
-    async ({ hasExistingDefault, hasInvalidPriorAction, hasPendingMetals }) => {
+    "selected CIB/Game with default=$hasExistingDefault and invalid prior action=$hasInvalidPriorAction and pending Metals=$hasPendingMetals and edited currency=$editCurrency",
+    async ({
+      hasExistingDefault,
+      hasInvalidPriorAction,
+      hasPendingMetals,
+      editCurrency,
+    }) => {
+      const saveCurrency = editCurrency ? "USD" : "EGP";
       if (hasExistingDefault) {
         await database.write(async () => {
           const cash = database
@@ -282,10 +298,29 @@ describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
       const confirmed = apply(
         initial,
         accountReviewCommandSchema.parse({
-          ...scope(initial),
-          kind: "confirm_group",
-          groupId: cib.groupId,
-          expectedGroupRevision: cib.revision,
+          ...(editCurrency
+            ? {
+                ...scope(initial),
+                kind: "edit_group",
+                groupId: cib.groupId,
+                expectedGroupRevision: cib.revision,
+                reconfirm: true,
+                identity: {
+                  name: cib.name,
+                  type: cib.type,
+                  currency: saveCurrency,
+                  institutionId: cib.institutionId,
+                  providerDisplayName: cib.providerDisplayName,
+                  cardLast4: cib.cardLast4,
+                  senderNames: cib.senderNames,
+                },
+              }
+            : {
+                ...scope(initial),
+                kind: "confirm_group",
+                groupId: cib.groupId,
+                expectedGroupRevision: cib.revision,
+              }),
         }),
         snapshots
       );
@@ -293,6 +328,14 @@ describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
         (row) => row.rowId === game.rowId
       );
       if (!confirmedGame) throw new Error("Confirmed Game row disappeared");
+      expect(confirmedGame.currency).toMatchObject({
+        state: "known",
+        code: saveCurrency,
+      });
+      expect(confirmedGame.transaction.amount).toBe(game.transaction.amount);
+      expect(confirmedGame.accountEvidence).toEqual(game.accountEvidence);
+      if (editCurrency)
+        expect(confirmedGame.hasUserCurrencyOverride).toBe(true);
       const selected = apply(
         confirmed,
         accountReviewCommandSchema.parse({
@@ -498,7 +541,7 @@ describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
         .find(createdId);
       expect(savedAccount.name).toBe("TEST CIB");
       expect(savedAccount.type).toBe("BANK");
-      expect(savedAccount.currency).toBe("EGP");
+      expect(savedAccount.currency).toBe(saveCurrency);
       expect(savedAccount.balance).toBe(-50);
       expect(savedAccount.financialRevision).toBe("1");
       expect(savedAccount.isDefault).toBe(!hasExistingDefault);
@@ -522,7 +565,7 @@ describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
       expect(transactions).toHaveLength(1);
       expect(transactions[0]?.accountId).toBe(createdId);
       expect(transactions[0]?.amount).toBe(50);
-      expect(transactions[0]?.currency).toBe("EGP");
+      expect(transactions[0]?.currency).toBe(saveCurrency);
       expect(transactions[0]?.categoryId).toBe(SHOPPING_CATEGORY);
       const effects = await persisted
         .get<AccountFinancialEffect>("account_financial_effects")

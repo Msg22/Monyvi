@@ -1,5 +1,41 @@
 # Delivery workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+## Global form interaction standards (owner-approved 2026-10-20)
+
+All new or modified dropdown/picker selected options MUST show the current
+choice immediately on open with a filled approved Nile-green selected
+background, WHITE readable text in both light and dark modes, and a contrasting
+white selected check/icon (never green on green). Use shared `Dropdown`,
+`CurrencyPicker` and their state/accessibility contracts rather than local
+duplicates. Add a focused source/render-contract regression of the real opened
+selected option after implementation; verify visual contrast/RTL separately when
+native evidence is authorized.
+
+All form text inputs (pages, modal/sheets, last fields) MUST remain visible,
+focusable and scrollable above the keyboard on Android and iOS, compact screens,
+landscape and enlarged fonts, despite modal headers, safe areas and fixed
+footers. Use measured available keyboard-adjusted viewport/layout space and
+shared keyboard-aware/scrollable form patterns, not fixed screen-height or
+keyboard-padding guesses. Focus/scroll the field and label/error into view;
+ensure submit/cancel can be reached. Cover deterministic contracts in affected
+tests, and record **native/manual keyboard, font-scale and RTL** checks as **NOT
+RUN** until actually performed. Do not infer device PASS from source/tests.
+
+This is a **global standard**, not proof that existing bespoke pickers/forms
+have been migrated. Shared component enforcement is a separate owned effort;
+audit/adopt older bespoke usages incrementally in their scoped changes. It adds
+no new mockup approval, binding artifact, TDD sequence or broad refactor gate.
+
 **Owner-approved policy: 2026-10-18.** Applies to new work and unfinished work,
 including #395. Replaces mandatory TDD sequencing in older project guidance.
 Product approval, approved mockups, Speckit analysis, architecture, financial

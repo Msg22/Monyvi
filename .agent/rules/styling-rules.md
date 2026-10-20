@@ -1,5 +1,23 @@
 # Monyvi Styling & UI Guidelines
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Global selected dropdown/picker rule (2026-10-20):** reuse shared selectors.
+  On open the actual current option MUST show a filled Nile-green selected
+  background with WHITE legible selected text in light/dark mode and a WHITE
+  selected check/icon; never green-on-green or just a tint. Preserve accessible
+  checked/selected state and RTL.
+- **Global keyboard form rule:** text fields must stay visible, focusable and
+  scroll-reachable above Android/iOS keyboards, even the final field beneath
+  modal headers/footers at compact heights or enlarged font sizes. Reuse shared
+  fields/keyboard-aware sheets; measure usable keyboard-adjusted viewport and
+  insets, scroll focused label/input/error into view, and keep submit/cancel
+  available. Never guess keyboard padding. Verify opened selected state in
+  focused source/render contracts; native/manual dark-mode, keyboard/font/RTL
+  evidence is separate and cannot be faked with Jest. Audit older bespoke
+  selectors/forms gradually rather than claim migration; add no new approval or
+  tests-first ceremony.
+
 This document outlines the project-specific styling and UI rules for Monyvi's
 mobile application.
 

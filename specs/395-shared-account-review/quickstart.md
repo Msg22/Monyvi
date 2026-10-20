@@ -1,5 +1,88 @@
 # Quickstart and implementation boundary
 
+## Latest local implementation evidence — 2026-10-20
+
+This supplement supersedes older pending counts below; historical records remain
+preserved.
+
+- Approved compact review corrections are implemented locally: title-column
+  linked actions, aligned information rows, one-row horizontally scrollable
+  overflow tabs, centered inline actions with red Remove, and account/category
+  icon-label-pencil alignment with a separate optional status line. Touch hosts
+  use literal 48px NativeWind dimensions with smaller 32px visual regions; Jest
+  does not establish native geometry.
+- Shared Dropdown and CurrencyPicker selected options, plus both review
+  account-type pickers, use the same solid-green background and white selected
+  foreground. This covers shared consumers, not every bespoke selector in the
+  application.
+- The new-account shared modal frame measures keyboard-adjusted available
+  height, reveals the focused native input and moves its footer into scrolling
+  content when needed. Existing suggested-account focus/layout safeguards
+  remain. Samsung/iOS keyboard, native alignment, RTL, increased fonts,
+  safe-area and touch geometry still require owner-device confirmation: NOT RUN
+  by Root.
+- The affected nine-suite UI cohort reached 163 passing tests after the single
+  six-case editor rerun. After the final picker/style changes, the two affected
+  suites passed 67 tests and mobile TypeScript passed. These are
+  post-implementation regression checks, not TDD or a native visual pass. Normal
+  repository commit hooks remain enabled.
+- Sync rejection was reproduced on real SQLite when a default-clear update
+  targets an account still classified as created. Commit 97e613e4 admits exactly
+  one owned live default-clear account across created/updated buckets; other
+  mutation requirements remain strict. Five affected sync/SDK lifecycle suites
+  passed 73 tests. Missing, duplicate, foreign, deleted and still-default
+  members remain rejected. Device sync success is pending; no new Save is needed
+  for that check.
+- PR #406 remains a separate logo-only stack above #396. Its refreshed parent
+  integration and validation are tracked independently; do not infer logo device
+  acceptance from the compact-review tests.
+
+## CURRENT manual entry and owner compact UI — 2026-10-20
+
+This dated update supersedes conflicting earlier ACTIVE text below; original
+quickstart, historical planning and evidence are otherwise unchanged.
+
+Open **Settings → Development tools → Voice transcript fixtures**
+(`/review-transcript-fixtures`) in a supported nonproduction build. The catalog
+opens the normal `/voice-review` with a synthetic review session and transcript;
+it does **not** use the old `reviewFixtureSceneId` harness, a microphone or
+Gemini. **TEST Save is still a real guarded local Save**: check
+Transactions/accounts before retrying an uncertain result.
+
+In the current compact review, the fourth **Account needed** tab is a
+**temporary, distinct source-row account/currency union**, including
+discontiguous rows and eligible genuine SMS ATM Cash destination issues. It does
+**not** add `account_needed` to the canonical filter enum. `Show all` restores
+source order without changing globally selected Save rows. Selected counts
+remain truthful; pending groups still require explicit Confirm. The expanded
+account card has **no duplicate account/currency action row**; amount/category
+actions remain inline.
+
+Both **Create account / New account** and suggested-group Edit use the existing
+searchable **CurrencyPicker**, not currency chips. Opening that picker hides the
+parent sheet, leaving one visible native modal; selection, Back/cancel and
+return preserve local name/type/currency form state until final Confirm or
+Cancel. No second currency-confirm overlay, FX conversion, premature physical
+account or Voice-transfer expansion. Internal deferred account commands are
+unchanged despite removal of visible “Draft” wording.
+
+**Evidence status:** Root's original Game/CIB TEST Save and 7 Save suites / 97
+tests PASS remain narrow; newer automated USD Save 5-case PASS is **not** device
+visual acceptance. Root's follow-up 2 logic + 2 hook focused suites and logic
+types PASS after an initial 27-suite 515 PASS / 1 precision-policy FAIL. Last
+full mobile intake was 295 PASS / 45 FAIL **before** final UI-test repairs;
+final affected rerun **PENDING**. Root's fresh SQLite Game/CIB collector has **1
+guard / 1 effect and PASS**; zero-guard hypothesis was refuted, not exempted. B2
+diagnostic-only changes and three sync/recovery suites / 39 tests PASS do
+**not** establish a fix for the original device sync fault; its cause awaits a
+new sanitized DEV `sync.financialActionRejected` log. Root owns UI
+checks/commit/push; #405 logo draft PR #406 rebase and native
+visual/accessibility approval remain **PENDING**. See the
+[dated validation status](validation/compact-review-2026-10-20.md). No new
+manual PASS is implied.
+
+---
+
 ## ACTIVE manual QA entry — compact interactive #395, 2026-10-20
 
 This active handoff supersedes the **historical planning commands and TDD/

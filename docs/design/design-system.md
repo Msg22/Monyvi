@@ -1,5 +1,52 @@
 # Monyvi Design System
 
+## Shared selection and keyboard standards (2026-10-20)
+
+## 5A. Selected Options And Keyboard-Reachable Forms
+
+**Global selection state (owner-approved 2026-10-20):** Use the existing
+`Dropdown`, `CurrencyPicker`, and shared picker/option primitives. Upon opening,
+the **currently selected option** has a **filled Nile-green** selected
+background, **white legible text in light and dark mode**, and a **white
+contrasting check/icon** if shown; green text or a green check on green is not
+acceptable. This is the actual choice, not merely a green border, translucent
+tint, hover state, or a guessed first option. Expose accurate
+`accessibilityState.selected`/`checked` and keyboard/screen-reader labels. Check
+selected state from the real controlled value in focused render-contract tests;
+dark/RTL contrast and actual navigation require separately captured
+native/rendered evidence.
+
+**Global keyboard reachability:** Reuse `TextField` and keyboard-aware,
+scrollable shared form/modal shells for every text input. With the soft keyboard
+open, the focused field (including the last field), its label/helper/error, and
+form completion/dismissal remain reachable on Android/iOS, compact screens,
+landscape, RTL and increased font sizes. Measure the **usable keyboard-adjusted
+viewport**, available header/footer space and safe-area insets at runtime,
+scroll the focused field into view, and do not derive reachability from nominal
+window height, a guessed keyboard offset or duplicate padding. A
+Jest/class/style assertion cannot certify physical on-device keyboard clearance;
+record native manual evidence or mark it NOT RUN.
+
+**Rollout:** This applies to new and touched surfaces app-wide. Shared component
+enforcement is separately owned; inventory bespoke selectors/fields over time,
+migrate them in focused changes and report remaining gaps. This section is a
+rule, not a claim of existing full-app compliance or a second design gate.
+
+### Owner-approved compact account-review alignment (#395 only)
+
+Preserve the existing approved #395 composition during its scoped
+implementation/review; this is **not** a new app-wide layout template: the
+linked-transactions action starts at the account **title-text column** (not
+beneath the leading icon); deferred-account-creation and Cash/default
+information notes use the same information-icon/text columns. The four review
+tabs stay on one row, becoming horizontally scrollable **only when the actual
+available width overflows**, not stacked based on a guessed device width. Center
+inline action controls and keep **Remove red**; account/category icon, name and
+pencil share their first row, with the status on a separate line. Validate real
+EN/AR, light/dark and enlarged-font reflow using native/rendered evidence, not a
+Jest geometry claim. No new mockup or approval is required for fidelity to these
+already approved facts.
+
 **Last updated:** 2026-10-20  
 **Status:** Implementation-aligned UI and theme guide
 

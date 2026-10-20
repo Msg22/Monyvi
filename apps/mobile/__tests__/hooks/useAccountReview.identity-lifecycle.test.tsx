@@ -9,7 +9,10 @@ import {
   type AccountReviewSession,
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import { mergeAccountReviewLateRows } from "../../../../packages/logic/src/account-review/reducer-merge";
-import type { AccountReviewCommandResult } from "../../../../packages/logic/src/account-review/reducer";
+import {
+  autoSelectReadyReviewSession,
+  type AccountReviewCommandResult,
+} from "../../../../packages/logic/src/account-review/reducer";
 import { makeOwnedContext } from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
 import {
   cloneCanonicalReviewSession,
@@ -37,6 +40,8 @@ type BootstrapService =
   typeof import("@/services/account-review-legacy-bootstrap-service").loadOrBootstrapOwnedSmsReviewSession;
 type SmsCommandService =
   typeof import("@/services/account-review-command-service").executeSmsAccountReviewCommand;
+type SmsReadyService =
+  typeof import("@/services/account-review-command-service").initializeSmsAccountReviewReadySelection;
 type ReadAccountsService =
   typeof import("@/services/account-review-read-model-service").loadAccountReviewAccountSnapshots;
 
@@ -47,6 +52,10 @@ const mockLoadOrBootstrap = jest.fn<
 const mockExecuteSmsCommand = jest.fn<
   ReturnType<SmsCommandService>,
   Parameters<SmsCommandService>
+>();
+const mockInitializeSmsReady = jest.fn<
+  ReturnType<SmsReadyService>,
+  Parameters<SmsReadyService>
 >();
 const mockLoadAccountSnapshots = jest.fn<
   ReturnType<ReadAccountsService>,
@@ -71,6 +80,9 @@ jest.mock("@/services/account-review-command-service", () => ({
   executeSmsAccountReviewCommand: (
     ...args: Parameters<SmsCommandService>
   ): ReturnType<SmsCommandService> => mockExecuteSmsCommand(...args),
+  initializeSmsAccountReviewReadySelection: (
+    ...args: Parameters<SmsReadyService>
+  ): ReturnType<SmsReadyService> => mockInitializeSmsReady(...args),
 }));
 jest.mock("@/services/account-review-read-model-service", () => ({
   loadAccountReviewAccountSnapshots: (
@@ -121,6 +133,29 @@ async function publish<T>(pending: Deferred<T>, value: T): Promise<void> {
 beforeEach(() => {
   mockLoadOrBootstrap.mockReset();
   mockExecuteSmsCommand.mockReset();
+  mockInitializeSmsReady.mockReset();
+  mockInitializeSmsReady.mockImplementation(
+    ({ ownerId, queueId, expectedSession }): ReturnType<SmsReadyService> => {
+      if (
+        expectedSession.ownerId !== ownerId ||
+        expectedSession.sessionId !== queueId
+      ) {
+        throw new Error("invalid_sms_bootstrap_expected_session");
+      }
+      const owned =
+        ownerId === T030_FOREIGN_OWNER
+          ? foreignAccountSnapshots()
+          : makeOwnedContext();
+      if (owned.ownerId !== ownerId)
+        throw new Error("invalid_sms_bootstrap_account_scope");
+      // Simulate the separate authenticated writer boundary through the real
+      // pure readiness transition, never fabricated selected rows/revisions.
+      return Promise.resolve(
+        autoSelectReadyReviewSession(expectedSession, owned, new Set<string>())
+          .state
+      );
+    }
+  );
   mockLoadAccountSnapshots.mockReset();
   mockLoadAccountSnapshots.mockResolvedValue(makeOwnedContext());
 });
@@ -395,6 +430,13 @@ describe("#395 T030 independent identity, authority and outward cancellation reg
         makeSmsReviewSession(T030_QUEUE, T030_FOREIGN_OWNER)
       );
       expect(result.current.session?.ownerId).toBe(T030_FOREIGN_OWNER);
+      expect(mockInitializeSmsReady).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ownerId: T030_FOREIGN_OWNER,
+          queueId: T030_QUEUE,
+          expectedSession: makeSmsReviewSession(T030_QUEUE, T030_FOREIGN_OWNER),
+        })
+      );
     });
 
     it("does not render a previous pending queue's busy state in the new session", async () => {

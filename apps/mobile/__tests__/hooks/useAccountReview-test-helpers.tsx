@@ -3,6 +3,7 @@
  * Voice is normalized from genuine Voice provider + mapped financial evidence.
  * No hook business logic, Watermelon writer or fabricated financial receipts.
  */
+import { act } from "@testing-library/react-native";
 import {
   accountReviewCommandSchema,
   accountReviewSessionSchema,
@@ -13,6 +14,7 @@ import { normalizeAccountReviewParserResult } from "../../../../packages/logic/s
 import { canonicalUuid } from "../../../../packages/logic/src/account-review/schema-primitives";
 import {
   reduceAccountReviewCommand,
+  autoSelectReadyReviewSession,
   type AccountReviewCommandResult,
   type ReviewUndoLease,
 } from "../../../../packages/logic/src/account-review/reducer";
@@ -94,6 +96,38 @@ export function createDeferred<T>(): Deferred<T> {
     reject = onReject;
   });
   return { promise, resolve, reject };
+}
+
+/** Same owned canonical readiness rule used at authenticated SMS bootstrap. */
+export function makeReadyBootstrapReviewSession(
+  session: AccountReviewSession
+): AccountReviewSession {
+  return autoSelectReadyReviewSession(
+    session,
+    makeOwnedContext(),
+    new Set<string>()
+  ).state;
+}
+
+/** Resolve genuine in-flight service promises within React's update boundary. */
+export async function publish<T>(
+  pending: Deferred<T>,
+  value: T
+): Promise<void> {
+  await act(async (): Promise<void> => {
+    pending.resolve(value);
+    await pending.promise;
+  });
+}
+
+export async function publishRejection(
+  pending: Deferred<AccountReviewSession>,
+  failure: Error
+): Promise<void> {
+  await act(async (): Promise<void> => {
+    pending.reject(failure);
+    await pending.promise.catch(() => undefined);
+  });
 }
 
 export function makeSmsReviewInput(

@@ -11,6 +11,7 @@ import {
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import {
   reduceAccountReviewCommand,
+  autoSelectReadyReviewSession,
   type ReviewUndoLease,
 } from "../../../../packages/logic/src/account-review/reducer";
 import { makeOwnedContext } from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
@@ -31,6 +32,10 @@ type AccountReadFn =
   typeof import("@/services/account-review-read-model-service").loadAccountReviewAccountSnapshots;
 type SmsCommandFn =
   typeof import("@/services/account-review-command-service").executeSmsAccountReviewCommand;
+type SmsReadyFn =
+  typeof import("@/services/account-review-command-service").initializeSmsAccountReviewReadySelection;
+type SmsDiscardFn =
+  typeof import("@/services/account-review-command-service").discardSmsAccountReviewRemovedSuggestion;
 
 const mockBootstrap = jest.fn<
   ReturnType<BootstrapFn>,
@@ -43,6 +48,14 @@ const mockAccounts = jest.fn<
 const mockSmsCommand = jest.fn<
   ReturnType<SmsCommandFn>,
   Parameters<SmsCommandFn>
+>();
+const mockReadyBootstrap = jest.fn<
+  ReturnType<SmsReadyFn>,
+  Parameters<SmsReadyFn>
+>();
+const mockDiscardRemoved = jest.fn<
+  ReturnType<SmsDiscardFn>,
+  Parameters<SmsDiscardFn>
 >();
 
 jest.mock("expo-crypto", () => ({
@@ -65,6 +78,12 @@ jest.mock("@/services/account-review-command-service", () => ({
   executeSmsAccountReviewCommand: (
     ...args: Parameters<SmsCommandFn>
   ): ReturnType<SmsCommandFn> => mockSmsCommand(...args),
+  initializeSmsAccountReviewReadySelection: (
+    ...args: Parameters<SmsReadyFn>
+  ): ReturnType<SmsReadyFn> => mockReadyBootstrap(...args),
+  discardSmsAccountReviewRemovedSuggestion: (
+    ...args: Parameters<SmsDiscardFn>
+  ): ReturnType<SmsDiscardFn> => mockDiscardRemoved(...args),
 }));
 jest.mock("@/services/account-review-voice-command-service", () => ({
   executeVoiceAccountReviewCommand: (): never => {
@@ -124,6 +143,20 @@ beforeEach(() => {
   mockBootstrap.mockReset();
   mockAccounts.mockReset();
   mockSmsCommand.mockReset();
+  mockReadyBootstrap.mockReset();
+  mockDiscardRemoved.mockReset();
+  mockReadyBootstrap.mockImplementation(({ expectedSession }) =>
+    Promise.resolve(
+      autoSelectReadyReviewSession(
+        expectedSession,
+        makeOwnedContext(),
+        new Set<string>()
+      ).state
+    )
+  );
+  mockDiscardRemoved.mockRejectedValue(
+    new Error("unexpected_sms_discard_in_followup")
+  );
   mockAccounts.mockResolvedValue(makeOwnedContext());
   mockSmsCommand.mockRejectedValue(
     new Error("unexpected_sms_financial_command_in_retry_test")
@@ -133,6 +166,11 @@ beforeEach(() => {
 describe("#395 PR396 same-ID SMS retry facade reload", () => {
   it("reboots from merged canonical queue rows using the existing reload API, preserving confirmed choices and owner scope", async () => {
     const { before, merged } = beforeAndAfterActualQueueMerge();
+    const readyMerged = autoSelectReadyReviewSession(
+      merged,
+      makeOwnedContext(),
+      new Set<string>()
+    ).state;
     const pendingOwner = T025_IDS.owner;
     mockBootstrap.mockResolvedValueOnce(before).mockResolvedValueOnce(merged);
     const { result } = renderHook(() => useAccountReview(input()));
@@ -143,7 +181,7 @@ describe("#395 PR396 same-ID SMS retry facade reload", () => {
     // A successful external retry updates physical items under exactly the
     // same owner/session/queue identity; the container must call this API.
     act(() => result.current.reload());
-    await waitFor(() => expect(result.current.session).toEqual(merged));
+    await waitFor(() => expect(result.current.session).toEqual(readyMerged));
     expect(mockBootstrap).toHaveBeenCalledTimes(2);
     expect(
       mockBootstrap.mock.calls.every(
@@ -284,6 +322,84 @@ describe("#395 PR396 same-ID SMS retry facade reload", () => {
     expect(result.current.readModel).toBeNull();
     expect(result.current.error).not.toBeNull();
     expect(mockSmsCommand).not.toHaveBeenCalled();
+  });
+
+  it("CR-DOM1 hook Discard revokes its matching Undo callback without touching removed transactions", async () => {
+    let persisted = makeT025ReviewSession();
+    let lease: ReviewUndoLease | null = null;
+    mockBootstrap.mockImplementation(() => Promise.resolve(persisted));
+    mockSmsCommand.mockImplementation(
+      ({ command, accountSnapshots, nextUndoToken }) => {
+        const previous = persisted;
+        const outcome = reduceAccountReviewCommand({
+          state: persisted,
+          command,
+          accountSnapshots,
+          nextUndoToken: nextUndoToken ?? null,
+          undo: lease,
+        });
+        if (
+          outcome.reasonCodes.length === 0 &&
+          outcome.effect === "persist_sms"
+        ) {
+          persisted = outcome.state;
+          lease =
+            command.kind === "remove_group" && outcome.undoToken
+              ? {
+                  token: outcome.undoToken,
+                  previousState: previous,
+                  afterRemovalGeneration: outcome.state.operationGeneration,
+                }
+              : null;
+        }
+        return Promise.resolve(outcome);
+      }
+    );
+    mockDiscardRemoved.mockImplementation(({ groupId, undoToken }) => {
+      expect(groupId).toBe(T025_IDS.group);
+      expect(undoToken).toBe(lease?.token);
+      lease = null;
+      return Promise.resolve();
+    });
+    const { result } = renderHook(() => useAccountReview(input()));
+    await waitFor(() => expect(result.current.session).toEqual(persisted));
+    const original = result.current.session;
+    if (!original) throw new Error("missing_review_for_discard");
+    await act(async () => {
+      const outcome = await result.current.dispatch(
+        accountReviewCommandSchema.parse({
+          kind: "remove_group",
+          ownerId: original.ownerId,
+          sessionId: original.sessionId,
+          expectedReviewRevision: original.revision,
+          expectedOperationGeneration: original.operationGeneration,
+          groupId: T025_IDS.group,
+          expectedGroupRevision: original.groups[0]?.revision,
+        })
+      );
+      expect(outcome.reasonCodes).toEqual([]);
+    });
+    const removed = result.current.session;
+    const staleUndo = result.current.undoRemoval;
+    if (!removed) throw new Error("missing_tombstone_after_remove");
+    await act(async () =>
+      result.current.discardRemovedSuggestion(T025_IDS.group)
+    );
+    expect(result.current.discardedGroupIds).toContain(T025_IDS.group);
+    expect(result.current.undoToken).toBeNull();
+    expect(result.current.session).toEqual(removed);
+    await act(async () => {
+      await expect(staleUndo()).rejects.toThrow(
+        "account_review_facade_undo_unavailable"
+      );
+    });
+    expect(mockSmsCommand).toHaveBeenCalledTimes(1);
+    expect(mockDiscardRemoved).toHaveBeenCalledTimes(1);
+    act(() => result.current.reload());
+    await waitFor(() => expect(result.current.session).toEqual(persisted));
+    expect(result.current.discardedGroupIds).toContain(T025_IDS.group);
+    expect(result.current.session?.groups[0]?.status).toBe("removed");
+    expect(result.current.session?.rows).toHaveLength(original.rows.length);
   });
 
   it("rejects a captured Undo for group A after removing B; only B's live token restores B", async () => {

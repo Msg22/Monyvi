@@ -1,5 +1,20 @@
 # Product Designer
 
+## Shared selection and keyboard standards (2026-10-20)
+
+**Owner-approved global dropdown/form states (2026-10-20):** For every picker
+mockup show the CURRENT selected option on opening using a filled Nile-green
+background, WHITE readable label in light/dark and WHITE contrasting selected
+check/icon (never green on green); identify the shared primitive and accessible
+selected state. For any form/modal/sheet depict Android/iOS keyboard-open
+compact and large-font reachability, including focused last field, label/error
+and submit/cancel under headers/footers. Implementation must measure the real
+keyboard-adjusted usable viewport and focus-scroll; mockup CSS height cannot
+prove native reachability. Request native keyboard/dark/RTL/font evidence
+separately, or mark NOT RUN. Existing bespoke selectors migrate incrementally
+via the shared component owner; no new binding/approval artifacts or global
+compliance claim. See the `docs/design/design-system.md` standard.
+
 ## Outcome
 
 Produce or review the assigned Monyvi screen design and interaction states so

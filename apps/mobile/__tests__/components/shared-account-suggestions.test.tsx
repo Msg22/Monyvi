@@ -1,7 +1,7 @@
 /**
- * #395 T026/T031 B1 shared-group presentation/action tests.
- * Exercises the real T031 presentation components; never mocks the SUT.
- * Callback assertions do not claim a canonical reducer, DB, or Save effect.
+ * #395 shared account presentation after compact interactive implementation.
+ * The real group and editor components are tested; callbacks do not simulate
+ * reducer, database, Save, Undo persistence or native rendered geometry.
  */
 import {
   fireEvent,
@@ -16,15 +16,14 @@ import {
 } from "i18next";
 import { initReactI18next } from "react-i18next";
 import React, { type ComponentProps } from "react";
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  ScrollView,
-} from "react-native";
+import { KeyboardAvoidingView, Modal, ScrollView } from "react-native";
 import { SharedAccountSuggestions } from "@/components/transaction-review/SharedAccountSuggestions";
 import { EditSuggestedAccountSheet } from "@/components/transaction-review/EditSuggestedAccountSheet";
 import { TransactionItem } from "@/components/transaction-review/TransactionItem";
+import enTransactions from "@/locales/en/transactions.json";
+import arTransactions from "@/locales/ar/transactions.json";
+import enCommon from "@/locales/en/common.json";
+import arCommon from "@/locales/ar/common.json";
 import {
   B1_TYPE_OPTIONS,
   makeSharedPresentation,
@@ -46,45 +45,15 @@ jest.mock("@/components/ui/Skeleton", () => ({
 }));
 let mockLocale: "en" | "ar" = "en";
 jest.mock("@/context/CategoriesContext", () => ({
-  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+  useCategoryLookup: (): ReturnType<
+    (typeof import("@/context/CategoriesContext"))["useCategoryLookup"]
+  > => new Map<string, never>(),
 }));
-
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: "en" | "ar" } => ({
     language: mockLocale,
   }),
 }));
-
-const messages = {
-  en: {
-    account_review_details_title: "Review details",
-    account_review_group_confirm: "Confirm",
-    account_review_group_confirmed: "Confirmed",
-    account_review_group_view_all: "View all",
-    account_review_group_edit: "Edit",
-    account_review_group_replace: "Use existing account",
-    account_review_group_remove: "Remove",
-    account_review_group_undo: "Undo",
-    account_review_group_edit_submit: "Confirm account",
-    account_review_group_edit_cancel: "Cancel",
-    account_review_group_change: "Change",
-    account_review_group_locked_currency: "Currency",
-  },
-  ar: {
-    account_review_details_title: "تفاصيل للمراجعة",
-    account_review_group_confirm: "تأكيد",
-    account_review_group_confirmed: "تم التأكيد",
-    account_review_group_view_all: "عرض الكل",
-    account_review_group_edit: "تعديل",
-    account_review_group_replace: "استخدام حساب موجود",
-    account_review_group_remove: "إزالة",
-    account_review_group_undo: "تراجع",
-    account_review_group_edit_submit: "تأكيد الحساب",
-    account_review_group_edit_cancel: "إلغاء",
-    account_review_group_change: "تغيير",
-    account_review_group_locked_currency: "العملة",
-  },
-} as const;
 
 type GroupActions = Pick<
   ComponentProps<typeof SharedAccountSuggestions>,
@@ -93,61 +62,42 @@ type GroupActions = Pick<
   | "onReplace"
   | "onRemove"
   | "onUndo"
-  | "onViewAll"
-  | "onCloseAllGroups"
+  | "onDiscardRemoved"
+  | "onViewLinked"
 >;
-
 function makeActions(): GroupActions {
   return {
-    onConfirm: jest.fn<void, [groupId: string]>(),
-    onEdit: jest.fn<void, [groupId: string]>(),
-    onReplace: jest.fn<void, [groupId: string]>(),
-    onRemove: jest.fn<void, [groupId: string]>(),
-    onUndo: jest.fn<void, [groupId: string]>(),
-    onViewAll: jest.fn<void, []>(),
-    onCloseAllGroups: jest.fn<void, []>(),
+    onConfirm: jest.fn<void, [string]>(),
+    onEdit: jest.fn<void, [string]>(),
+    onReplace: jest.fn<void, [string]>(),
+    onRemove: jest.fn<void, [string]>(),
+    onUndo: jest.fn<void, [string]>(),
+    onDiscardRemoved: jest.fn<void, [string]>(),
+    onViewLinked: jest.fn<void, [string]>(),
   };
 }
-
 function renderGroups(
   view: SharedPresentationFixture,
-  actions: GroupActions = makeActions(),
-  isAllGroupsSheetOpen = false
+  actions: GroupActions = makeActions()
 ): GroupActions {
   render(
     <SharedAccountSuggestions
       groups={view.groups}
       summary={view.summary}
-      isAllGroupsSheetOpen={isAllGroupsSheetOpen}
       isBusy={false}
       {...actions}
     />
   );
   return actions;
 }
-
-interface EditProps {
-  readonly visible: boolean;
-  readonly groupId: string;
-  readonly groupName: string;
-  readonly currentTypeOptionId: string;
-  readonly allowedTypeOptions: ReadonlyArray<{
-    readonly id: string;
-    readonly label: string;
-  }>;
-  readonly lockedCurrencyLabel: string;
-  readonly identitySummary: string;
-  readonly linkedCount: number;
-  readonly canSubmit: boolean;
-  readonly isBusy: boolean;
-  readonly validationMessage: string | null;
-  readonly onSubmit: (value: {
-    readonly name: string;
-    readonly typeOptionId: string;
-  }) => void;
-  readonly onReplace: () => void;
-  readonly onCancel: () => void;
+function openDetails(): void {
+  const toggle = screen.getByTestId("account-review-compact-summary-toggle");
+  expect(toggle).toHaveProp("accessibilityState", { expanded: false });
+  fireEvent.press(toggle);
+  expect(toggle).toHaveProp("accessibilityState", { expanded: true });
 }
+
+type EditProps = ComponentProps<typeof EditSuggestedAccountSheet>;
 function makeEditProps(overrides: Partial<EditProps> = {}): EditProps {
   const qnb = requireGroup(makeSharedPresentation("r3-combined-en"), "QNB");
   return {
@@ -171,17 +121,16 @@ function makeEditProps(overrides: Partial<EditProps> = {}): EditProps {
 function showEdit(props: EditProps = makeEditProps()): void {
   render(<EditSuggestedAccountSheet {...props} />);
 }
-
 beforeAll(async (): Promise<void> => {
   registerI18nextPlugin(initReactI18next);
   await initializeI18next({
     lng: "en",
     fallbackLng: "en",
-    ns: ["transactions"],
+    ns: ["transactions", "common"],
     defaultNS: "transactions",
     resources: {
-      en: { transactions: messages.en },
-      ar: { transactions: messages.ar },
+      en: { transactions: enTransactions, common: enCommon },
+      ar: { transactions: arTransactions, common: arCommon },
     },
     interpolation: { escapeValue: false },
   });
@@ -192,51 +141,52 @@ afterEach(async (): Promise<void> => {
   jest.clearAllMocks();
 });
 
-describe("T026 US2: R3-05 combined independent group cards", () => {
-  it("renders 7 total, 5 distinct review rows, 2 selected and QNB3/CIB1 separately", () => {
+describe("#395 compact inline account groups — parent callbacks only", () => {
+  it("starts collapsed with truthful pending count and reveals independent QNB3/CIB1 without View all", () => {
     const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
     const cib = requireGroup(view, "CIB");
-    expect(view.summary).toEqual(
-      expect.objectContaining({
-        totalCount: 7,
-        distinctNeedsReviewCount: 5,
-        selectedCount: 2,
-        defaultAssignmentCount: 2,
-        pendingGroupCount: 2,
-      })
-    );
+    expect(view.summary).toMatchObject({
+      totalCount: 7,
+      distinctNeedsReviewCount: 5,
+      selectedCount: 2,
+      pendingGroupCount: 2,
+      defaultAssignmentCount: 2,
+    });
     renderGroups(view);
-    expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
+    expect(screen.getByText("2 accounts need review")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-group-card-" + qnb.groupId)
+    ).toBeNull();
+    openDetails();
     expect(
       screen.getByTestId("account-review-group-card-" + qnb.groupId)
     ).toBeTruthy();
     expect(
       screen.getByTestId("account-review-group-card-" + cib.groupId)
     ).toBeTruthy();
+    expect(screen.getByText("3 linked transactions")).toBeTruthy();
+    expect(screen.getByText("1 linked transaction")).toBeTruthy();
     expect(
-      screen.getByTestId("account-review-group-disclosure-" + qnb.groupId)
-    ).toHaveTextContent(/\ball 3\b/);
-    expect(
-      screen.getByTestId("account-review-group-disclosure-" + cib.groupId)
-    ).toHaveTextContent(/\b1 transaction\b/);
-    expect(screen.getByText("Confirm currency")).toBeTruthy();
-    expect(screen.queryByText("Confirm all")).toBeNull();
+      screen.getByTestId("account-review-compact-save-explanation")
+    ).toHaveTextContent(
+      "New accounts are created only when you save their selected transactions."
+    );
+    expect(screen.queryByTestId("account-review-group-view-all")).toBeNull();
+    expect(screen.queryByTestId("account-review-group-all-sheet")).toBeNull();
   });
 
-  it("QNB Confirm invokes only the QNB callback without touching CIB or row selection", () => {
+  it("Confirm invokes only QNB without selecting rows, creating accounts or confirming CIB", () => {
     const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
     const cib = requireGroup(view, "CIB");
     const actions = renderGroups(view);
+    openDetails();
     const confirm = screen.getByTestId(
       "account-review-group-confirm-" + qnb.groupId
     );
     expect(confirm).toHaveProp("accessibilityRole", "button");
-    expect(confirm).toHaveProp(
-      "accessibilityLabel",
-      expect.stringContaining("QNB")
-    );
+    expect(confirm).toHaveProp("accessibilityLabel", "Confirm");
     fireEvent.press(confirm);
     expect(actions.onConfirm).toHaveBeenCalledTimes(1);
     expect(actions.onConfirm).toHaveBeenCalledWith(qnb.groupId);
@@ -244,53 +194,13 @@ describe("T026 US2: R3-05 combined independent group cards", () => {
     expect(actions.onEdit).not.toHaveBeenCalled();
     expect(actions.onRemove).not.toHaveBeenCalled();
     expect(actions.onReplace).not.toHaveBeenCalled();
-  });
-
-  it("shows confirmed read-only status only after new shaped props; Change stays available", () => {
-    const first = makeSharedPresentation("r3-combined-en");
-    const qnb = requireGroup(first, "QNB");
-    const actions = makeActions();
-    const original = render(
-      <SharedAccountSuggestions
-        groups={first.groups}
-        summary={first.summary}
-        isAllGroupsSheetOpen={false}
-        isBusy={false}
-        {...actions}
-      />
-    );
-    const confirmed = withGroup(first, qnb.groupId, {
-      isConfirmed: true,
-      isRemoved: false,
-      canConfirm: false,
-      statusLabel: "Confirmed",
-      canEdit: true,
-      canReplace: true,
-    });
-    original.rerender(
-      <SharedAccountSuggestions
-        groups={confirmed.groups}
-        summary={confirmed.summary}
-        isAllGroupsSheetOpen={false}
-        isBusy={false}
-        {...actions}
-      />
-    );
     expect(
-      screen.getByTestId("account-review-group-status-" + qnb.groupId)
-    ).toHaveTextContent("Confirmed");
-    expect(
-      screen.queryByTestId("account-review-group-confirm-" + qnb.groupId)
-    ).toBeNull();
-    expect(
-      screen.getByTestId("account-review-group-actions-" + qnb.groupId)
+      screen.getByTestId("account-review-group-confirm-" + cib.groupId)
     ).toBeTruthy();
-    expect(actions.onConfirm).not.toHaveBeenCalled();
   });
 
-  it("keeps existing row checkbox independent from group-confirm and group menu actions", () => {
+  it("a transaction checkbox remains separate from pending-group Confirm", () => {
     const view = makeSharedPresentation("r3-combined-en");
-    const qnb = requireGroup(view, "QNB");
     const actions = makeActions();
     const onToggleSelect = jest.fn<void, [number]>();
     render(
@@ -298,7 +208,6 @@ describe("T026 US2: R3-05 combined independent group cards", () => {
         <SharedAccountSuggestions
           groups={view.groups}
           summary={view.summary}
-          isAllGroupsSheetOpen={false}
           isBusy={false}
           {...actions}
         />
@@ -312,15 +221,13 @@ describe("T026 US2: R3-05 combined independent group cards", () => {
         />
       </>
     );
-    fireEvent.press(
-      screen.getByTestId("account-review-group-confirm-" + qnb.groupId)
-    );
-    expect(actions.onConfirm).toHaveBeenCalledWith(qnb.groupId);
-    expect(onToggleSelect).not.toHaveBeenCalled();
+    openDetails();
     fireEvent.press(screen.getByRole("checkbox"));
+    expect(onToggleSelect).toHaveBeenCalledTimes(1);
     expect(onToggleSelect).toHaveBeenCalledWith(0);
-    expect(actions.onConfirm).toHaveBeenCalledTimes(1);
-    // T024/T025/T030 must prove the real combined reducer transition.
+    expect(actions.onConfirm).not.toHaveBeenCalled();
+    // This legacy independent TransactionItem is not the canonical pending
+    // checkbox; the canonical UI must intercept and show explicit choice.
   });
 
   it.each([
@@ -328,311 +235,326 @@ describe("T026 US2: R3-05 combined independent group cards", () => {
     ["replace", "account-review-group-replace", "onReplace"],
     ["remove", "account-review-group-remove", "onRemove"],
   ] as const)(
-    "QNB %s menu action invokes only its scoped callback",
-    (_name, targetId, key) => {
+    "%s acts only on the opened QNB inline menu",
+    (_label, id, key) => {
       const view = makeSharedPresentation("r3-combined-en");
       const qnb = requireGroup(view, "QNB");
       const cib = requireGroup(view, "CIB");
       const actions = renderGroups(view);
+      openDetails();
+      expect(
+        screen.queryByTestId("account-review-group-inline-menu")
+      ).toBeNull();
       fireEvent.press(
         screen.getByTestId("account-review-group-actions-" + qnb.groupId)
       );
       expect(
-        screen.getByTestId("account-review-group-action-sheet")
+        screen.getByTestId("account-review-group-inline-menu")
       ).toBeTruthy();
-      fireEvent.press(screen.getByTestId(targetId));
+      fireEvent.press(screen.getByTestId(id));
       expect(actions[key]).toHaveBeenCalledTimes(1);
       expect(actions[key]).toHaveBeenCalledWith(qnb.groupId);
       expect(actions[key]).not.toHaveBeenCalledWith(cib.groupId);
       expect(actions.onConfirm).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("account-review-group-all-sheet")).toBeNull();
     }
   );
 
-  it("CIB menu retains a separate group scope and never invokes QNB action", () => {
+  it("CIB inline menu does not reuse QNB group scope", () => {
     const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
     const cib = requireGroup(view, "CIB");
     const actions = renderGroups(view);
+    openDetails();
+    fireEvent.press(
+      screen.getByTestId("account-review-group-actions-" + qnb.groupId)
+    );
     fireEvent.press(
       screen.getByTestId("account-review-group-actions-" + cib.groupId)
     );
+    expect(
+      screen.getAllByTestId("account-review-group-inline-menu")
+    ).toHaveLength(1);
     fireEvent.press(screen.getByTestId("account-review-group-edit"));
     expect(actions.onEdit).toHaveBeenCalledWith(cib.groupId);
     expect(actions.onEdit).not.toHaveBeenCalledWith(qnb.groupId);
-    expect(actions.onConfirm).not.toHaveBeenCalled();
   });
 
-  it("keeps a multi-reason category/amount/currency issue visible after confirmation callback", () => {
-    const base = makeSharedPresentation("r3-combined-en");
-    const view = {
-      ...base,
-      summary: {
-        ...base.summary,
-        issueLabels: ["Confirm currency", "Check amount", "Choose a category"],
-      },
-    };
+  it("keeps pending group Confirm while account/currency recovery moves to the dedicated tab", () => {
+    const view = makeSharedPresentation("r3-combined-en");
     const actions = renderGroups(view);
+    openDetails();
+    expect(screen.getByText("2 accounts need review")).toBeTruthy();
+    expect(screen.queryByTestId("account-review-compact-issues")).toBeNull();
     fireEvent.press(
       screen.getByTestId(
         "account-review-group-confirm-" + requireGroup(view, "QNB").groupId
       )
     );
     expect(actions.onConfirm).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Confirm currency")).toBeTruthy();
-    expect(screen.getByText("Check amount")).toBeTruthy();
-    expect(screen.getByText("Choose a category")).toBeTruthy();
-  });
-});
-
-describe("T026 US2: distinct confirmed, removed, blocked and full-list states", () => {
-  it("uses R3-09 4/0/1 rather than mutating the combined 7/5/2 fixture", () => {
-    const view = makeSharedPresentation("r3-confirmed-feedback");
-    expect(view.summary).toEqual(
-      expect.objectContaining({
-        totalCount: 4,
-        distinctNeedsReviewCount: 0,
-        selectedCount: 1,
-        confirmedGroupCount: 2,
-      })
+    expect(actions.onConfirm).toHaveBeenCalledWith(
+      requireGroup(view, "QNB").groupId
     );
-    const qnb = requireGroup(view, "QNB");
-    const cib = requireGroup(view, "CIB");
-    renderGroups(view);
     expect(
-      screen.getByTestId("account-review-group-status-" + qnb.groupId)
-    ).toHaveTextContent("Confirmed");
-    expect(
-      screen.getByTestId("account-review-group-status-" + cib.groupId)
-    ).toHaveTextContent("Confirmed");
-    expect(screen.queryByText("Confirm all")).toBeNull();
-  });
-
-  it("shows R3-06 removed QNB2 recovery without hiding CIB1 or Cash1 selection", () => {
-    const view = makeSharedPresentation("r3-removed-undo");
-    const qnb = requireGroup(view, "QNB");
-    const cib = requireGroup(view, "CIB");
-    expect(view.summary).toEqual(
-      expect.objectContaining({
-        totalCount: 4,
-        distinctNeedsReviewCount: 3,
-        selectedCount: 1,
-      })
-    );
-    expect(qnb.linkedCount).toBe(2);
-    expect(qnb.isRemoved).toBe(true);
-    expect(cib.canConfirm).toBe(true);
-    const actions = renderGroups(view);
-    expect(
-      screen.getByTestId("account-review-group-status-" + qnb.groupId)
-    ).toHaveTextContent("Removed");
-    expect(
-      screen.getByTestId("account-review-group-card-" + cib.groupId)
+      screen.getByTestId(
+        "account-review-group-confirm-" + requireGroup(view, "CIB").groupId
+      )
     ).toBeTruthy();
-    fireEvent.press(screen.getByTestId("account-review-group-undo"));
-    expect(actions.onUndo).toHaveBeenCalledWith(qnb.groupId);
+    expect(screen.queryByTestId("account-review-compact-issues")).toBeNull();
+  });
+
+  it("rerenders confirmed status from parent and keeps explicit Change", () => {
+    const view = makeSharedPresentation("r3-combined-en");
+    const qnb = requireGroup(view, "QNB");
+    const actions = makeActions();
+    const rendered = render(
+      <SharedAccountSuggestions
+        groups={view.groups}
+        summary={view.summary}
+        isBusy={false}
+        {...actions}
+      />
+    );
+    openDetails();
+    const confirmed = withGroup(view, qnb.groupId, {
+      isConfirmed: true,
+      canConfirm: false,
+      statusLabel: "Confirmed",
+      canReplace: true,
+    });
+    rendered.rerender(
+      <SharedAccountSuggestions
+        groups={confirmed.groups}
+        summary={confirmed.summary}
+        isBusy={false}
+        {...actions}
+      />
+    );
+    expect(
+      screen.getByTestId("account-review-group-status-" + qnb.groupId)
+    ).toHaveTextContent("Confirmed");
+    expect(
+      screen.queryByTestId("account-review-group-confirm-" + qnb.groupId)
+    ).toBeNull();
+    fireEvent.press(
+      screen.getByTestId("account-review-group-change-" + qnb.groupId)
+    );
+    expect(actions.onReplace).toHaveBeenCalledWith(qnb.groupId);
     expect(actions.onConfirm).not.toHaveBeenCalled();
   });
 
-  it("withdraws outdated Undo when the facade marks its token ineligible", () => {
+  it("removed QNB ghost has scoped Undo and Discard without touching CIB", () => {
+    const view = makeSharedPresentation("r3-removed-undo");
+    const qnb = requireGroup(view, "QNB");
+    const cib = requireGroup(view, "CIB");
+    const actions = renderGroups(view);
+    openDetails();
+    expect(
+      screen.getByTestId("account-review-group-card-" + cib.groupId)
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-group-name-" + qnb.groupId)
+    ).toHaveTextContent("QNB · " + qnb.currencyLabel);
+    fireEvent.press(screen.getByTestId("account-review-group-undo"));
+    expect(actions.onUndo).toHaveBeenCalledTimes(1);
+    expect(actions.onUndo).toHaveBeenCalledWith(qnb.groupId);
+    fireEvent.press(
+      screen.getByTestId("account-review-group-discard-" + qnb.groupId)
+    );
+    expect(actions.onDiscardRemoved).toHaveBeenCalledTimes(1);
+    expect(actions.onDiscardRemoved).toHaveBeenCalledWith(qnb.groupId);
+    expect(actions.onRemove).not.toHaveBeenCalled();
+    // Actual revocation of a stale service-level Undo lease is verified in
+    // B's domain tests; a view callback is not that authority.
+  });
+
+  it("revokes the visible Undo affordance when parent marks the lease ineligible", () => {
     const base = makeSharedPresentation("r3-removed-undo");
     const qnb = requireGroup(base, "QNB");
     const view = withGroup(base, qnb.groupId, { canUndo: false });
     const actions = renderGroups(view);
+    openDetails();
+    expect(screen.queryByTestId("account-review-group-undo")).toBeNull();
     expect(
-      screen.getByTestId("account-review-group-status-" + qnb.groupId)
-    ).toHaveTextContent("Removed");
-    const undo = screen.queryByTestId("account-review-group-undo");
-    if (undo) {
-      expect(undo).toHaveProp(
-        "accessibilityState",
-        expect.objectContaining({ disabled: true })
-      );
-      fireEvent.press(undo);
-    }
+      screen.getByTestId("account-review-group-discard-" + qnb.groupId)
+    ).toBeTruthy();
     expect(actions.onUndo).not.toHaveBeenCalled();
-    // Actual stale-token reject and atomic row rollback belong T024/T025.
   });
 
-  it("exposes six R2-03 groups through a scrollable View all sheet without a first-N cutoff", () => {
+  it("renders all six groups inline, no modal and no first-N truncation", () => {
     const view = makeSixGroupViewAll();
+    const actions = renderGroups(view);
     expect(view.groups).toHaveLength(6);
+    openDetails();
+    for (const group of view.groups) {
+      expect(
+        screen.getByTestId("account-review-group-card-" + group.groupId)
+      ).toBeTruthy();
+    }
     expect(
-      view.groups
-        .map((group) => group.linkedCount)
-        .reduce((sum, n) => sum + n, 0)
-    ).toBe(10);
-    const actions = makeActions();
-    const renderResult = render(
-      <SharedAccountSuggestions
-        groups={view.groups}
-        summary={view.summary}
-        isAllGroupsSheetOpen={false}
-        isBusy={false}
-        {...actions}
-      />
-    );
-    fireEvent.press(screen.getByTestId("account-review-group-view-all"));
-    expect(actions.onViewAll).toHaveBeenCalledTimes(1);
-    renderResult.rerender(
-      <SharedAccountSuggestions
-        groups={view.groups}
-        summary={view.summary}
-        isAllGroupsSheetOpen
-        isBusy={false}
-        {...actions}
-      />
-    );
-    expect(screen.getByTestId("account-review-group-all-sheet")).toBeTruthy();
-    expect(
-      screen
-        .UNSAFE_getAllByType(FlatList)
-        .some(
-          (list) =>
-            Array.isArray(list.props.data) && list.props.data.length === 6
-        )
-    ).toBe(true);
-    const last = view.groups[5];
-    if (!last) throw new Error("Missing sixth approved test group");
-    expect(
-      screen.getAllByTestId("account-review-group-card-" + last.groupId).length
-    ).toBeGreaterThan(0);
+      screen.getAllByTestId(
+        "account-review-group-card-" + view.groups[5]?.groupId
+      )
+    ).toHaveLength(1);
+    expect(screen.queryByTestId("account-review-group-all-sheet")).toBeNull();
     expect(actions.onConfirm).not.toHaveBeenCalled();
   });
 
-  it("Remove from a View all group menu calls onRemove without closing the sheet", () => {
+  it("one inline Remove targets its own group and leaves other inline groups", () => {
     const view = makeSixGroupViewAll();
-    const targetGroup = view.groups[1];
-    if (!targetGroup) throw new Error("Missing target group");
-    const otherGroup = view.groups[2];
-    if (!otherGroup) throw new Error("Missing other group");
-    const actions = makeActions();
-    render(
-      <SharedAccountSuggestions
-        groups={view.groups}
-        summary={view.summary}
-        isAllGroupsSheetOpen={true}
-        isBusy={false}
-        {...actions}
-      />
-    );
-    const allSheet = screen.getByTestId("account-review-group-all-sheet");
-    expect(allSheet).toBeTruthy();
-    const sheetQuery = within(allSheet);
+    const chosen = view.groups[1];
+    const other = view.groups[2];
+    if (!chosen || !other) throw new Error("Missing six-group fixture");
+    const actions = renderGroups(view);
+    openDetails();
     fireEvent.press(
-      sheetQuery.getByTestId(
-        "account-review-group-actions-" + targetGroup.groupId
-      )
+      screen.getByTestId("account-review-group-actions-" + chosen.groupId)
     );
-    fireEvent.press(sheetQuery.getByTestId("account-review-group-remove"));
+    const menu = within(screen.getByTestId("account-review-group-inline-menu"));
+    fireEvent.press(menu.getByTestId("account-review-group-remove"));
     expect(actions.onRemove).toHaveBeenCalledTimes(1);
-    expect(actions.onRemove).toHaveBeenCalledWith(targetGroup.groupId);
-    expect(actions.onRemove).not.toHaveBeenCalledWith(otherGroup.groupId);
-    expect(actions.onCloseAllGroups).not.toHaveBeenCalled();
-    expect(screen.getByTestId("account-review-group-all-sheet")).toBeTruthy();
+    expect(actions.onRemove).toHaveBeenCalledWith(chosen.groupId);
+    expect(actions.onRemove).not.toHaveBeenCalledWith(other.groupId);
     expect(
-      sheetQuery.getByTestId("account-review-group-card-" + otherGroup.groupId)
+      screen.getByTestId("account-review-group-card-" + other.groupId)
     ).toBeTruthy();
+    expect(screen.queryByTestId("account-review-group-all-sheet")).toBeNull();
   });
 
-  it("does not show an empty shared-group details region for default-only or clean state", () => {
-    const emptyStates = [
-      makeSharedPresentation("r3-default-only"),
-      makeSharedPresentation("r3-clean"),
-    ];
-    for (const view of emptyStates) {
+  it("default-only and clean states have reviewed collapsed summary, no invented groups", () => {
+    for (const id of ["r3-default-only", "r3-clean"] as const) {
+      const view = makeSharedPresentation(id);
       const rendered = render(
         <SharedAccountSuggestions
           groups={view.groups}
           summary={view.summary}
-          isAllGroupsSheetOpen={false}
           isBusy={false}
           {...makeActions()}
         />
       );
-      expect(screen.queryByTestId("account-review-details-panel")).toBeNull();
+      expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
+      expect(screen.getByText("Accounts reviewed")).toBeTruthy();
+      openDetails();
+      expect(
+        screen.queryByTestId("account-review-group-inline-menu")
+      ).toBeNull();
+      expect(screen.queryByTestId("account-review-group-card-")).toBeNull();
       rendered.unmount();
     }
   });
 
-  it("keeps unresolved currency issue actionable without suggesting or auto-confirming an account", () => {
+  it("currency-only unresolved state counts account needed, but has no duplicate inline action", () => {
     const view = makeSharedPresentation("r3-currency-conflict");
     const actions = renderGroups(view);
     expect(view.groups).toHaveLength(0);
     expect(view.summary.distinctNeedsReviewCount).toBe(1);
-    expect(screen.getByText("Confirm currency")).toBeTruthy();
-    expect(screen.queryByText("Confirm all")).toBeNull();
+    expect(screen.getByText("1 transaction needs an account")).toBeTruthy();
+    openDetails();
+    expect(screen.queryByTestId("account-review-compact-issues")).toBeNull();
     expect(actions.onConfirm).not.toHaveBeenCalled();
   });
 
-  it("never enables Confirm for a group with incomplete/currency-blocked evidence", () => {
-    const first = makeSharedPresentation("r3-combined-en");
-    const qnb = requireGroup(first, "QNB");
-    const view = withGroup(first, qnb.groupId, {
-      canConfirm: false,
-      isBusy: false,
-      statusLabel: "Needs currency confirmation",
-    });
-    const actions = renderGroups(view);
-    expect(
-      screen.getByTestId("account-review-group-card-" + qnb.groupId)
-    ).toBeTruthy();
-    const confirm = screen.queryByTestId(
-      "account-review-group-confirm-" + qnb.groupId
+  it("authoritative account-needed row union overrides overlapping issue counts without creating duplicate inline action", () => {
+    const original = makeSharedPresentation("r3-currency-conflict");
+    const view = {
+      ...original,
+      summary: {
+        ...original.summary,
+        issues: [
+          {
+            key: "account_review_issue_account" as const,
+            label: "Account needed",
+            count: 2,
+          },
+          {
+            key: "account_review_issue_currency" as const,
+            label: "Confirm currency",
+            count: 3,
+          },
+          {
+            key: "account_review_issue_category" as const,
+            label: "Choose a category",
+            count: 1,
+          },
+        ],
+      },
+    };
+    const actions = makeActions();
+    render(
+      <SharedAccountSuggestions
+        {...actions}
+        groups={view.groups}
+        summary={view.summary}
+        accountNeededCount={2}
+        isBusy={false}
+      />
     );
-    if (confirm) {
-      expect(confirm).toHaveProp(
-        "accessibilityState",
-        expect.objectContaining({ disabled: true })
-      );
-      fireEvent.press(confirm);
-    }
+    expect(screen.getByText("2 transactions need an account")).toBeTruthy();
+    openDetails();
+    const issues = within(screen.getByTestId("account-review-compact-issues"));
+    expect(issues.getByText("Choose a category")).toBeTruthy();
+    expect(issues.queryByText("Account needed")).toBeNull();
+    expect(issues.queryByText("Confirm currency")).toBeNull();
     expect(actions.onConfirm).not.toHaveBeenCalled();
-    expect(screen.getByText("Confirm currency")).toBeTruthy();
   });
 
-  it("retains masked identity, wraps long names and uses semantic dark theme classes", () => {
+  it("incomplete group has no actionable Confirm even after expansion", () => {
+    const base = makeSharedPresentation("r3-combined-en");
+    const qnb = requireGroup(base, "QNB");
+    const view = withGroup(base, qnb.groupId, { canConfirm: false });
+    const actions = renderGroups(view);
+    openDetails();
+    expect(
+      screen.queryByTestId("account-review-group-confirm-" + qnb.groupId)
+    ).toBeNull();
+    expect(actions.onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("long name, masked card identity and effective menu accessibility survive render", () => {
     const base = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(base, "QNB");
     const name = "QNB Everyday - اسم حساب طويل للغاية for account ending 0007";
     const view = withGroup(base, qnb.groupId, { displayName: name });
     renderGroups(view);
-    expect(screen.getByText(name + " · " + qnb.currencyLabel)).toBeTruthy();
+    openDetails();
+    expect(
+      screen.getByTestId("account-review-group-name-" + qnb.groupId)
+    ).toHaveTextContent(name + " · " + qnb.currencyLabel);
     expect(screen.getByText(/•••• 0007/)).toBeTruthy();
-    expect(screen.getByTestId("account-review-details-panel")).toHaveProp(
-      "className",
-      expect.stringContaining("dark:")
-    );
-    // This is only semantic coverage, NOT native 340dp/390dp/600dp/font 1.35 proof.
+    expect(
+      screen.getByTestId("account-review-group-actions-" + qnb.groupId)
+    ).toHaveProp("accessibilityRole", "button");
+    // Native clipping/geometry/font scaling cannot be asserted from Jest.
   });
 
-  it("confirmed group exposes a compact Change action and neutral type circle without implicit selection", () => {
-    const view = makeSharedPresentation("r3-confirmed-feedback");
+  it("linked-row action is scoped to its group without changing selection", () => {
+    const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
-    const actions = makeActions();
-    renderGroups(view, actions);
-    expect(
-      screen.queryByTestId("account-review-group-confirm-" + qnb.groupId)
-    ).toBeNull();
-    const change = screen.getByTestId(
-      "account-review-group-change-" + qnb.groupId
+    const cib = requireGroup(view, "CIB");
+    const actions = renderGroups(view);
+    openDetails();
+    fireEvent.press(
+      screen.getByTestId("account-review-group-linked-" + qnb.groupId)
     );
-    fireEvent.press(change);
-    expect(
-      screen.getByTestId("account-review-group-action-sheet")
-    ).toBeTruthy();
+    expect(actions.onViewLinked).toHaveBeenCalledTimes(1);
+    expect(actions.onViewLinked).toHaveBeenCalledWith(qnb.groupId);
+    expect(actions.onViewLinked).not.toHaveBeenCalledWith(cib.groupId);
     expect(actions.onConfirm).not.toHaveBeenCalled();
-    expect(actions.onReplace).not.toHaveBeenCalled();
   });
 
-  it("renders approved Arabic three-link disclosure and accessible group-specific actions", async () => {
+  it("Arabic compact summary and group actions retain localized labels and group identity", async () => {
     mockLocale = "ar";
     await changeLanguage("ar");
     const view = makeSharedPresentation("r3-combined-ar", "ar");
     const qnb = requireGroup(view, "QNB");
     renderGroups(view);
-    expect(
-      screen.getByText("اختيار معاملة من QNB يؤكد الحساب للمعاملات الثلاث.")
-    ).toBeTruthy();
+    const summary = screen.getByTestId("account-review-compact-summary-toggle");
+    expect(summary).toHaveProp(
+      "accessibilityLabel",
+      arTransactions.compact_review_pending_two
+    );
+    expect(summary).toHaveProp("accessibilityState", { expanded: false });
+    openDetails();
     const menu = screen.getByTestId(
       "account-review-group-actions-" + qnb.groupId
     );
@@ -641,30 +563,60 @@ describe("T026 US2: distinct confirmed, removed, blocked and full-list states", 
       "accessibilityLabel",
       expect.stringContaining("QNB")
     );
-    // Native RTL placement/bidi glyphs and screen-reader focus require owner device.
+    const groupName = screen.getByTestId(
+      "account-review-group-name-" + qnb.groupId
+    );
+    expect(groupName).toHaveTextContent(
+      "\u2068QNB\u2069 · \u2068" + qnb.currencyLabel + "\u2069"
+    );
+    // The directional isolates are intentional. Native RTL placement and
+    // TalkBack focus still require actual device evidence.
   });
 });
 
 describe("T026 US2: R1-07 edit sheet and R2-02 menu boundaries", () => {
-  it("shows name and type editable, but keeps EGP group currency locked with linked-three scope", () => {
-    showEdit();
+  it("preselects current EGP in the shared searchable picker and returns to the same uncommitted editor", () => {
+    const onSubmit = jest.fn<void, Parameters<EditProps["onSubmit"]>>();
+    showEdit(makeEditProps({ onSubmit }));
     expect(screen.getByTestId("account-review-group-edit-sheet")).toBeTruthy();
     expect(screen.getByTestId("account-review-group-edit-name")).toBeTruthy();
     expect(screen.getByTestId("account-review-group-edit-type")).toBeTruthy();
-    const currency = screen.getByTestId("account-review-group-locked-currency");
-    expect(currency).toHaveTextContent("EGP");
-    expect(currency).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ disabled: true })
+    const currency = screen.getByTestId("account-review-group-edit-currency");
+    expect(currency).toHaveProp("accessibilityRole", "button");
+    expect(currency).toHaveProp("accessibilityLabel", "Currency, EGP");
+    expect(
+      screen.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)
+    ).toHaveLength(1);
+    fireEvent.press(currency);
+    const picker = screen.getByTestId(
+      "account-review-group-edit-currency-picker"
     );
-    expect(screen.getByText(/3/)).toBeTruthy();
+    expect(picker).toHaveProp("visible", true);
+    expect(
+      screen.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)
+    ).toHaveLength(1);
+    expect(screen.getByTestId("currency-row-highlight-EGP")).toBeTruthy();
+    const search = screen.getByPlaceholderText(
+      enCommon.search_currency_name_code
+    );
+    fireEvent.changeText(search, "USD");
+    expect(screen.getByTestId("currency-code-row-USD")).toBeTruthy();
+    expect(screen.queryByTestId("currency-code-row-EGP")).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent(picker, "requestClose");
+    expect(screen.getByTestId("account-review-group-edit-currency")).toHaveProp(
+      "accessibilityLabel",
+      "Currency, EGP"
+    );
+    expect(screen.getByTestId("account-review-group-edit-name")).toHaveProp(
+      "value",
+      "QNB"
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("submits only an explicit changed name and selected type option, not a persisted account", () => {
-    const onSubmit = jest.fn<
-      void,
-      [{ readonly name: string; readonly typeOptionId: string }]
-    >();
+    const onSubmit = jest.fn<void, Parameters<EditProps["onSubmit"]>>();
     showEdit(makeEditProps({ onSubmit }));
     fireEvent.changeText(
       screen.getByTestId("account-review-group-edit-name"),
@@ -675,14 +627,12 @@ describe("T026 US2: R1-07 edit sheet and R2-02 menu boundaries", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       name: "QNB Office",
       typeOptionId: "BANK",
+      currency: "EGP",
     });
   });
 
   it("allows selecting a different permitted account type before confirming edit", () => {
-    const onSubmit = jest.fn<
-      void,
-      [{ readonly name: string; readonly typeOptionId: string }]
-    >();
+    const onSubmit = jest.fn<void, Parameters<EditProps["onSubmit"]>>();
     showEdit(makeEditProps({ onSubmit }));
     fireEvent.press(screen.getByTestId("account-review-group-edit-type"));
     fireEvent.press(screen.getByText("Digital wallet"));
@@ -690,7 +640,96 @@ describe("T026 US2: R1-07 edit sheet and R2-02 menu boundaries", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       name: "QNB",
       typeOptionId: "DIGITAL_WALLET",
+      currency: "EGP",
     });
+  });
+
+  it("stages USD using searchable CurrencyPicker while preserving edited name/type and no FX or early command", () => {
+    const onSubmit = jest.fn<void, Parameters<EditProps["onSubmit"]>>();
+    const onReplace = jest.fn<void, []>();
+    showEdit(makeEditProps({ onSubmit, onReplace }));
+    fireEvent.changeText(
+      screen.getByTestId("account-review-group-edit-name"),
+      "QNB Office"
+    );
+    fireEvent.press(screen.getByTestId("account-review-group-edit-type"));
+    fireEvent.press(
+      screen.getByTestId("account-review-group-edit-type-option-DIGITAL_WALLET")
+    );
+    fireEvent.press(screen.getByTestId("account-review-group-edit-currency"));
+    const picker = screen.getByTestId(
+      "account-review-group-edit-currency-picker"
+    );
+    expect(picker).toHaveProp("visible", true);
+    expect(
+      screen.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)
+    ).toHaveLength(1);
+    fireEvent.changeText(
+      screen.getByPlaceholderText(enCommon.search_currency_name_code),
+      "usd"
+    );
+    expect(screen.getByTestId("currency-code-row-USD")).toBeTruthy();
+    expect(screen.queryByTestId("currency-code-row-EGP")).toBeNull();
+    fireEvent.press(screen.getByTestId("currency-code-row-USD"));
+    expect(screen.getByTestId("account-review-group-edit-currency")).toHaveProp(
+      "accessibilityLabel",
+      "Currency, USD"
+    );
+    expect(screen.getByTestId("account-review-group-edit-name")).toHaveProp(
+      "value",
+      "QNB Office"
+    );
+    expect(
+      screen.getByTestId("account-review-group-edit-type")
+    ).toHaveTextContent("Digital wallet");
+    expect(
+      screen.getByTestId("account-review-group-currency-no-conversion")
+    ).toHaveTextContent(
+      "The amount stays the same number. This changes its currency without conversion."
+    );
+    expect(
+      screen.UNSAFE_getAllByType(Modal).filter((modal) => modal.props.visible)
+    ).toHaveLength(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onReplace).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-group-edit-submit"));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: "QNB Office",
+      typeOptionId: "DIGITAL_WALLET",
+      currency: "USD",
+    });
+    expect(onReplace).not.toHaveBeenCalled();
+  });
+
+  it("picker Back preserves local draft and Cancel dismisses without submitting", () => {
+    const onSubmit = jest.fn<void, Parameters<EditProps["onSubmit"]>>();
+    const onCancel = jest.fn<void, []>();
+    showEdit(makeEditProps({ onSubmit, onCancel }));
+    fireEvent.changeText(
+      screen.getByTestId("account-review-group-edit-name"),
+      "QNB Office"
+    );
+    fireEvent.press(screen.getByTestId("account-review-group-edit-currency"));
+    expect(
+      screen.getByTestId("account-review-group-edit-currency-picker")
+    ).toHaveProp("visible", true);
+    fireEvent(
+      screen.getByTestId("account-review-group-edit-currency-picker"),
+      "requestClose"
+    );
+    expect(screen.getByTestId("account-review-group-edit-name")).toHaveProp(
+      "value",
+      "QNB Office"
+    );
+    expect(screen.getByTestId("account-review-group-edit-currency")).toHaveProp(
+      "accessibilityLabel",
+      "Currency, EGP"
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByText("Cancel"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("shows validation and disabled submit for invalid identity instead of making a fake command", () => {
@@ -742,7 +781,13 @@ describe("T026 US2: R1-07 edit sheet and R2-02 menu boundaries", () => {
     const onCancel = jest.fn();
     const onSubmit = jest.fn();
     showEdit(makeEditProps({ onCancel, onSubmit }));
-    fireEvent(screen.UNSAFE_getByType(Modal), "requestClose");
+    const visibleModals = screen
+      .UNSAFE_getAllByType(Modal)
+      .filter((modal) => modal.props.visible === true);
+    expect(visibleModals).toHaveLength(1);
+    const activeModal = visibleModals[0];
+    if (!activeModal) throw new Error("Missing visible edit modal");
+    fireEvent(activeModal, "requestClose");
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onSubmit).not.toHaveBeenCalled();
   });

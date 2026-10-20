@@ -8,19 +8,14 @@
 import type { AccountReviewRow, AccountReviewSession } from "@monyvi/logic";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
-import { shouldUseCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 import {
   DefaultAccountInfo,
   DefaultAccountWhySheet,
 } from "./DefaultAccountInfo";
+import { AccountNeededTemporaryHeader } from "./account-review-filter-header";
 import {
   SharedAccountSuggestions,
   type SharedAccountSuggestionsProps,
@@ -28,6 +23,7 @@ import {
 } from "./SharedAccountSuggestions";
 
 type ReviewFilter = AccountReviewSession["filter"];
+type ReviewVisibleTab = ReviewFilter | "account_needed";
 type ReviewRowId = AccountReviewRow["rowId"];
 
 export interface AccountReviewPanelProps extends SharedAccountSuggestionsProps {
@@ -38,6 +34,13 @@ export interface AccountReviewPanelProps extends SharedAccountSuggestionsProps {
   readonly defaultAccountName: string | null;
   readonly isWhySheetOpen: boolean;
   readonly onFilterChange: (filter: ReviewFilter) => void;
+  readonly onAccountNeededPress: () => void;
+  readonly accountNeededCount: number;
+  readonly accountNeededActive: boolean;
+  readonly temporaryScopeActive: boolean;
+  readonly linkedGroupName: string | null;
+  readonly temporaryRowCount: number;
+  readonly onShowAll: () => void;
   readonly onSelectReady: () => void;
   readonly onClearSelection: () => void;
   readonly onDefaultWhyPress: () => void;
@@ -63,12 +66,12 @@ const approvedCopy = {
 } as const;
 
 interface FilterButtonProps {
-  readonly value: ReviewFilter;
+  readonly value: ReviewVisibleTab;
   readonly label: string;
   readonly count: number;
   readonly active: boolean;
   readonly disabled: boolean;
-  readonly onChange: (filter: ReviewFilter) => void;
+  readonly onChange: (filter: ReviewVisibleTab) => void;
   readonly language: "en" | "ar";
 }
 
@@ -90,7 +93,7 @@ function FilterButton(props: FilterButtonProps): React.JSX.Element {
       onPress={() => props.onChange(props.value)}
       activeOpacity={0.8}
       className={
-        "min-h-12 min-w-0 flex-1 items-center justify-center rounded-lg px-1.5 py-2 " +
+        "min-h-11 min-w-11 flex-grow shrink-0 items-center justify-center rounded-lg px-3 py-2 " +
         (props.active ? "bg-gold-400 dark:bg-gold-400" : "bg-transparent")
       }
     >
@@ -107,14 +110,18 @@ function FilterButton(props: FilterButtonProps): React.JSX.Element {
 interface FilterBarProps {
   readonly filter: ReviewFilter;
   readonly summary: SharedReviewSummaryView;
+  readonly accountNeededActive: boolean;
+  readonly accountNeededCount: number;
+  readonly temporaryScopeActive: boolean;
   readonly isBusy: boolean;
+  readonly onAccountNeededPress: () => void;
   readonly onFilterChange: (filter: ReviewFilter) => void;
 }
 
 function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const { language } = useLocale();
-  const labels: Record<ReviewFilter, string> = {
+  const labels: Record<ReviewVisibleTab, string> = {
     all: t("review_mode_all", {
       defaultValue: language === "ar" ? "الكل" : "All",
     }),
@@ -124,34 +131,57 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
     selected: t("account_review_filter_selected", {
       defaultValue: approvedCopy[language].selected,
     }),
+    account_needed: t("account_review_issue_account_needed"),
   };
-  const counts: Record<ReviewFilter, number> = {
+  const counts: Record<ReviewVisibleTab, number> = {
     all: props.summary.totalCount,
     needs_review: props.summary.distinctNeedsReviewCount,
     selected: props.summary.selectedCount,
+    account_needed: props.accountNeededCount,
   };
-  const filters: readonly ReviewFilter[] = ["all", "needs_review", "selected"];
+  const filters: readonly ReviewVisibleTab[] = [
+    "all",
+    "needs_review",
+    "account_needed",
+    "selected",
+  ];
   return (
-    <View
-      testID="account-review-filter-bar"
-      className={
-        "w-full self-center gap-1 rounded-xl border border-border bg-surface p-1 dark:border-border-dark dark:bg-surface-dark " +
-        (language === "ar" ? "flex-row-reverse" : "flex-row")
-      }
+    <ScrollView
+      testID="account-review-filter-scroll"
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ flexGrow: 1 }}
+      className="w-full self-center"
     >
-      {filters.map((value) => (
-        <FilterButton
-          key={value}
-          value={value}
-          label={labels[value]}
-          count={counts[value]}
-          active={props.filter === value}
-          language={language}
-          disabled={props.isBusy}
-          onChange={props.onFilterChange}
-        />
-      ))}
-    </View>
+      <View
+        testID="account-review-filter-bar"
+        className={
+          "min-w-full flex-grow shrink-0 items-center gap-1 rounded-xl border border-border bg-surface p-1 dark:border-border-dark dark:bg-surface-dark " +
+          (language === "ar" ? "flex-row-reverse" : "flex-row")
+        }
+      >
+        {filters.map((value) => (
+          <FilterButton
+            key={value}
+            value={value}
+            label={labels[value]}
+            count={counts[value]}
+            active={
+              value === "account_needed"
+                ? props.accountNeededActive
+                : !props.temporaryScopeActive && props.filter === value
+            }
+            language={language}
+            disabled={props.isBusy}
+            onChange={(tab) => {
+              if (tab === "account_needed") props.onAccountNeededPress();
+              else props.onFilterChange(tab);
+            }}
+          />
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -209,20 +239,14 @@ function ReviewSelectionToolbar(
 ): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const { language } = useLocale();
-  const { width, fontScale } = useWindowDimensions();
-  const stacked = shouldUseCompactLayout(width, fontScale);
   const offerClear =
     props.readyVisibleRowIds.length === 0 && props.selectedVisibleCount > 0;
   return (
     <View
       testID="account-review-selection-toolbar"
       className={
-        "w-full self-center items-center justify-between gap-2 " +
-        (stacked
-          ? "flex-col"
-          : language === "ar"
-            ? "flex-row-reverse"
-            : "flex-row")
+        "w-full self-center flex-wrap items-center justify-between gap-2 " +
+        (language === "ar" ? "flex-row-reverse" : "flex-row")
       }
     >
       <Text
@@ -329,7 +353,6 @@ interface DefaultDisclosureProps {
   readonly name: string | null;
   readonly count: number;
   readonly isWhySheetOpen: boolean;
-  readonly isAllGroupsSheetOpen: boolean;
   readonly onDefaultWhyPress: () => void;
   readonly onCloseWhy: () => void;
 }
@@ -348,7 +371,7 @@ function DefaultDisclosure(
         />
       ) : null}
       <DefaultAccountWhySheet
-        visible={props.isWhySheetOpen && !props.isAllGroupsSheetOpen}
+        visible={props.isWhySheetOpen}
         defaultAccountName={props.name}
         assignmentCount={props.count}
         onClose={props.onCloseWhy}
@@ -363,15 +386,16 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
       <SharedAccountSuggestions
         groups={props.groups}
         summary={props.summary}
-        isAllGroupsSheetOpen={props.isAllGroupsSheetOpen}
+        accountNeededCount={props.accountNeededCount}
         isBusy={props.isBusy}
         onConfirm={props.onConfirm}
         onEdit={props.onEdit}
         onReplace={props.onReplace}
         onRemove={props.onRemove}
         onUndo={props.onUndo}
-        onViewAll={props.onViewAll}
-        onCloseAllGroups={props.onCloseAllGroups}
+        onViewLinked={props.onViewLinked}
+        onDiscardRemoved={props.onDiscardRemoved}
+        revealGroupsKey={props.revealGroupsKey}
         defaultAccountName={props.defaultAccountName}
         onDefaultWhyPress={props.onDefaultWhyPress}
         onIssuePress={props.onIssuePress}
@@ -383,7 +407,6 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
         name={props.defaultAccountName}
         count={props.summary.defaultAssignmentCount}
         isWhySheetOpen={props.isWhySheetOpen}
-        isAllGroupsSheetOpen={props.isAllGroupsSheetOpen}
         onDefaultWhyPress={props.onDefaultWhyPress}
         onCloseWhy={props.onCloseWhy}
       />
@@ -398,24 +421,49 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
 export function AccountReviewPanel(
   props: AccountReviewPanelProps
 ): React.JSX.Element {
+  const { t } = useTranslation("transactions");
   return (
     <View testID="account-review-panel" className="w-full gap-3 px-5">
       <ReviewDetails {...props} />
       <ReviewFilterBar
         filter={props.filter}
         summary={props.summary}
+        accountNeededActive={props.accountNeededActive}
+        accountNeededCount={props.accountNeededCount}
+        temporaryScopeActive={props.temporaryScopeActive}
         isBusy={props.isBusy}
+        onAccountNeededPress={props.onAccountNeededPress}
         onFilterChange={props.onFilterChange}
       />
-      <ReviewSelectionToolbar
-        visibleRowCount={props.visibleRowIds.length}
-        selectedVisibleCount={props.selectedVisibleCount}
-        readyVisibleRowIds={props.readyVisibleRowIds}
-        isBusy={props.isBusy}
-        onSelectReady={props.onSelectReady}
-        onClearSelection={props.onClearSelection}
-      />
-      {props.filter !== "all" && props.visibleRowIds.length === 0 ? (
+      {props.linkedGroupName !== null ? (
+        <AccountNeededTemporaryHeader
+          count={props.temporaryRowCount}
+          linkedGroupName={props.linkedGroupName}
+          disabled={props.isBusy}
+          onShowAll={props.onShowAll}
+        />
+      ) : null}
+      {!props.temporaryScopeActive ? (
+        <ReviewSelectionToolbar
+          visibleRowCount={props.visibleRowIds.length}
+          selectedVisibleCount={props.selectedVisibleCount}
+          readyVisibleRowIds={props.readyVisibleRowIds}
+          isBusy={props.isBusy}
+          onSelectReady={props.onSelectReady}
+          onClearSelection={props.onClearSelection}
+        />
+      ) : null}
+      {props.accountNeededActive && props.accountNeededCount === 0 ? (
+        <Text
+          testID="account-review-account-needed-empty"
+          className="text-sm text-text-secondary dark:text-text-secondary-dark"
+        >
+          {t("compact_review_account_needed_empty")}
+        </Text>
+      ) : null}
+      {!props.temporaryScopeActive &&
+      props.filter !== "all" &&
+      props.visibleRowIds.length === 0 ? (
         <ReviewFilterEmpty
           filter={props.filter}
           isBusy={props.isBusy}

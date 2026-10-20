@@ -20,6 +20,9 @@ import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { TextField } from "@/components/ui/TextField";
+import { DropdownSelectedOptionBackground } from "@/components/ui/Dropdown";
+import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
+import { ReviewCurrencyDropdown } from "./ReviewCurrencyDropdown";
 import {
   displayIdentity,
   ReviewActionButton,
@@ -30,7 +33,20 @@ import {
 } from "./shared-account-presentation";
 import { useTranslation } from "react-i18next";
 import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
+import type { AccountReviewCommand } from "@monyvi/logic";
+import { ACCOUNT_REVIEW_CURRENCIES } from "../../../../packages/logic/src/account-review/generated-vocabulary";
+import { currencyCode } from "../../../../packages/logic/src/account-review/schema-primitives";
+import { choiceCopy } from "./account-review-choice-presentation";
 import { ReviewInlineNotice } from "./ReviewInlineNotice";
+
+type GroupDraftCurrency = NonNullable<
+  Extract<AccountReviewCommand, { kind: "edit_group" }>["identity"]["currency"]
+>;
+
+function parseGroupCurrency(value: string): GroupDraftCurrency | null {
+  const checked = currencyCode.safeParse(value);
+  return checked.success ? checked.data : null;
+}
 
 export interface EditSuggestedAccountSheetProps {
   readonly visible: boolean;
@@ -41,6 +57,7 @@ export interface EditSuggestedAccountSheetProps {
     readonly id: string;
     readonly label: string;
   }>;
+  /** Existing controller prop: the canonical current group currency. */
   readonly lockedCurrencyLabel: string;
   readonly identitySummary: string;
   readonly linkedCount: number;
@@ -51,6 +68,8 @@ export interface EditSuggestedAccountSheetProps {
   readonly onSubmit: (value: {
     readonly name: string;
     readonly typeOptionId: string;
+    /** Optional for legacy callers; this editor always submits it. */
+    readonly currency?: GroupDraftCurrency;
   }) => void;
   readonly onReplace: () => void;
   readonly onCancel: () => void;
@@ -153,7 +172,7 @@ function EditNameField({
       required
       variant="outlined"
       containerClassName="mb-0"
-      className="min-h-12"
+      className="min-h-12 bg-surface dark:bg-surface-dark"
       style={{ writingDirection: direction }}
     />
   );
@@ -222,17 +241,15 @@ function EditTypePicker(props: TypePickerProps): React.JSX.Element {
                 }}
                 className={
                   (rtl ? "flex-row-reverse " : "flex-row ") +
-                  "min-h-11 items-center justify-between rounded-md border px-3 " +
-                  (isSelected
-                    ? "border-nileGreen-500 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-nileGreen-900"
-                    : "border-transparent")
+                  "relative min-h-11 items-center justify-between overflow-hidden rounded-md border border-transparent px-3"
                 }
               >
+                <DropdownSelectedOptionBackground selected={isSelected} />
                 <Text
                   className={
                     "min-w-0 flex-1 text-base leading-6 " +
                     (isSelected
-                      ? "font-semibold text-nileGreen-700 dark:text-nileGreen-300"
+                      ? "font-semibold text-white dark:text-white"
                       : "text-text-primary dark:text-text-primary-dark")
                   }
                 >
@@ -243,7 +260,7 @@ function EditTypePicker(props: TypePickerProps): React.JSX.Element {
                     testID="account-review-group-edit-selected-type-check"
                     name="checkmark"
                     size={20}
-                    color={palette.nileGreen[500]}
+                    color="white"
                     accessibilityElementsHidden
                     importantForAccessibility="no"
                   />
@@ -256,45 +273,42 @@ function EditTypePicker(props: TypePickerProps): React.JSX.Element {
     </View>
   );
 }
-function LockedCurrencyField({
-  label,
+/** Inside the existing edit sheet: one draft field, no second modal/command. */
+/** Native dropdown trigger; the shared CurrencyPicker replaces this form modal. */
+function EditCurrencyField({
+  value,
+  onOpen,
   language,
+  disabled,
 }: {
-  readonly label: string;
+  readonly value: GroupDraftCurrency | null;
+  readonly onOpen: () => void;
   readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
 }): React.JSX.Element {
-  const rtl = language === "ar";
   return (
     <View className="gap-2">
-      <Text className="text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark">
-        {reviewCopy("account_review_group_locked_currency", language)}
-      </Text>
-      <View
-        testID="account-review-group-locked-currency"
-        accessible
-        accessibilityRole="text"
-        accessibilityState={{ disabled: true }}
-        accessibilityLabel={
-          reviewCopy("account_review_group_locked_currency", language) +
-          " " +
-          label
-        }
+      <ReviewCurrencyDropdown
+        testID="account-review-group-edit-currency"
+        label={reviewCopy("account_review_group_locked_currency", language)}
+        value={value}
+        placeholder={choiceCopy(
+          "account_review_choice_choose_currency",
+          language
+        )}
+        disabled={disabled}
+        language={language}
+        onPress={onOpen}
+      />
+      <Text
+        testID="account-review-group-currency-no-conversion"
         className={
-          (rtl ? "flex-row-reverse " : "flex-row ") +
-          "min-h-12 items-center justify-between rounded-lg border border-border bg-slate-100 px-3 dark:border-border-dark dark:bg-slate-800"
+          "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+          (language === "ar" ? "text-right" : "text-left")
         }
       >
-        <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
-          {displayIdentity(label, language)}
-        </Text>
-        <Ionicons
-          name="lock-closed-outline"
-          size={20}
-          color={palette.slate[500]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-      </View>
+        {choiceCopy("account_review_choice_no_conversion", language)}
+      </Text>
     </View>
   );
 }
@@ -398,6 +412,8 @@ interface EditSheetSurfaceProps {
   readonly setName: (name: string) => void;
   readonly typeOptionId: string;
   readonly setTypeOptionId: (id: string) => void;
+  readonly currency: GroupDraftCurrency | null;
+  readonly onOpenCurrencyPicker: () => void;
   readonly canSubmit: boolean;
   readonly language: ReviewDisplayLanguage;
   readonly bottomInset: number;
@@ -560,9 +576,11 @@ function EditSheetSurface(p: EditSheetSurfaceProps): React.JSX.Element {
             language={p.language}
             disabled={source.isBusy}
           />
-          <LockedCurrencyField
-            label={source.lockedCurrencyLabel}
+          <EditCurrencyField
+            value={p.currency}
+            onOpen={p.onOpenCurrencyPicker}
             language={p.language}
+            disabled={source.isBusy}
           />
           <ReviewActionButton
             testID="account-review-group-replace"
@@ -587,25 +605,37 @@ export function EditSuggestedAccountSheet(
   const bottomInset = useModalBottomInset();
   const [name, setName] = useState(props.groupName);
   const [typeOptionId, setTypeOptionId] = useState(props.currentTypeOptionId);
+  const [currency, setCurrency] = useState<GroupDraftCurrency | null>(() =>
+    parseGroupCurrency(props.lockedCurrencyLabel)
+  );
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [keyboardAreaHeight, setKeyboardAreaHeight] = useState<number | null>(
     null
   );
   useEffect(() => {
     setName(props.groupName);
     setTypeOptionId(props.currentTypeOptionId);
+    setCurrency(parseGroupCurrency(props.lockedCurrencyLabel));
+    setCurrencyPickerOpen(false);
   }, [
     props.groupId,
     props.groupName,
     props.currentTypeOptionId,
+    props.lockedCurrencyLabel,
     props.visible,
   ]);
   const allowed = props.allowedTypeOptions.some(
     (option) => option.id === typeOptionId
   );
   const canSubmit =
-    props.canSubmit && !props.isBusy && allowed && name.trim().length > 0;
+    props.canSubmit &&
+    !props.isBusy &&
+    allowed &&
+    currency !== null &&
+    name.trim().length > 0;
   const submit = (): void => {
-    if (canSubmit) props.onSubmit({ name, typeOptionId });
+    if (canSubmit && currency !== null)
+      props.onSubmit({ name, typeOptionId, currency });
   };
   // Cap at 80% of the original usable viewport. Android KAV(height) already
   // constrains the sheet to the keyboard-adjusted area; multiplying that
@@ -617,38 +647,53 @@ export function EditSuggestedAccountSheet(
   );
   if (!props.visible) return null;
   return (
-    <Modal
-      visible
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={props.onCancel}
-    >
-      <KeyboardAvoidingView
-        testID="account-review-group-edit-keyboard-area"
-        className="flex-1 justify-end"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        onLayout={(event) => {
-          const measured = Math.round(event.nativeEvent.layout.height);
-          setKeyboardAreaHeight((current) =>
-            current === measured ? current : measured
-          );
-        }}
+    <>
+      <Modal
+        visible={!currencyPickerOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={props.onCancel}
       >
-        <ReviewPointerBackdrop onPress={props.onCancel} />
-        <EditSheetSurface
-          source={props}
-          name={name}
-          setName={setName}
-          typeOptionId={typeOptionId}
-          setTypeOptionId={setTypeOptionId}
-          canSubmit={canSubmit}
-          language={language}
-          submit={submit}
-          bottomInset={bottomInset}
-          maxHeight={maxSheetHeight}
-        />
-      </KeyboardAvoidingView>
-    </Modal>
+        <KeyboardAvoidingView
+          testID="account-review-group-edit-keyboard-area"
+          className="flex-1 justify-end"
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          onLayout={(event) => {
+            const measured = Math.round(event.nativeEvent.layout.height);
+            setKeyboardAreaHeight((current) =>
+              current === measured ? current : measured
+            );
+          }}
+        >
+          <ReviewPointerBackdrop onPress={props.onCancel} />
+          <EditSheetSurface
+            source={props}
+            name={name}
+            setName={setName}
+            typeOptionId={typeOptionId}
+            setTypeOptionId={setTypeOptionId}
+            currency={currency}
+            onOpenCurrencyPicker={() => {
+              if (!props.isBusy) setCurrencyPickerOpen(true);
+            }}
+            canSubmit={canSubmit}
+            language={language}
+            submit={submit}
+            bottomInset={bottomInset}
+            maxHeight={maxSheetHeight}
+          />
+        </KeyboardAvoidingView>
+      </Modal>
+      <CurrencyPicker
+        testID="account-review-group-edit-currency-picker"
+        visible={currencyPickerOpen}
+        selectedCurrency={currency}
+        contextSubtitle={props.groupName}
+        allowedCurrencies={ACCOUNT_REVIEW_CURRENCIES}
+        onSelect={setCurrency}
+        onClose={() => setCurrencyPickerOpen(false)}
+      />
+    </>
   );
 }

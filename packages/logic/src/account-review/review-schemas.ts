@@ -644,6 +644,9 @@ export const accountReviewCommandSchema = z
           .object({
             name: nonblankText,
             type: accountType,
+            // Local user-confirmed group currency, never a financial conversion.
+            // Omitted by existing callers: the current group currency wins.
+            currency: currencyCode.optional(),
             institutionId: z.string().nullable(),
             providerDisplayName: z.string().nullable(),
             cardLast4: cardSuffix.nullable(),

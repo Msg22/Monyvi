@@ -29,6 +29,7 @@ import {
   View,
 } from "react-native";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { DropdownSelectedOptionBackground } from "@/components/ui/Dropdown";
 
 interface CurrencyPickerProps {
   readonly visible: boolean;
@@ -62,14 +63,16 @@ function CurrencyRow({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="px-5 py-3.5"
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      className="relative overflow-hidden px-5 py-3.5"
       activeOpacity={0.7}
     >
+      <DropdownSelectedOptionBackground selected={isSelected} />
       <View
         testID={isSelected ? `currency-row-highlight-${item.code}` : undefined}
-        className={`flex-row items-center justify-between ${
-          isSelected ? "bg-nileGreen-50 dark:bg-nileGreen-900/20" : ""
-        }`}
+        className="flex-row items-center justify-between"
       >
         <View className="flex-row items-center gap-3 flex-1">
           <Text className="text-2xl">{item.flag}</Text>
@@ -80,7 +83,11 @@ function CurrencyRow({
             >
               <Text
                 testID={`currency-code-${item.code}`}
-                className="text-base font-semibold text-slate-800 dark:text-white"
+                className={
+                  isSelected
+                    ? "text-base font-semibold text-white dark:text-white"
+                    : "text-base font-semibold text-slate-800 dark:text-white"
+                }
               >
                 {item.code}
               </Text>
@@ -89,15 +96,27 @@ function CurrencyRow({
                   testID={`currency-selected-checkmark-${item.code}`}
                   name="checkmark-circle"
                   size={17}
-                  color={palette.nileGreen[500]}
+                  color="white"
                 />
               ) : null}
             </View>
-            <Text className="text-xs text-slate-500 dark:text-slate-400">
+            <Text
+              className={
+                isSelected
+                  ? "text-xs text-white dark:text-white"
+                  : "text-xs text-slate-500 dark:text-slate-400"
+              }
+            >
               {getCurrencyName(item.code)}
             </Text>
           </View>
-          <Text className="text-sm text-slate-400 dark:text-slate-500 me-2">
+          <Text
+            className={
+              isSelected
+                ? "me-2 text-sm text-white dark:text-white"
+                : "me-2 text-sm text-slate-400 dark:text-slate-500"
+            }
+          >
             {item.symbol}
           </Text>
         </View>

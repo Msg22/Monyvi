@@ -2,7 +2,7 @@
  * #395 T030 — React lifecycle facade for the canonical owned review services.
  * Business commands, SMS persistence and account snapshots stay in services.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AccountReviewRow,
   AccountReviewCommand,
@@ -28,6 +28,8 @@ export interface UseAccountReviewResult extends AccountReviewFacadeView {
   ) => Promise<AccountReviewCommandResult>;
   readonly reload: () => void;
   readonly undoRemoval: () => Promise<AccountReviewCommandResult>;
+  /** Current-review visual discard; revokes the matching real Undo lease. */
+  readonly discardRemovedSuggestion: (groupId: string) => Promise<void>;
 }
 
 /** Stable discriminated props: caller may construct a new object each render. */
@@ -58,6 +60,10 @@ export function useAccountReview(
   const facade = useMemo(() => new AccountReviewFacadeController(setView), []);
   const proposedInput = useStableReviewInput(input);
   const stableInput = facade.stableVoiceInput(proposedInput);
+  // On a dependency change, configure() cancels the prior owner/scope while
+  // retaining only SAME-review intent. A preceding cleanup would erase it.
+  const latestInputRef = useRef(stableInput);
+  latestInputRef.current = stableInput;
   const generation = facade.currentGeneration();
   const scopedView = facade.scopedView(stableInput, view);
 
@@ -68,7 +74,11 @@ export function useAccountReview(
 
   useEffect(() => {
     facade.configure(stableInput);
-    return () => facade.cancel();
+    return () => {
+      // A new input is handled by configure() with the old scope still
+      // available for exact-match intent transfer. Unmount still cancels.
+      if (latestInputRef.current === stableInput) facade.cancel();
+    };
   }, [facade, stableInput]);
 
   const dispatch = useCallback(
@@ -86,6 +96,28 @@ export function useAccountReview(
     () => facade.undoRemoval(stableInput, generation, expectedUndoToken),
     [facade, stableInput, generation, expectedUndoToken]
   );
+  const expectedReviewRevision = scopedView.session?.revision ?? null;
+  const expectedOperationGeneration =
+    scopedView.session?.operationGeneration ?? null;
+  const discardRemovedSuggestion = useCallback(
+    (groupId: string) =>
+      facade.discardRemovedSuggestion(
+        groupId,
+        stableInput,
+        generation,
+        expectedReviewRevision,
+        expectedOperationGeneration,
+        expectedUndoToken
+      ),
+    [
+      facade,
+      stableInput,
+      generation,
+      expectedReviewRevision,
+      expectedOperationGeneration,
+      expectedUndoToken,
+    ]
+  );
   const getAccountCandidates = useCallback(
     (rowId: AccountReviewRow["rowId"], role: "source" | "destination") =>
       facade.getChoiceCandidates(rowId, role, stableInput, generation),
@@ -96,6 +128,7 @@ export function useAccountReview(
     dispatch,
     reload,
     undoRemoval,
+    discardRemovedSuggestion,
     getAccountCandidates,
   };
 }

@@ -10,12 +10,14 @@ import {
   type AccountReviewSession,
 } from "./review-schemas";
 import { assertOwnedResolutionContext } from "./resolution-candidates";
+import type { AccountReviewOwnedContext } from "./normalization-types";
 import { reduceGroupCommand } from "./reducer-groups";
 import { reduceChoiceCommand } from "./reducer-choices";
 import {
   reduceSelectRow,
   reduceDeselectRow,
   reduceSelectBatch,
+  autoSelectReadyTransition,
 } from "./reducer-selection";
 import { reduceUndoRemoval } from "./reducer-undo";
 import { reduceTransactionEdit } from "./reducer-transaction-edit";
@@ -98,6 +100,63 @@ function validateCommandScope(
   return null;
 }
 
+/** Bootstrap uses the identical guarded readiness proof without a new command. */
+export function autoSelectReadyReviewSession(
+  state: AccountReviewSession,
+  context: AccountReviewOwnedContext,
+  manuallyDeselected: ReadonlySet<string>
+): AccountReviewCommandResult {
+  accountReviewSessionSchema.parse(state);
+  assertOwnedResolutionContext(state, context);
+  const transition =
+    state.saveIntent === null
+      ? autoSelectReadyTransition(state, context, manuallyDeselected)
+      : null;
+  return transition
+    ? acceptReviewTransition(state, transition)
+    : {
+        state,
+        reasonCodes: [],
+        effect: "none",
+        undoToken: null,
+        affectedRowIds: [],
+        affectedGroupIds: [],
+      };
+}
+
+/** Merge new ready selections into the SAME accepted business generation. */
+function includeNewReadySelections(
+  prior: AccountReviewSession,
+  transition: ReviewTransition,
+  context: AccountReviewOwnedContext,
+  manuallyDeselected: ReadonlySet<string>
+): ReviewTransition {
+  const proposed = accountReviewSessionSchema.parse({
+    ...prior,
+    rows: transition.rows,
+    groups: transition.groups,
+    removedEvidenceKeys:
+      transition.removedEvidenceKeys ?? prior.removedEvidenceKeys,
+  });
+  const automatic = autoSelectReadyTransition(
+    proposed,
+    context,
+    manuallyDeselected
+  );
+  return automatic
+    ? {
+        ...transition,
+        rows: automatic.rows,
+        affectedRowIds: [
+          ...new Set([
+            ...transition.affectedRowIds,
+            ...automatic.affectedRowIds,
+          ]),
+        ],
+      }
+    : transition;
+}
+
 /** No successful command can bypass final canonical reciprocal-group validation. */
 export function reduceAccountReviewCommand(
   input: ReduceAccountReviewCommandInput
@@ -141,12 +200,32 @@ export function reduceAccountReviewCommand(
         affectedGroupIds: [],
       };
     }
-    return outcome.transition
-      ? acceptReviewTransition(input.state, outcome.transition)
-      : rejectReviewCommand(
-          input.state,
-          outcome.reason ?? "account_group_snapshot_conflict"
-        );
+    if (!outcome.transition) {
+      return rejectReviewCommand(
+        input.state,
+        outcome.reason ?? "account_group_snapshot_conflict"
+      );
+    }
+    // Manual bulk selection/deselection and removal/Undo keep their exact
+    // established commands. An automatic pass never confirms a pending group.
+    const autoAllowed =
+      input.autoSelectReady === true &&
+      command.kind !== "set_row_selected" &&
+      command.kind !== "select_ready" &&
+      command.kind !== "clear_selection" &&
+      command.kind !== "remove_group" &&
+      command.kind !== "undo_removal";
+    return acceptReviewTransition(
+      input.state,
+      autoAllowed
+        ? includeNewReadySelections(
+            input.state,
+            outcome.transition,
+            input.accountSnapshots,
+            input.manuallyDeselectedRowIds ?? new Set<string>()
+          )
+        : outcome.transition
+    );
   } catch (error) {
     if (isRevisionOverflow(error)) {
       return rejectReviewCommand(input.state, "review_revision_stale");

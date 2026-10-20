@@ -1,4 +1,6 @@
 /** Pure T027 group transitions: preserve original evidenceKey/groupId on edit. */
+import Decimal from "decimal.js";
+import { getCurrencyPrecision } from "../utils/currency";
 import { canonicalUuid } from "./schema-primitives";
 import { normalizeGroundedIdentity } from "./identity";
 import { resolveAccountReviewSession } from "./resolution";
@@ -78,6 +80,42 @@ function identityForEditedType(
       };
 }
 
+/** A missing optional currency preserves all legacy edit_group callers. */
+function editedGroupCurrency(
+  group: AccountReviewGroup,
+  command: GroupCommand
+): AccountReviewGroup["currency"] {
+  return command.kind === "edit_group"
+    ? (command.identity.currency ?? group.currency)
+    : group.currency;
+}
+
+/** Only user-facing currency metadata changes. No amount or evidence rewrite. */
+function withUserConfirmedGroupCurrency(
+  row: AccountReviewRow,
+  currency: AccountReviewGroup["currency"]
+): AccountReviewRow {
+  const reviewCurrency = {
+    state: "known" as const,
+    code: currency,
+    origin: "user" as const,
+  };
+  if (row.source === "VOICE") {
+    return {
+      ...row,
+      currency: reviewCurrency,
+      transaction: { ...row.transaction, currency },
+      hasUserCurrencyOverride: true,
+    };
+  }
+  return {
+    ...row,
+    currency: reviewCurrency,
+    transaction: { ...row.transaction, currency },
+    hasUserCurrencyOverride: true,
+  };
+}
+
 /** Never regenerate identity hashes on edits to a persisted temporary group. */
 function confirmedGroup(
   group: AccountReviewGroup,
@@ -92,9 +130,14 @@ function confirmedGroup(
       confirmedIdentityRevision: revision,
     };
   }
+  const { currency, ...identity } = identityForEditedType(
+    group,
+    command.identity
+  );
   return {
     ...group,
-    ...identityForEditedType(group, command.identity),
+    ...identity,
+    currency: currency ?? group.currency,
     revision,
     status: "confirmed",
     confirmedIdentityRevision: revision,
@@ -117,6 +160,7 @@ function isNicknameOnlyReconfirmation(
   const identity = command.identity;
   return (
     identity.type === group.type &&
+    (identity.currency ?? group.currency) === group.currency &&
     identity.institutionId === group.institutionId &&
     identity.providerDisplayName === group.providerDisplayName &&
     identity.cardLast4 === group.cardLast4 &&
@@ -166,7 +210,8 @@ function confirmGroupRows(
   rows: readonly AccountReviewRow[],
   group: AccountReviewGroup,
   revision: string,
-  retainValidSelections: boolean
+  retainValidSelections: boolean,
+  confirmedCurrency: AccountReviewGroup["currency"]
 ): AccountReviewRow[] {
   const members = new Set(group.linkedRowIds);
   return rows.map((row): AccountReviewRow => {
@@ -196,6 +241,15 @@ function confirmGroupRows(
           row.toAssignment?.state === "existing" ||
           (row.toAssignment?.state === "suggested" &&
             row.toAssignment.confirmation === "confirmed"));
+    const currencyChanged = confirmedCurrency !== group.currency;
+    const currencyRow = currencyChanged
+      ? withUserConfirmedGroupCurrency(row, confirmedCurrency)
+      : row;
+    const reasons = currencyChanged
+      ? row.reviewReasons.filter(
+          (reason) => reason !== "currency_confirmation_needed"
+        )
+      : row.reviewReasons;
     const next = {
       state: "suggested" as const,
       accountId: null,
@@ -204,18 +258,18 @@ function confirmGroupRows(
       confirmation: "confirmed" as const,
     };
     return revisedRow({
-      ...row,
+      ...currencyRow,
       selected: retainSelection,
       ...(destination
         ? {
             toAssignment: next,
-            reviewReasons: row.reviewReasons.filter(
+            reviewReasons: reasons.filter(
               (reason) => reason !== "cash_transfer_review"
             ),
           }
         : {
             assignment: next,
-            reviewReasons: withoutAccountBlocker(row.reviewReasons),
+            reviewReasons: withoutAccountBlocker(reasons),
           }),
     });
   });
@@ -234,7 +288,7 @@ function editedNameConflicts(
     (group) =>
       group.groupId !== edited.groupId &&
       group.status !== "removed" &&
-      group.currency === edited.currency &&
+      group.currency === editedGroupCurrency(edited, command) &&
       group.institutionId === identity.institutionId &&
       normalizeGroundedIdentity(group.name) === wanted
   );
@@ -264,6 +318,31 @@ function confirmOrEdit(
   if (command.kind === "confirm_group" && group.status === "confirmed") {
     return blocked("review_revision_stale");
   }
+  const targetCurrency = editedGroupCurrency(group, command);
+  if (targetCurrency !== group.currency) {
+    const linked = new Set(group.linkedRowIds);
+    for (const row of state.rows) {
+      if (!linked.has(row.rowId)) continue;
+      // A currency edit changes denomination metadata, never numeric value.
+      // Reject a precision mismatch rather than rounding or saving an
+      // amount the new currency cannot represent.
+      if (
+        new Decimal(row.amountDecimal).decimalPlaces() >
+        getCurrencyPrecision(targetCurrency)
+      )
+        return blocked("ambiguous_amount");
+      // Historical parsed account proposals remain unmodified. The reviewed
+      // group and row currency, not that advisory, governs creation at Save.
+      if (row.source === "SMS" && row.transaction.isAtmWithdrawal === true) {
+        const isDestination = group.type === "CASH";
+        const opposite = isDestination ? row.assignment : row.toAssignment;
+        // No row may become a cross-currency ATM transfer through a group
+        // identity edit. An unresolved opposite endpoint remains reviewable.
+        if (opposite && opposite.state !== "unresolved")
+          return blocked("cash_transfer_review");
+      }
+    }
+  }
   const retainValidSelections = isNicknameOnlyReconfirmation(group, command);
   if (
     retainValidSelections &&
@@ -280,7 +359,8 @@ function confirmOrEdit(
       state.rows,
       group,
       updated.revision,
-      retainValidSelections
+      retainValidSelections,
+      updated.currency
     ),
     affectedGroupIds: [group.groupId],
     affectedRowIds: [...group.linkedRowIds],

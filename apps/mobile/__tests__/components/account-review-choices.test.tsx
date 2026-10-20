@@ -11,7 +11,12 @@ import { KeyboardAvoidingView, Modal, ScrollView } from "react-native";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
-import { AccountChoiceSheet } from "@/components/transaction-review/AccountChoiceSheet";
+import {
+  AccountChoiceSheet,
+  AccountChoiceLinkedRowsContext,
+} from "@/components/transaction-review/AccountChoiceSheet";
+import enTransactions from "@/locales/en/transactions.json";
+import arTransactions from "@/locales/ar/transactions.json";
 import { CurrencyConfirmationSheet } from "@/components/transaction-review/CurrencyConfirmationSheet";
 import {
   GROUP_SCOPE_EN,
@@ -97,9 +102,12 @@ beforeAll(async (): Promise<void> => {
   await i18next.init({
     lng: "en",
     fallbackLng: "en",
-    ns: ["common"],
+    ns: ["common", "transactions"],
     defaultNS: "common",
-    resources: { en: { common: enCommon }, ar: { common: arCommon } },
+    resources: {
+      en: { common: enCommon, transactions: enTransactions },
+      ar: { common: arCommon, transactions: arTransactions },
+    },
     interpolation: { escapeValue: false },
   });
 });
@@ -237,7 +245,13 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
     const onClose = jest.fn();
     const onUseSelected = jest.fn();
     renderAccounts(makeAccountChoiceProps({ onClose, onUseSelected }));
-    fireEvent(screen.UNSAFE_getByType(Modal), "requestClose");
+    const visibleModals = screen
+      .UNSAFE_getAllByType(Modal)
+      .filter((modal) => modal.props.visible === true);
+    expect(visibleModals).toHaveLength(1);
+    const modal = visibleModals[0];
+    if (!modal) throw new Error("Expected the single active account chooser");
+    fireEvent(modal, "requestClose");
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onUseSelected).not.toHaveBeenCalled();
   });
@@ -289,6 +303,37 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
     expect(groupUse).toHaveBeenCalledTimes(1);
     expect(rowUse).toHaveBeenCalledTimes(1);
     // Real row/group mutation scope is T034/T036/T039, not this callback.
+  });
+
+  it("group chooser discloses exact linked transaction names and amounts before Use", () => {
+    const onUseSelected = jest.fn();
+    const option = getQnbCandidate(makeQnbChoiceCandidates(), "0007");
+    render(
+      <AccountChoiceLinkedRowsContext.Provider
+        value={[
+          { rowId: "row-1", title: "Game", amountLabel: "-50 EGP" },
+          { rowId: "row-3", title: "Groceries", amountLabel: "-180 EGP" },
+        ]}
+      >
+        <AccountChoiceSheet
+          {...makeGroupChoiceProps({
+            selectedCandidateId: option.id,
+            canUseSelection: true,
+            onUseSelected,
+          })}
+        />
+      </AccountChoiceLinkedRowsContext.Provider>
+    );
+    const linked = screen.getByTestId("account-review-account-linked-rows");
+    const rows = within(linked);
+    expect(rows.getByText("Game")).toBeTruthy();
+    expect(rows.getByText("-50 EGP")).toBeTruthy();
+    expect(rows.getByText("Groceries")).toBeTruthy();
+    expect(rows.getByText("-180 EGP")).toBeTruthy();
+    expect(linked).toHaveTextContent("Game-50 EGPGroceries-180 EGP");
+    expect(onUseSelected).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-account-use"));
+    expect(onUseSelected).toHaveBeenCalledTimes(1);
   });
 
   it("suppresses competing Use while the facade is busy even with a selected ID", () => {
@@ -617,7 +662,10 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
       })
     );
     expect(screen.queryByTestId("account-review-account-use")).toBeNull();
+    expect(screen.getByText("Create account")).toBeTruthy();
     fireEvent.press(screen.getByTestId("account-review-create-draft"));
+    expect(screen.getByText("New account")).toBeTruthy();
+    expect(screen.queryByText(/\bdraft\b/i)).toBeNull();
     expect(
       within(
         screen.getByTestId("account-review-manual-draft-currency")
@@ -673,8 +721,9 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
       onClose,
     });
     const finalAction = screen.getByTestId("account-review-account-use");
-    expect(finalAction.props.accessibilityLabel).toContain("USD");
-    expect(finalAction.props.accessibilityLabel).toContain("QNB");
+    expect(finalAction).toHaveProp("accessibilityRole", "button");
+    expect(finalAction).toHaveProp("accessibilityLabel", "Use account — USD");
+    expect(screen.getByText("QNB Everyday")).toBeTruthy();
     expect(
       screen.getByTestId("account-review-account-currency-no-conversion")
     ).toBeTruthy();
@@ -689,10 +738,12 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("unconfirmed currency draft opens existing picker and saves only one explicit EUR identity", () => {
+  it("new account uses the shared searchable picker with one visible modal and retains form state", () => {
     const onSubmit = jest.fn();
+    const onUseSelected = jest.fn();
     renderAccounts(
       makeManualDraftChoiceProps("BANK", onSubmit, {
+        onUseSelected,
         draftCreation: {
           lockedCurrencyLabel: "",
           initialCurrency: null,
@@ -714,18 +765,50 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
     expect(
       screen.getByTestId("account-review-manual-draft-submit")
     ).toBeDisabled();
-    fireEvent.press(screen.getByTestId("account-review-manual-draft-currency"));
+    const currency = screen.getByTestId("account-review-manual-draft-currency");
+    expect(currency).toHaveProp("accessibilityRole", "button");
+    expect(currency).toHaveProp(
+      "accessibilityLabel",
+      "Currency, Choose currency"
+    );
+    fireEvent.press(currency);
+    const picker = screen.getByTestId(
+      "account-review-manual-draft-currency-picker"
+    );
+    expect(picker).toHaveProp("visible", true);
     expect(
-      screen.queryByTestId("account-review-account-choice-sheet")
-    ).toBeNull();
+      screen
+        .UNSAFE_getAllByType(Modal)
+        .filter((modal) => modal.props.visible === true)
+    ).toHaveLength(1);
+    fireEvent.changeText(
+      screen.getByPlaceholderText("search_currency_name_code"),
+      "EUR"
+    );
     expect(screen.getByTestId("currency-code-row-EUR")).toBeTruthy();
-    fireEvent.press(screen.getByTestId("currency-code-row-EUR"));
+    expect(screen.queryByTestId("currency-code-row-USD")).toBeNull();
     expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("currency-code-row-EUR"));
     expect(
-      within(
-        screen.getByTestId("account-review-manual-draft-currency")
-      ).getByText("EUR", { exact: true })
-    ).toBeTruthy();
+      screen.getByTestId("account-review-manual-draft-currency")
+    ).toHaveProp("accessibilityLabel", "Currency, EUR");
+    expect(screen.getByTestId("account-review-manual-draft-name")).toHaveProp(
+      "value",
+      "Travel"
+    );
+    const typeDropdown = screen.getByTestId("account-review-manual-draft-type");
+    expect(typeDropdown).toHaveProp("accessibilityRole", "button");
+    expect(within(typeDropdown).getByText("Bank")).toBeTruthy();
+    expect(
+      screen
+        .UNSAFE_getAllByType(Modal)
+        .filter((modal) => modal.props.visible === true)
+    ).toHaveLength(1);
+    expect(
+      screen.queryByTestId("account-review-confirm-account-currency")
+    ).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onUseSelected).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("account-review-manual-draft-submit"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith({
@@ -733,5 +816,49 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
       type: "BANK",
       currency: "EUR",
     });
+    expect(onUseSelected).not.toHaveBeenCalled();
+  });
+
+  it("picker Back and form Cancel preserve the unsaved form until explicit dismissal", () => {
+    const onSubmit = jest.fn();
+    const onUseSelected = jest.fn();
+    renderAccounts(
+      makeManualDraftChoiceProps("BANK", onSubmit, { onUseSelected })
+    );
+    fireEvent.press(screen.getByTestId("account-review-create-draft"));
+    fireEvent.changeText(
+      screen.getByTestId("account-review-manual-draft-name"),
+      "New bank"
+    );
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-type"));
+    fireEvent.press(
+      screen.getByTestId("account-review-manual-draft-type-option")
+    );
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-currency"));
+    expect(
+      screen.getByTestId("account-review-manual-draft-currency-picker")
+    ).toHaveProp("visible", true);
+    fireEvent(
+      screen.getByTestId("account-review-manual-draft-currency-picker"),
+      "requestClose"
+    );
+    expect(screen.getByTestId("account-review-manual-draft-name")).toHaveProp(
+      "value",
+      "New bank"
+    );
+    const typeDropdown = screen.getByTestId("account-review-manual-draft-type");
+    expect(typeDropdown).toHaveProp("accessibilityRole", "button");
+    expect(within(typeDropdown).getByText("Bank")).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-manual-draft-currency")
+    ).toHaveProp("accessibilityLabel", "Currency, EGP");
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-manual-draft-cancel"));
+    expect(
+      screen.getByTestId("account-review-account-choice-sheet")
+    ).toBeTruthy();
+    expect(screen.queryByTestId("account-review-manual-draft-name")).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onUseSelected).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,28 @@
 # Team-Led Delivery Workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+**Global form/selector quality in UI dispatch and review (owner-approved
+2026-10-20):** Include shared-component reuse and the opened-current dropdown
+selection contract (filled Nile-green, readable WHITE text in light/dark, WHITE
+contrasting check/icon, accessible selected/checked state). Include Android/iOS
+focused-input keyboard reachability at compact available heights and large
+fonts: measured actual keyboard-adjusted viewport, safe areas and modal
+header/footer, scroll-to-focus, reachable submit/cancel. Ask for focused
+source/render coverage and keep native/manual keyboard, dark, font, RTL evidence
+as a distinct owner-executed gate or explicitly NOT RUN. Bespoke-selector
+adoption is a gradual separately owned audit; these existing rules do not add
+binding manifests, another approval ceremony, broad migration or mandatory TDD
+before code.
+
 Apply the
 [first-release scope filter](../../docs/development-workflow.md#first-release-scope-and-rare-cases)
 before turning a rare edge case or review suggestion into implementation work.

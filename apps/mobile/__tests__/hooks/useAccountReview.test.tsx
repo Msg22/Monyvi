@@ -4,15 +4,24 @@
  * Mock only the real bootstrap, command and owned-account read services.
  */
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import type { AccountReviewSession } from "../../../../packages/logic/src/account-review/review-schemas";
+import {
+  accountReviewCommandSchema,
+  type AccountReviewSession,
+} from "../../../../packages/logic/src/account-review/review-schemas";
+import { normalizeAccountReviewParserResult } from "../../../../packages/logic/src/account-review/normalization";
 import {
   reduceAccountReviewCommand,
+  autoSelectReadyReviewSession,
   type AccountReviewCommandResult,
 } from "../../../../packages/logic/src/account-review/reducer";
-import { makeOwnedContext } from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
+import {
+  makeOwnedContext,
+  makeTwoIdenticalVoiceInput,
+} from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
 import {
   createDeferred,
   makeAcceptedCommandResult,
+  makeReadyBootstrapReviewSession,
   makeCurrencyCommand,
   makeGroupCommand,
   makeSelectCommand,
@@ -21,13 +30,14 @@ import {
   makeUndoCommand,
   makeVoiceReviewInput,
   makeVoiceReviewSession,
+  publish,
+  publishRejection,
   T030_FOREIGN_OWNER,
   T030_OTHER_QUEUE,
   T030_OWNER,
   T030_QUEUE,
   T030_UNDO_TOKEN,
   T030_VOICE_SESSION,
-  type Deferred,
 } from "./useAccountReview-test-helpers";
 import {
   useAccountReview,
@@ -40,6 +50,10 @@ type SmsCommandService =
   typeof import("@/services/account-review-command-service").executeSmsAccountReviewCommand;
 type ReadAccountsService =
   typeof import("@/services/account-review-read-model-service").loadAccountReviewAccountSnapshots;
+type SmsReadyBootstrap =
+  typeof import("@/services/account-review-command-service").initializeSmsAccountReviewReadySelection;
+type SmsDiscard =
+  typeof import("@/services/account-review-command-service").discardSmsAccountReviewRemovedSuggestion;
 
 const mockLoadOrBootstrap = jest.fn<
   ReturnType<BootstrapService>,
@@ -48,6 +62,14 @@ const mockLoadOrBootstrap = jest.fn<
 const mockExecuteSmsCommand = jest.fn<
   ReturnType<SmsCommandService>,
   Parameters<SmsCommandService>
+>();
+const mockInitializeReadySms = jest.fn<
+  ReturnType<SmsReadyBootstrap>,
+  Parameters<SmsReadyBootstrap>
+>();
+const mockDiscardSms = jest.fn<
+  ReturnType<SmsDiscard>,
+  Parameters<SmsDiscard>
 >();
 const mockLoadAccountSnapshots = jest.fn<
   ReturnType<ReadAccountsService>,
@@ -76,6 +98,12 @@ jest.mock("@/services/account-review-command-service", () => ({
   executeSmsAccountReviewCommand: (
     ...args: Parameters<SmsCommandService>
   ): ReturnType<SmsCommandService> => mockExecuteSmsCommand(...args),
+  initializeSmsAccountReviewReadySelection: (
+    ...args: Parameters<SmsReadyBootstrap>
+  ): ReturnType<SmsReadyBootstrap> => mockInitializeReadySms(...args),
+  discardSmsAccountReviewRemovedSuggestion: (
+    ...args: Parameters<SmsDiscard>
+  ): ReturnType<SmsDiscard> => mockDiscardSms(...args),
 }));
 jest.mock("@/services/account-review-read-model-service", () => ({
   loadAccountReviewAccountSnapshots: (
@@ -87,26 +115,27 @@ function bootstrapSignal(index: number): AbortSignal | undefined {
   return mockLoadOrBootstrap.mock.calls[index]?.[0].signal;
 }
 
-async function publish<T>(pending: Deferred<T>, value: T): Promise<void> {
-  await act(async (): Promise<void> => {
-    pending.resolve(value);
-    await pending.promise;
-  });
-}
-
-async function publishRejection(
-  pending: Deferred<AccountReviewSession>,
-  failure: Error
-): Promise<void> {
-  await act(async (): Promise<void> => {
-    pending.reject(failure);
-    await pending.promise.catch(() => undefined);
-  });
-}
-
 beforeEach(() => {
   mockLoadOrBootstrap.mockReset();
   mockExecuteSmsCommand.mockReset();
+  mockInitializeReadySms.mockReset();
+  mockDiscardSms.mockReset();
+  mockDiscardSms.mockRejectedValue(
+    new Error("unexpected_sms_discard_without_scoped_lease")
+  );
+  mockInitializeReadySms.mockImplementation(
+    ({ expectedSession }): ReturnType<SmsReadyBootstrap> =>
+      Promise.resolve(
+        autoSelectReadyReviewSession(
+          expectedSession,
+          {
+            ...makeOwnedContext(),
+            ownerId: mockAuthenticatedOwnerId,
+          },
+          new Set<string>()
+        ).state
+      )
+  );
   mockLoadAccountSnapshots.mockReset();
   mockAuthenticatedOwnerId = T030_OWNER;
   mockLoadAccountSnapshots.mockImplementation(
@@ -193,6 +222,7 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
         original,
         makeGroupCommand(original, "confirm_group")
       ).state;
+      const readyAccepted = makeReadyBootstrapReviewSession(accepted);
       mockLoadOrBootstrap
         .mockReturnValueOnce(old.promise)
         .mockResolvedValueOnce(accepted);
@@ -200,10 +230,12 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       const { result } = renderHook(() => useAccountReview(input));
       await waitFor(() => expect(mockLoadOrBootstrap).toHaveBeenCalledTimes(1));
       act(() => result.current.reload());
-      await waitFor(() => expect(result.current.session).toEqual(accepted));
+      await waitFor(() =>
+        expect(result.current.session).toEqual(readyAccepted)
+      );
       expect(bootstrapSignal(0)?.aborted).toBe(true);
       await publish(old, original);
-      expect(result.current.session).toEqual(accepted);
+      expect(result.current.session).toEqual(readyAccepted);
       expect(result.current.error).toBeNull();
     });
 
@@ -214,6 +246,7 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
         original,
         makeGroupCommand(original, "confirm_group")
       ).state;
+      const readyAccepted = makeReadyBootstrapReviewSession(accepted);
       mockLoadOrBootstrap
         .mockReturnValueOnce(old.promise)
         .mockResolvedValueOnce(accepted);
@@ -221,9 +254,11 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       const { result } = renderHook(() => useAccountReview(input));
       await waitFor(() => expect(mockLoadOrBootstrap).toHaveBeenCalledTimes(1));
       act(() => result.current.reload());
-      await waitFor(() => expect(result.current.session).toEqual(accepted));
+      await waitFor(() =>
+        expect(result.current.session).toEqual(readyAccepted)
+      );
       await publishRejection(old, new Error("old transport error"));
-      expect(result.current.session).toEqual(accepted);
+      expect(result.current.session).toEqual(readyAccepted);
       expect(result.current.error).toBeNull();
     });
   });
@@ -257,6 +292,104 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       expect(result.current.error).toBeNull();
       expect(mockLoadOrBootstrap).not.toHaveBeenCalled();
       expect(mockExecuteSmsCommand).not.toHaveBeenCalled();
+    });
+
+    it("retains an explicit Voice ready-row opt-out through a genuine newer-source row merge", async () => {
+      const voice = await makeVoiceReviewSession();
+      const { result, rerender } = renderHook(
+        ({ current }: { current: AccountReviewSession }) =>
+          useAccountReview(makeVoiceReviewInput(current)),
+        { initialProps: { current: voice } }
+      );
+      await waitFor(() => expect(result.current.session).not.toBeNull());
+      const first = result.current.session;
+      if (!first) throw new Error("missing_initial_voice_review");
+      await act(async () => {
+        const confirmed = await result.current.dispatch(
+          makeGroupCommand(first, "confirm_group")
+        );
+        expect(confirmed.reasonCodes).toEqual([]);
+      });
+      const ready = result.current.session;
+      const row = ready?.rows[0];
+      if (!ready || !row) throw new Error("missing_voice_ready_row");
+      expect(row.selected).toBe(true);
+      await act(async () => {
+        const deselected = await result.current.dispatch(
+          accountReviewCommandSchema.parse({
+            kind: "set_row_selected",
+            ownerId: ready.ownerId,
+            sessionId: ready.sessionId,
+            expectedReviewRevision: ready.revision,
+            expectedOperationGeneration: ready.operationGeneration,
+            rowId: row.rowId,
+            expectedRowRevision: row.revision,
+            selected: false,
+          })
+        );
+        expect(deselected.reasonCodes).toEqual([]);
+      });
+      expect(result.current.session?.rows[0]?.selected).toBe(false);
+      const expanded = await normalizeAccountReviewParserResult(
+        makeTwoIdenticalVoiceInput()
+      );
+      expect(expanded.rows).toHaveLength(2);
+      expect(expanded.rows.some((item) => item.rowId === row.rowId)).toBe(true);
+      rerender({
+        current: {
+          ...expanded,
+          sourceRevision: "1",
+        },
+      });
+      await waitFor(() => expect(result.current.session?.rows).toHaveLength(2));
+      expect(
+        result.current.session?.rows.find((item) => item.rowId === row.rowId)
+          ?.selected
+      ).toBe(false);
+      expect(mockExecuteSmsCommand).not.toHaveBeenCalled();
+    });
+
+    it("Voice Remove/Discard revokes its real transient lease without deleting rows", async () => {
+      const voice = await makeVoiceReviewSession();
+      const { result } = renderHook(() =>
+        useAccountReview(makeVoiceReviewInput(voice))
+      );
+      await waitFor(() => expect(result.current.session).not.toBeNull());
+      const initial = result.current.session;
+      if (!initial) throw new Error("missing_voice_session");
+      await act(async () => {
+        await result.current.dispatch(
+          makeGroupCommand(initial, "remove_group")
+        );
+      });
+      const removed = result.current.session;
+      const group = removed?.groups[0];
+      if (!removed || !group || !result.current.undoToken)
+        throw new Error("missing_voice_removal_lease");
+      const staleUndo = result.current.undoRemoval;
+      const auth = jest.requireMock<{
+        assertExpectedCurrentUser: jest.MockedFunction<
+          typeof import("@/services/user-data-access").assertExpectedCurrentUser
+        >;
+      }>("@/services/user-data-access").assertExpectedCurrentUser;
+      auth.mockResolvedValueOnce(undefined);
+      try {
+        await act(async () =>
+          result.current.discardRemovedSuggestion(group.groupId)
+        );
+      } finally {
+        auth.mockClear();
+      }
+      expect(result.current.discardedGroupIds).toContain(group.groupId);
+      expect(result.current.undoToken).toBeNull();
+      expect(result.current.session).toEqual(removed);
+      await act(async () => {
+        await expect(staleUndo()).rejects.toThrow(
+          "account_review_facade_undo_unavailable"
+        );
+      });
+      expect(result.current.session?.groups[0]?.status).toBe("removed");
+      expect(result.current.session?.rows).toHaveLength(initial.rows.length);
     });
 
     it("a null Voice session remains empty without accessing SMS storage", async () => {
@@ -556,6 +689,7 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
         initial,
         makeGroupCommand(initial, "confirm_group")
       ).state;
+      const readyNewer = makeReadyBootstrapReviewSession(newer);
       const pending = createDeferred<AccountReviewCommandResult>();
       mockLoadOrBootstrap
         .mockResolvedValueOnce(initial)
@@ -573,12 +707,12 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       const observed = request.catch(() => undefined);
       expect(result.current.isBusy).toBe(true);
       act(() => result.current.reload());
-      await waitFor(() => expect(result.current.session).toEqual(newer));
+      await waitFor(() => expect(result.current.session).toEqual(readyNewer));
       await act(async (): Promise<void> => {
         pending.resolve(stale);
         await observed;
       });
-      expect(result.current.session).toEqual(newer);
+      expect(result.current.session).toEqual(readyNewer);
       expect(result.current.error).toBeNull();
     });
 
@@ -586,6 +720,7 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       const initial = makeSmsReviewSession();
       const command = makeGroupCommand(initial, "confirm_group");
       const newer = makeAcceptedCommandResult(initial, command).state;
+      const readyNewer = makeReadyBootstrapReviewSession(newer);
       const pending = createDeferred<AccountReviewCommandResult>();
       mockLoadOrBootstrap
         .mockResolvedValueOnce(initial)
@@ -602,13 +737,13 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
       // Observe the cancellation before reload, not after the late rejection.
       const observed = request.catch(() => undefined);
       act(() => result.current.reload());
-      await waitFor(() => expect(result.current.session).toEqual(newer));
+      await waitFor(() => expect(result.current.session).toEqual(readyNewer));
       const failure = new Error("old command now rejected");
       await act(async (): Promise<void> => {
         pending.reject(failure);
         await observed;
       });
-      expect(result.current.session).toEqual(newer);
+      expect(result.current.session).toEqual(readyNewer);
       expect(result.current.error).toBeNull();
       expect(result.current.isBusy).toBe(false);
     });

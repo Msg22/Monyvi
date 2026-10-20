@@ -45,7 +45,10 @@ import {
   discardAllSmsReviewDrafts,
   mergeSmsReviewDrafts,
 } from "@/services/sms-review-draft-repository";
-import { executeSmsAccountReviewCommand } from "@/services/account-review-command-service";
+import {
+  executeSmsAccountReviewCommand,
+  initializeSmsAccountReviewReadySelection,
+} from "@/services/account-review-command-service";
 
 interface SqliteModules {
   readonly database: Database;
@@ -369,6 +372,19 @@ afterEach(() => {
 });
 
 describe("#395 T025 command service with real SQLite and no writer stub", () => {
+  it("CR-DOM1 pending suggestions never auto-confirm at an owned SQLite bootstrap", async () => {
+    const seeded = await seedLinkedV2Queue();
+    const before = await rawDraftPostimages();
+    const initial = await initializeSmsAccountReviewReadySelection({
+      ownerId: T025_IDS.owner,
+      queueId: seeded.queueId,
+      expectedSession: seeded.session,
+    });
+    expect(initial.groups[0]?.status).toBe("pending");
+    expect(initial.rows.every((row) => !row.selected)).toBe(true);
+    expect(await rawDraftPostimages()).toEqual(before);
+  });
+
   it("confirms a shared group across every linked record in one durable snapshot", async () => {
     const seeded = await seedLinkedV2Queue();
     const before = await rawDraftPostimages();

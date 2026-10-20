@@ -119,7 +119,10 @@ export function presentReviewGroup(
             : "help-circle-outline",
     linkedCount,
     statusLabel: removed
-      ? ""
+      ? t("account_review_group_removed", {
+          ns: "transactions",
+          lng: language,
+        })
       : group.status === "confirmed"
         ? reviewCopy("account_review_group_confirmed", language)
         : reviewCopy("account_review_group_new_account", language),

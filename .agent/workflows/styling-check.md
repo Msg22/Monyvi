@@ -4,6 +4,21 @@ description: Run styling checks and common refactorings for Monyvi UI
 
 # 🎨 Monyvi Styling Workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- [ ] Open picker/dropdown visibly distinguishes its ACTUAL selected option:
+      filled Nile-green background, WHITE selected text on light/dark and a
+      white contrasting check/icon; selected/checked accessibility state matches
+      the bound value (not tint-only or green on green).
+- [ ] Forms and modal/sheet text fields (including the last) stay focusable and
+      scroll-reachable above the Android/iOS keyboard at compact viewport,
+      enlarged font and RTL. Use measured keyboard-adjusted viewport and
+      header/footer/insets, not arbitrary offsets; actions remain reachable.
+- [ ] Reuse shared selector/text input/form primitives; cover selected state in
+      focused source/render tests and record native dark/keyboard/font/RTL
+      checks as PASS/FAIL only with execution, otherwise NOT RUN. Audit bespoke
+      legacy uses incrementally; do not claim whole-app migration or TDD gate.
+
 This workflow helps ensure that building components follow the established
 styling rules. Apply `AGENTS.md`, `docs/development-workflow.md`,
 `docs/design/design-system.md`, and `.agent/rules/styling-rules.md` before

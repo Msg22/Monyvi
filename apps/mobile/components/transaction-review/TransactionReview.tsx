@@ -36,6 +36,10 @@ import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
 import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
 import { CanonicalAccountReview } from "./CanonicalTransactionReview";
 import { ReviewInlineNotice } from "./ReviewInlineNotice";
+import {
+  CompactReviewTranscript,
+  type CompactReviewTranscriptProps,
+} from "./CompactReviewTranscript";
 import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 
 export interface AccountReviewRuntimeBoundary {
@@ -50,6 +54,7 @@ export interface TransactionReviewProps {
   /** Canonical v2 only; absence preserves the original V1 review component. */
   readonly accountReview?: AccountReviewRuntimeBoundary;
   readonly transactions: readonly ReviewableTransaction[];
+  readonly reviewTranscript?: CompactReviewTranscriptProps;
   readonly onSave: (
     selected: readonly ReviewableTransaction[],
     transactionAccountMap: ReadonlyMap<number, string>,
@@ -140,6 +145,7 @@ function LegacyTransactionReview({
   onReviewLater,
   undoBanner,
   reviewFeedback,
+  reviewTranscript,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -328,6 +334,11 @@ function LegacyTransactionReview({
             entering={FadeInDown.delay(100)}
             className="px-5 pb-3 pt-3"
           >
+            {reviewTranscript ? (
+              <View className="-mx-5">
+                <CompactReviewTranscript {...reviewTranscript} />
+              </View>
+            ) : null}
             <View
               testID="review-summary-card"
               className="min-h-20 flex-row items-center rounded-lg border border-border bg-background px-3 py-2 dark:border-border-dark dark:bg-background-dark"

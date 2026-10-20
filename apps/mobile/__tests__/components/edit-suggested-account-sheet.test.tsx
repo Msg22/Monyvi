@@ -203,15 +203,19 @@ describe("#395 R2 suggested-account form keyboard, type and real content fit", (
         includeHiddenElements: true,
       })
     ).toBeNull();
-    const lockedCurrency = screen.getByTestId(
-      "account-review-group-locked-currency"
+    const currencyTrigger = screen.getByTestId(
+      "account-review-group-edit-currency"
     );
-    expect(within(lockedCurrency).getByText("EGP")).toBeTruthy();
-    expect(lockedCurrency).toHaveProp("accessibilityState", { disabled: true });
+    expect(currencyTrigger).toHaveProp("accessibilityRole", "button");
+    expect(currencyTrigger).toHaveProp("accessibilityState", {
+      disabled: false,
+    });
+    expect(within(currencyTrigger).getByText("EGP")).toBeTruthy();
     fireEvent.press(screen.getByTestId("account-review-group-edit-submit"));
     expect(props.onSubmit).toHaveBeenCalledWith({
       name: "QNB",
       typeOptionId: "DIGITAL_WALLET",
+      currency: "EGP",
     });
   });
 
@@ -415,6 +419,7 @@ describe("#395 R2 suggested-account form keyboard, type and real content fit", (
     expect(onSubmit).toHaveBeenCalledWith({
       name: "QNB",
       typeOptionId: "BANK",
+      currency: "EGP",
     });
   });
 
@@ -449,6 +454,7 @@ describe("#395 R2 suggested-account form keyboard, type and real content fit", (
     expect(props.onSubmit).toHaveBeenCalledWith({
       name: "QNB",
       typeOptionId: "BANK",
+      currency: "EGP",
     });
   });
 });

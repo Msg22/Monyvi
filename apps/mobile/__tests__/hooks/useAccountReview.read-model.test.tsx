@@ -13,12 +13,14 @@ import {
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import { projectAccountReviewSession } from "../../../../packages/logic/src/account-review/read-model";
 import { reduceAccountReviewCommand } from "../../../../packages/logic/src/account-review/reducer";
+import { makeT025ConfirmedSession } from "../../../../packages/logic/src/sms-review-drafts/__tests__/account-review-v2-t025-fixtures";
 import { makeOwnedContext } from "../../../../packages/logic/src/account-review/__tests__/normalization-fixtures";
 import {
   createDeferred,
   makeCurrencyCommand,
   makeSmsReviewInput,
   makeSmsReviewSession,
+  makeReadyBootstrapReviewSession,
   makeVoiceReviewInput,
   makeVoiceReviewSession,
   T030_FOREIGN_OWNER,
@@ -35,6 +37,8 @@ type AccountsFn =
   typeof import("@/services/account-review-read-model-service").loadAccountReviewAccountSnapshots;
 type SmsFn =
   typeof import("@/services/account-review-command-service").executeSmsAccountReviewCommand;
+type SmsReadyFn =
+  typeof import("@/services/account-review-command-service").initializeSmsAccountReviewReadySelection;
 
 const mockBootstrap = jest.fn<
   ReturnType<BootstrapFn>,
@@ -42,6 +46,7 @@ const mockBootstrap = jest.fn<
 >();
 const mockAccounts = jest.fn<ReturnType<AccountsFn>, Parameters<AccountsFn>>();
 const mockSms = jest.fn<ReturnType<SmsFn>, Parameters<SmsFn>>();
+const mockSmsReady = jest.fn<ReturnType<SmsReadyFn>, Parameters<SmsReadyFn>>();
 
 jest.mock("expo-crypto", () => ({
   randomUUID: (): string =>
@@ -63,6 +68,9 @@ jest.mock("@/services/account-review-command-service", () => ({
   executeSmsAccountReviewCommand: (
     ...args: Parameters<SmsFn>
   ): ReturnType<SmsFn> => mockSms(...args),
+  initializeSmsAccountReviewReadySelection: (
+    ...args: Parameters<SmsReadyFn>
+  ): ReturnType<SmsReadyFn> => mockSmsReady(...args),
 }));
 
 function setFilter(
@@ -93,6 +101,20 @@ beforeEach(() => {
   mockBootstrap.mockReset();
   mockAccounts.mockReset();
   mockSms.mockReset();
+  mockSmsReady.mockReset();
+  mockSmsReady.mockImplementation(
+    ({ ownerId, queueId, expectedSession }): ReturnType<SmsReadyFn> => {
+      if (
+        expectedSession.ownerId !== ownerId ||
+        expectedSession.sessionId !== queueId
+      ) {
+        throw new Error("invalid_sms_bootstrap_expected_session");
+      }
+      // Exercise the actual pure readiness rule at the newly separated writer
+      // boundary. Pending groups cannot gain checkbox or confirmation authority.
+      return Promise.resolve(makeReadyBootstrapReviewSession(expectedSession));
+    }
+  );
   mockAccounts.mockResolvedValue(makeOwnedContext());
 });
 
@@ -117,6 +139,33 @@ describe("#395 T054 useAccountReview canonical readModel view", () => {
     );
     expect(exposedProjection(result.current)).not.toHaveProperty("accounts");
     expect(mockAccounts).toHaveBeenCalled();
+    expect(session.groups[0]?.status).toBe("pending");
+    expect(result.current.session?.rows.every((row) => !row.selected)).toBe(
+      true
+    );
+    expect(mockSmsReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: session.ownerId,
+        queueId: session.sessionId,
+        expectedSession: session,
+      })
+    );
+  });
+
+  it("H01b selects only genuinely ready SMS rows at bootstrap using canonical revisions", async () => {
+    const original = makeT025ConfirmedSession(makeSmsReviewSession());
+    const expected = makeReadyBootstrapReviewSession(original);
+    expect(expected.revision).not.toBe(original.revision);
+    expect(expected.rows.every((row) => row.selected)).toBe(true);
+    mockBootstrap.mockResolvedValue(original);
+    const { result } = renderHook(() => useAccountReview(makeSmsReviewInput()));
+    await waitFor(() => expect(result.current.session).toEqual(expected));
+    expect(exposedProjection(result.current)).toEqual(
+      actualProjection(expected)
+    );
+    expect(mockSmsReady).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedSession: original })
+    );
   });
 
   it("H02 waits for BOTH SMS session and current-owner account snapshot before publishing a non-null projection", async () => {

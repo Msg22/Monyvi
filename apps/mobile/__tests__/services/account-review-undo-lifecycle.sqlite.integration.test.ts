@@ -23,6 +23,7 @@ import {
 } from "../../../../packages/logic/src/sms-review-drafts/sms-review-draft-codec";
 import {
   makeT025ReviewSession,
+  makeT025ConfirmedSession,
   makeT025SmsOriginal,
   makeT025StoredReview,
   T025_IDS,
@@ -48,7 +49,11 @@ import {
   discardAllSmsReviewDrafts,
   mergeSmsReviewDrafts,
 } from "@/services/sms-review-draft-repository";
-import { executeSmsAccountReviewCommand } from "@/services/account-review-command-service";
+import {
+  executeSmsAccountReviewCommand,
+  initializeSmsAccountReviewReadySelection,
+  discardSmsAccountReviewRemovedSuggestion,
+} from "@/services/account-review-command-service";
 
 const { __modelClasses: modelClasses } = jest.requireMock<{
   readonly __modelClasses: Array<typeof Model>;
@@ -346,6 +351,234 @@ describe("#395 T029 transient Undo authority across real auth lifetimes", () => 
       expect(decoded.review?.removedEvidenceKeys).toEqual([]);
       expect(draft.payloadJson).not.toContain(T025_IDS.undoToken);
     }
+  });
+
+  it("CR-DOM1 bootstraps an already-confirmed owned SMS queue with genuinely ready selections", async () => {
+    const seeded = await seedCanonicalReview();
+    const confirmed = makeT025ConfirmedSession(seeded.session);
+    await database.write(() =>
+      database.batch(
+        ...seeded.drafts.map((draft, index) => {
+          const row = confirmed.rows[index];
+          if (!row || row.source !== "SMS") throw new Error("missing_seed_row");
+          const payload = encodeSmsReviewDraftV2({
+            transaction: row.transaction,
+            review: makeT025StoredReview(confirmed, row.rowId),
+          });
+          return draft.prepareUpdate((item) => {
+            item.payloadVersion = payload.version;
+            item.payloadJson = payload.json;
+            item.selectionOverride = null;
+          });
+        })
+      )
+    );
+    const initialized = await initializeSmsAccountReviewReadySelection({
+      ownerId: OWNER,
+      queueId: seeded.queue.id,
+      expectedSession: confirmed,
+    });
+    expect(initialized.groups).toEqual(confirmed.groups);
+    expect(initialized.rows.map((row) => row.selected)).toEqual([true, true]);
+    const physical = await freshSqlite();
+    const persisted = await physical
+      .get<SmsReviewDraftItem>("sms_review_draft_items")
+      .query()
+      .fetch();
+    expect(persisted).toHaveLength(2);
+    expect(persisted.every((row) => row.selectionOverride === null)).toBe(true);
+    expect(
+      persisted.every(
+        (draft) =>
+          decodeSmsReviewDraftPayload({
+            version: draft.payloadVersion,
+            json: draft.payloadJson,
+            expectedFingerprint: draft.smsFingerprint,
+            expectedOwnerId: OWNER,
+            expectedSessionId: seeded.queue.id,
+            selectionOverride: draft.selectionOverride,
+          }).review?.row.selected
+      )
+    ).toBe(true);
+  });
+
+  it("CR-DOM1 confirms ready linked rows but preserves explicit opt-out until Select ready", async () => {
+    const seeded = await seedCanonicalReview();
+    const willing = seeded.drafts[0];
+    const optedOut = seeded.drafts[1];
+    if (!willing || !optedOut) throw new Error("missing_seeded_rows");
+    await database.write(() =>
+      database.batch(
+        willing.prepareUpdate((row) => {
+          row.selectionOverride = null;
+        })
+      )
+    );
+    const command = accountReviewCommandSchema.parse({
+      ...removeGroupCommand(seeded.session),
+      kind: "confirm_group",
+    });
+    const confirmed = await execute(seeded.queue.id, command);
+    expect(confirmed.reasonCodes).toEqual([]);
+    expect(confirmed.state.groups[0]?.status).toBe("confirmed");
+    expect(
+      confirmed.state.rows.filter((row) => row.selected).map((row) => row.rowId)
+    ).toEqual([willing.id]);
+    const refreshed = await initializeSmsAccountReviewReadySelection({
+      ownerId: OWNER,
+      queueId: seeded.queue.id,
+      expectedSession: confirmed.state,
+    });
+    expect(
+      refreshed.rows.filter((row) => row.selected).map((row) => row.rowId)
+    ).toEqual([willing.id]);
+    const reselected = await execute(
+      seeded.queue.id,
+      accountReviewCommandSchema.parse({
+        kind: "select_ready",
+        ownerId: refreshed.ownerId,
+        sessionId: refreshed.sessionId,
+        expectedReviewRevision: refreshed.revision,
+        expectedOperationGeneration: refreshed.operationGeneration,
+        filter: refreshed.filter,
+      })
+    );
+    expect(reselected.reasonCodes).toEqual([]);
+    expect(reselected.affectedRowIds).toEqual([optedOut.id]);
+    expect(reselected.state.rows.every((row) => row.selected)).toBe(true);
+    const persisted = await draftItems(OWNER);
+    expect(
+      persisted.find((draft) => draft.id === optedOut.id)?.selectionOverride
+    ).toBe(true);
+  });
+
+  it("CR-DOM1 bootstrap never confirms pending groups or mutates on stale/cancel", async () => {
+    const seeded = await seedCanonicalReview();
+    const before = await physicalPreimages();
+    const pending = await initializeSmsAccountReviewReadySelection({
+      ownerId: OWNER,
+      queueId: seeded.queue.id,
+      expectedSession: seeded.session,
+    });
+    expect(pending.groups[0]?.status).toBe("pending");
+    expect(pending.rows.every((row) => !row.selected)).toBe(true);
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      initializeSmsAccountReviewReadySelection({
+        ownerId: OWNER,
+        queueId: seeded.queue.id,
+        expectedSession: seeded.session,
+        signal: abort.signal,
+      })
+    ).rejects.toThrow();
+    await expect(
+      initializeSmsAccountReviewReadySelection({
+        ownerId: OWNER,
+        queueId: seeded.queue.id,
+        expectedSession: { ...seeded.session, revision: "99" },
+      })
+    ).rejects.toThrow("review_revision_stale");
+    expect(await physicalPreimages()).toEqual(before);
+  });
+
+  it("CR-DOM1 Discard revokes the real matching SMS Undo without changing any physical rows", async () => {
+    const seeded = await seedCanonicalReview();
+    const removed = await removeWithUndo(seeded);
+    const group = removed.state.groups[0];
+    if (!group) throw new Error("missing_removed_group");
+    const before = await physicalPreimages();
+    const cached = currentModelPreimages(seeded.queue, seeded.drafts);
+    await discardSmsAccountReviewRemovedSuggestion({
+      ownerId: OWNER,
+      queueId: seeded.queue.id,
+      sessionId: removed.state.sessionId,
+      groupId: group.groupId,
+      expectedReviewRevision: removed.state.revision,
+      expectedOperationGeneration: removed.state.operationGeneration,
+      undoToken: T025_IDS.undoToken,
+    });
+    expect(await physicalPreimages()).toEqual(before);
+    expect(currentModelPreimages(seeded.queue, seeded.drafts)).toEqual(cached);
+    await expectInvalidUndoWithoutWrites(seeded, removed, T025_IDS.undoToken);
+    const drafts = await draftItems(OWNER);
+    expect(drafts).toHaveLength(2);
+    expect(
+      drafts.every((draft) => draft.payloadJson.includes('"status":"removed"'))
+    ).toBe(true);
+    expect(removed.state.removedEvidenceKeys).toContain(group.evidenceKey);
+  });
+
+  it("CR-DOM1 stale revision, wrong group and cancellation cannot revoke current SMS Undo", async () => {
+    const seeded = await seedCanonicalReview();
+    const removed = await removeWithUndo(seeded);
+    const group = removed.state.groups[0];
+    if (!group) throw new Error("missing_removed_group");
+    const args = {
+      ownerId: OWNER,
+      queueId: seeded.queue.id,
+      sessionId: removed.state.sessionId,
+      groupId: group.groupId,
+      expectedReviewRevision: removed.state.revision,
+      expectedOperationGeneration: removed.state.operationGeneration,
+      undoToken: T025_IDS.undoToken,
+    };
+    const before = await physicalPreimages();
+    await expect(
+      discardSmsAccountReviewRemovedSuggestion({
+        ...args,
+        expectedReviewRevision: "999",
+      })
+    ).rejects.toThrow("review_undo_invalid");
+    await expect(
+      discardSmsAccountReviewRemovedSuggestion({
+        ...args,
+        groupId: NEW_UNDO_TOKEN,
+      })
+    ).rejects.toThrow("review_undo_invalid");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      discardSmsAccountReviewRemovedSuggestion({
+        ...args,
+        signal: controller.signal,
+      })
+    ).rejects.toThrow();
+    expect(await physicalPreimages()).toEqual(before);
+    const restored = await execute(
+      seeded.queue.id,
+      undoCommand(removed.state, T025_IDS.undoToken)
+    );
+    expect(restored.reasonCodes).toEqual([]);
+    expect(restored.state.groups[0]?.status).toBe("pending");
+    expect(restored.state.removedEvidenceKeys).toEqual([]);
+  });
+
+  it("CR-DOM1 a foreign actor cannot discard the owner's transient SMS lease", async () => {
+    const seeded = await seedCanonicalReview();
+    const removed = await removeWithUndo(seeded);
+    const group = removed.state.groups[0];
+    if (!group) throw new Error("missing_removed_group");
+    const before = await physicalPreimages();
+    setCurrentUser(FOREIGN);
+    try {
+      await expect(
+        discardSmsAccountReviewRemovedSuggestion({
+          ownerId: OWNER,
+          queueId: seeded.queue.id,
+          sessionId: removed.state.sessionId,
+          groupId: group.groupId,
+          expectedReviewRevision: removed.state.revision,
+          expectedOperationGeneration: removed.state.operationGeneration,
+          undoToken: T025_IDS.undoToken,
+        })
+      ).rejects.toThrow();
+      expect(await physicalPreimages()).toEqual(before);
+    } finally {
+      setCurrentUser(OWNER);
+    }
+    expect(removed.state.groups[0]?.status).toBe("removed");
+    expect(removed.state.rows.every((row) => !row.selected)).toBe(true);
   });
 
   it("U02 rejects pre-logout Undo after same-owner reauth on the identical cached queue", async () => {

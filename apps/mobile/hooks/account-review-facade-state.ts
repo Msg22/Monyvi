@@ -17,18 +17,28 @@ import {
   projectAccountReviewSession,
   type AccountReviewReadModel,
 } from "../../../packages/logic/src/account-review/read-model";
-import type {
-  AccountReviewCommandResult,
-  ReviewUndoLease,
+import {
+  autoSelectReadyReviewSession,
+  type AccountReviewCommandResult,
+  type ReviewUndoLease,
 } from "../../../packages/logic/src/account-review/reducer";
 import {
   loadAccountReviewAccountSnapshots,
   type AccountReviewAccountSnapshots,
 } from "../services/account-review-read-model-service";
 import { loadOrBootstrapOwnedSmsReviewSession } from "../services/account-review-legacy-bootstrap-service";
-import { executeSmsAccountReviewCommand } from "../services/account-review-command-service";
+import {
+  executeSmsAccountReviewCommand,
+  initializeSmsAccountReviewReadySelection,
+  discardSmsAccountReviewRemovedSuggestion,
+} from "../services/account-review-command-service";
 import { executeVoiceAccountReviewCommand } from "../services/account-review-voice-command-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "../services/user-data-access-error-codes";
+import { assertExpectedCurrentUser } from "../services/user-data-access";
+import {
+  currentReviewUndoGroupId,
+  isRemovedReviewGroup,
+} from "./account-review-facade-removed-state";
 
 interface CommonReviewInput {
   readonly ownerId: string | null;
@@ -85,6 +95,8 @@ export interface AccountReviewFacadeView {
   readonly isBusy: boolean;
   readonly error: Error | null;
   readonly undoToken: string | null;
+  /** Ghosts dismissed in this mounted review only; canonical tombstones persist. */
+  readonly discardedGroupIds: readonly string[];
   /** Only the group of the current transient Undo lease may expose Undo. */
   readonly undoGroupId?:
     | AccountReviewSession["groups"][number]["groupId"]
@@ -98,6 +110,7 @@ export const EMPTY_ACCOUNT_REVIEW_FACADE: AccountReviewFacadeView = {
   isBusy: false,
   error: null,
   undoToken: null,
+  discardedGroupIds: [],
   undoGroupId: null,
 };
 
@@ -188,6 +201,9 @@ export class AccountReviewFacadeController {
   private readModel: AccountReviewReadModel | null = null;
   private error: Error | null = null;
   private undo: ReviewUndoLease | null = null;
+  private manuallyDeselectedRowIds = new Set<string>();
+  private discardedGroupIds = new Set<string>();
+  private discarding = false;
   private loading = false;
   private running = false;
   private mounted = false;
@@ -292,37 +308,6 @@ export class AccountReviewFacadeController {
     }
   }
 
-  /** Tie the one-use lease to its real removed group, never every tombstone. */
-  private currentUndoGroupId():
-    | AccountReviewSession["groups"][number]["groupId"]
-    | null {
-    const current = this.session;
-    const lease = this.undo;
-    if (
-      !current ||
-      !lease ||
-      current.operationGeneration !== lease.afterRemovalGeneration ||
-      current.ownerId !== lease.previousState.ownerId ||
-      current.sessionId !== lease.previousState.sessionId ||
-      current.source !== lease.previousState.source
-    )
-      return null;
-    const previous = lease.previousState;
-    const removed = previous.groups.filter(
-      (group) =>
-        group.status !== "removed" &&
-        !previous.removedEvidenceKeys.includes(group.evidenceKey) &&
-        current.removedEvidenceKeys.includes(group.evidenceKey) &&
-        current.groups.some(
-          (now) =>
-            now.groupId === group.groupId &&
-            now.status === "removed" &&
-            now.evidenceKey === group.evidenceKey
-        )
-    );
-    return removed.length === 1 ? (removed[0]?.groupId ?? null) : null;
-  }
-
   private publish(): void {
     if (!this.mounted) return;
     const scopedAccounts =
@@ -338,10 +323,15 @@ export class AccountReviewFacadeController {
       session: this.session,
       choiceAccounts: scopedAccounts.map(presentAccountChoice),
       readModel: this.error || this.loading ? null : this.readModel,
-      isBusy: this.loading || this.running || this.queue.length > 0,
+      isBusy:
+        this.loading ||
+        this.running ||
+        this.discarding ||
+        this.queue.length > 0,
       error: this.error,
       undoToken: this.undo?.token ?? null,
-      undoGroupId: this.currentUndoGroupId(),
+      discardedGroupIds: [...this.discardedGroupIds],
+      undoGroupId: currentReviewUndoGroupId(this.session, this.undo),
     });
   }
 
@@ -398,6 +388,9 @@ export class AccountReviewFacadeController {
     this.readModel = null;
     this.error = null;
     this.undo = null;
+    this.manuallyDeselectedRowIds.clear();
+    this.discardedGroupIds.clear();
+    this.discarding = false;
     this.loading = false;
     this.running = false;
     this.publish();
@@ -412,7 +405,17 @@ export class AccountReviewFacadeController {
   }
 
   configure(input: UseAccountReviewInput): void {
+    const preserveReview =
+      this.input !== null &&
+      this.input.ownerId === input.ownerId &&
+      this.input.sessionId === input.sessionId &&
+      this.input.mode === input.mode &&
+      this.input.signal === input.signal;
+    const manual = preserveReview ? [...this.manuallyDeselectedRowIds] : [];
+    const discarded = preserveReview ? [...this.discardedGroupIds] : [];
     this.cancel();
+    this.manuallyDeselectedRowIds = new Set(manual);
+    this.discardedGroupIds = new Set(discarded);
     if (input.ownerId === null || input.signal?.aborted) return;
     canonicalUuid.parse(input.ownerId);
     canonicalUuid.parse(input.sessionId);
@@ -480,6 +483,13 @@ export class AccountReviewFacadeController {
       if (snapshots.ownerId !== input.ownerId)
         throw new Error("account_review_facade_account_scope_changed");
       this.snapshots = snapshots;
+      if (this.session) {
+        this.session = autoSelectReadyReviewSession(
+          this.session,
+          snapshots,
+          this.manuallyDeselectedRowIds
+        ).state;
+      }
       this.error = null;
       this.loading = false;
       this.refreshReadModel();
@@ -518,7 +528,14 @@ export class AccountReviewFacadeController {
       if (!this.isCurrent(generation) || this.input !== input) return;
       if (snapshots.ownerId !== input.ownerId)
         throw new Error("account_review_facade_account_scope_changed");
-      this.session = verifySessionScope(session, input);
+      const readySession = await initializeSmsAccountReviewReadySelection({
+        ownerId: input.ownerId,
+        queueId: input.queueId,
+        expectedSession: session,
+        signal,
+      });
+      if (!this.isCurrent(generation) || this.input !== input) return;
+      this.session = verifySessionScope(readySession, input);
       this.snapshots = snapshots;
       this.loading = false;
       this.error = null;
@@ -584,7 +601,13 @@ export class AccountReviewFacadeController {
   }
 
   private pump(): void {
-    if (this.loading || this.running || this.queue.length === 0) return;
+    if (
+      this.loading ||
+      this.running ||
+      this.discarding ||
+      this.queue.length === 0
+    )
+      return;
     const task = this.queue.shift();
     if (!task) return;
     this.active = task;
@@ -639,6 +662,7 @@ export class AccountReviewFacadeController {
       accountSnapshots: snapshots,
       nextUndoToken,
       undo: this.undo,
+      manuallyDeselectedRowIds: this.manuallyDeselectedRowIds,
       signal: input.signal,
     });
     if (!this.isCurrent(task.generation)) throw cancelledError();
@@ -669,6 +693,24 @@ export class AccountReviewFacadeController {
               afterRemovalGeneration: accepted.operationGeneration,
             }
           : null;
+    }
+    if (result.reasonCodes.length === 0) {
+      if (
+        task.command.kind === "set_row_selected" ||
+        task.command.kind === "clear_selection"
+      ) {
+        result.affectedRowIds.forEach((id) =>
+          this.manuallyDeselectedRowIds.add(id)
+        );
+      } else if (
+        task.command.kind === "select_row" ||
+        task.command.kind === "select_ready"
+      ) {
+        result.affectedRowIds.forEach((id) => {
+          if (accepted.rows.some((row) => row.rowId === id && row.selected))
+            this.manuallyDeselectedRowIds.delete(id);
+        });
+      }
     }
     this.session = accepted;
     this.snapshots = snapshots;
@@ -742,6 +784,78 @@ export class AccountReviewFacadeController {
           this.pump();
           this.publish();
         }
+      }
+    }
+  }
+
+  /** Dismiss a removed group's ghost and revoke only its matching Undo lease. */
+  async discardRemovedSuggestion(
+    groupId: string,
+    expectedInput: UseAccountReviewInput,
+    expectedGeneration: number,
+    expectedReviewRevision: string | null,
+    expectedOperationGeneration: string | null,
+    expectedUndoToken: string | null
+  ): Promise<void> {
+    const input = this.input;
+    const session = this.session;
+    if (
+      !input ||
+      !session ||
+      input !== expectedInput ||
+      !this.isCurrent(expectedGeneration) ||
+      this.generation !== expectedGeneration ||
+      session.revision !== expectedReviewRevision ||
+      session.operationGeneration !== expectedOperationGeneration ||
+      (this.undo?.token ?? null) !== expectedUndoToken ||
+      this.loading ||
+      this.running ||
+      this.discarding ||
+      this.queue.length > 0 ||
+      session.saveIntent !== null ||
+      this.discardedGroupIds.has(groupId) ||
+      !isRemovedReviewGroup(session, groupId)
+    )
+      throw new Error("account_review_facade_undo_unavailable");
+    const matchingUndo =
+      currentReviewUndoGroupId(this.session, this.undo) === groupId
+        ? (this.undo?.token ?? null)
+        : null;
+    this.discarding = true;
+    this.publish();
+    try {
+      if (input.mode === "SMS") {
+        const signal = this.controller?.signal;
+        if (!signal || signal.aborted) throw cancelledError();
+        await discardSmsAccountReviewRemovedSuggestion({
+          ownerId: session.ownerId,
+          queueId: input.queueId,
+          sessionId: session.sessionId,
+          groupId,
+          expectedReviewRevision: session.revision,
+          expectedOperationGeneration: session.operationGeneration,
+          undoToken: matchingUndo,
+          signal,
+        });
+      } else {
+        // Voice's lease is volatile but its actor must still be current.
+        await assertExpectedCurrentUser(session.ownerId);
+      }
+      if (
+        !this.isCurrent(expectedGeneration) ||
+        this.input !== expectedInput ||
+        this.session?.revision !== expectedReviewRevision ||
+        this.session?.operationGeneration !== expectedOperationGeneration
+      )
+        throw cancelledError();
+      if (matchingUndo) this.undo = null;
+      this.discardedGroupIds.add(groupId);
+      this.publish();
+    } finally {
+      if (this.isCurrent(expectedGeneration) && this.input === expectedInput) {
+        this.discarding = false;
+        this.pump();
+        this.publish();
       }
     }
   }
