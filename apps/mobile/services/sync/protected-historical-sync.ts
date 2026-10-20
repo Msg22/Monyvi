@@ -9,6 +9,7 @@ import type {
   SyncPushResult,
 } from "@nozbe/watermelondb/sync";
 import { logger } from "@/utils/logger";
+import { serializeAccountActionFailureContext } from "./account-action-failure-context";
 import { getCurrentUserId } from "../supabase";
 import { repairLegacyMetalAdds } from "../legacy-metal-add-repair-service";
 import { repairLegacyMetalEdits } from "../legacy-metal-edit-repair-service";
@@ -195,6 +196,10 @@ export function createProtectedHistoricalSync(
         if (String(error).includes("Concurrent synchronization")) {
           logger.warn("sync.concurrentSyncAborted");
           return;
+        }
+        if (__DEV__) {
+          const diagnostic = serializeAccountActionFailureContext(error);
+          if (diagnostic !== null) logger.debug(diagnostic);
         }
         logger.error("sync.failed", error);
         throw error;

@@ -7,10 +7,21 @@ import { parseFinancialActionEnvelopeJson } from "@monyvi/logic";
 import { validateReviewBatchSavePayload } from "../../../packages/logic/src/financial-actions/review-batch-save";
 import { validateAccountCreateDefaultPayload } from "../../../packages/logic/src/financial-actions/account-create-default";
 import { createAccountReviewFinancialRegistry } from "./account-review-financial-command-service";
+import {
+  malformedAccountActionRoot,
+  type AccountActionFailureReason,
+  type AccountActionFailureSite,
+} from "./sync/account-action-failure-context";
 
-const BROKEN = "account_financial_action_malformed_root";
-function fail(): never {
-  throw new Error(BROKEN);
+function fail(
+  reason: AccountActionFailureReason,
+  context: Pick<AccountActionFailureSite, "table" | "rootState"> = {}
+): never {
+  throw malformedAccountActionRoot({
+    phase: "inspector",
+    reason,
+    ...context,
+  });
 }
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -31,12 +42,15 @@ function expectDirty(
   changes: SyncPushArgs["changes"],
   table: string,
   id: string,
-  which: "created" | "updated"
+  which: "created" | "updated" | "created_or_updated"
 ): Readonly<Record<string, unknown>> {
-  const found = rows(changes, table, which).filter(
-    (candidate) => candidate.id === id
-  );
-  if (found.length !== 1 || !found[0]) fail();
+  const candidates =
+    which === "created_or_updated"
+      ? [...rows(changes, table, "created"), ...rows(changes, table, "updated")]
+      : rows(changes, table, which);
+  const found = candidates.filter((candidate) => candidate.id === id);
+  if (found.length !== 1 || !found[0])
+    fail("dirty_member_missing_or_duplicate", { table });
   return found[0];
 }
 
@@ -66,9 +80,9 @@ export function inspectNewFinancialActionPushRoot(
   try {
     raw = JSON.parse(root.payload_json);
   } catch {
-    fail();
+    fail("payload_json_invalid");
   }
-  if (!isRecord(raw)) fail();
+  if (!isRecord(raw)) fail("payload_root_not_object");
   const version = raw.payloadVersion;
   if (
     version !== "review.batch-save/v1" &&
@@ -87,7 +101,7 @@ export function inspectNewFinancialActionPushRoot(
     typeof root.payload_hash !== "string" ||
     !/^[0-9a-f]{64}$/.test(root.payload_hash)
   )
-    fail();
+    fail("root_tuple_mismatch", { rootState: root.state });
   const payload =
     version === "review.batch-save/v1"
       ? validateReviewBatchSavePayload(envelope.payload)
@@ -95,35 +109,48 @@ export function inspectNewFinancialActionPushRoot(
   const refs: Array<{ table: string; id: string }> = [];
   for (const mutation of payload.domainMutation.records) {
     const table = TABLE_BY_ENTITY[mutation.entity];
-    if (!table) fail();
+    if (!table) fail("mutation_entity_unsupported");
     const id = mutation.after.id;
     const physical = expectDirty(
       changes,
       table,
       id,
-      mutation.mode === "create" ? "created" : "updated"
+      mutation.mode === "create"
+        ? "created"
+        : mutation.entity === "account_default"
+          ? "created_or_updated"
+          : "updated"
     );
     if (mutation.mode === "create") {
-      if (physical.deleted !== false) fail();
+      if (physical.deleted !== false) fail("created_member_deleted", { table });
       if (
         mutation.entity === "account" ||
         mutation.entity === "transaction" ||
         mutation.entity === "transfer"
       ) {
-        if (physical.user_id !== envelope.userId) fail();
+        if (physical.user_id !== envelope.userId)
+          fail("created_member_owner_mismatch", { table });
       } else {
-        if (physical.account_id !== mutation.after.accountId) fail();
+        if (physical.account_id !== mutation.after.accountId)
+          fail("created_child_parent_mismatch", { table });
       }
     } else if (mutation.entity === "account_default") {
-      if (physical.user_id !== envelope.userId || physical.is_default !== false)
-        fail();
-    } else fail();
+      // Updating an unsynced account preserves Watermelon's created status.
+      // Admit only this default-clear mutation, with unique owned live membership.
+      if (
+        physical.user_id !== envelope.userId ||
+        physical.deleted !== false ||
+        physical.is_default !== false
+      )
+        fail("default_clear_mismatch", { table });
+    } else fail("mutation_mode_invalid");
     refs.push({ table, id });
   }
   const effects = rows(changes, "account_financial_effects", "created").filter(
     (row) => row.action_id === envelope.actionId
   );
-  if (effects.length !== payload.accountEffects.length) fail();
+  if (effects.length !== payload.accountEffects.length)
+    fail("effect_count_mismatch", { table: "account_financial_effects" });
   for (const effect of payload.accountEffects) {
     const physical = expectDirty(
       changes,
@@ -138,18 +165,19 @@ export function inspectNewFinancialActionPushRoot(
       physical.amount_minor_units !== effect.amountMinorUnits ||
       physical.currency !== effect.currency
     )
-      fail();
+      fail("effect_fields_mismatch", { table: "account_financial_effects" });
     refs.push({ table: "accounts", id: effect.accountId });
   }
   for (const guard of envelope.accountGuards) {
     const accountId = guard.accountId;
-    if (typeof accountId !== "string") fail();
+    if (typeof accountId !== "string")
+      fail("guard_account_id_invalid", { table: "accounts" });
     const candidates = [
       ...rows(changes, "accounts", "created"),
       ...rows(changes, "accounts", "updated"),
     ].filter((candidate) => candidate.id === accountId);
     if (candidates.length !== 1 || candidates[0]?.user_id !== envelope.userId)
-      fail();
+      fail("guard_account_membership_mismatch", { table: "accounts" });
     refs.push({ table: "accounts", id: accountId });
   }
   const guarded = envelope.accountGuards.map((guard) => ({

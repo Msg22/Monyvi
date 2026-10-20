@@ -5,6 +5,12 @@ import type {
 } from "@nozbe/watermelondb/sync";
 import type { FinancialActionPushCandidate } from "../financial-action-sync-service";
 import { inspectNewFinancialActionPushRoot } from "../account-review-recovery-protected-push";
+import {
+  malformedAccountActionRoot,
+  type AccountActionFailurePhase,
+  type AccountActionFailureReason,
+  type AccountActionFailureSite,
+} from "./account-action-failure-context";
 import type { AccountActionProtection } from "./account-action-protection";
 import {
   ACCOUNT_BALANCE_WRITER_REGISTRY,
@@ -18,8 +24,15 @@ const ENTITY_TABLES = {
   transfer: "transfers",
 } as const;
 
-const MALFORMED_ROOT_ERROR = "account_financial_action_malformed_root";
 const GENERIC_ACCOUNT_PUSH_WRITER_ID = "sync.accounts.push-full-row";
+
+function rejectMalformedRoot(
+  phase: AccountActionFailurePhase,
+  reason: AccountActionFailureReason,
+  context: Pick<AccountActionFailureSite, "rootState" | "table"> = {}
+): never {
+  throw malformedAccountActionRoot({ phase, reason, ...context });
+}
 
 function assertGenericAccountPushIsGuarded(): void {
   const isRegistered = ACCOUNT_BALANCE_WRITER_REGISTRY.some(
@@ -87,7 +100,7 @@ function readAccountBalanceEnvelope(
             )
           : [];
       if (created.length !== 1 || !isObject(created[0])) {
-        throw new Error(MALFORMED_ROOT_ERROR);
+        rejectMalformedRoot("envelope", "add_created_account_cardinality");
       }
       createdAccountId = readChangeId(created[0].after);
       const snapshot = strict.payload.expectedDefaultSnapshot;
@@ -96,7 +109,7 @@ function readAccountBalanceEnvelope(
         !isObject(snapshot) ||
         !Array.isArray(snapshot.activeAccountIds)
       ) {
-        throw new Error(MALFORMED_ROOT_ERROR);
+        rejectMalformedRoot("envelope", "add_created_account_snapshot_invalid");
       }
       // Local dependencyActionIds are derived from this frozen snapshot.
       // Match those identities against pending Add creators in this batch,
@@ -125,12 +138,13 @@ function readAccountBalanceEnvelope(
   try {
     envelope = JSON.parse(record.payload_json);
   } catch {
-    throw new Error(MALFORMED_ROOT_ERROR);
+    rejectMalformedRoot("envelope", "legacy_envelope_invalid_json");
   }
-  if (!isObject(envelope)) throw new Error(MALFORMED_ROOT_ERROR);
+  if (!isObject(envelope))
+    rejectMalformedRoot("envelope", "legacy_envelope_not_object");
   if (envelope.payloadVersion !== "account.balance-effects/v1") return null;
   if (!isObject(envelope.payload) || !Array.isArray(envelope.accountGuards)) {
-    throw new Error(MALFORMED_ROOT_ERROR);
+    rejectMalformedRoot("envelope", "legacy_envelope_fields_invalid");
   }
   return {
     accountGuards: envelope.accountGuards.filter(isObject),
@@ -200,7 +214,10 @@ function isCataloguedNonDispatchRoot(
       candidate.payloadJson === root.payload_json &&
       candidate.state === root.state
   );
-  if (!found) throw new Error(MALFORMED_ROOT_ERROR);
+  if (!found)
+    rejectMalformedRoot("catalog", "catalog_binding_mismatch", {
+      rootState: root.state,
+    });
   // Only Add is rerouted to durable clean/terminal membership. Review and
   // deployed legacy dirty-group admission remain exactly on their existing
   // coordinator/strict-member path (including accepted/recovery behavior).
@@ -304,9 +321,14 @@ function assertEveryEffectHasOwnedRoot(
     ...(effects?.created ?? []),
     ...(effects?.updated ?? []),
   ]) {
-    if (!isObject(record)) throw new Error(MALFORMED_ROOT_ERROR);
+    if (!isObject(record))
+      rejectMalformedRoot("effects", "effect_record_invalid", {
+        table: "account_financial_effects",
+      });
     if (typeof record.action_id !== "string" || typeof record.id !== "string")
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("effects", "effect_identity_missing", {
+        table: "account_financial_effects",
+      });
     const durable = catalog?.roots.find(
       (candidate) => candidate.actionId === record.action_id
     );
@@ -332,7 +354,9 @@ function assertEveryEffectHasOwnedRoot(
       record.user_id !== boundRoot.ownerId ||
       !catalog?.effectIdsByAction.get(record.action_id)?.has(record.id)
     )
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("effects", "orphan_effect_unverified", {
+        table: "account_financial_effects",
+      });
     // The immutable root has been fully decoded/hash-checked by the durable
     // catalog. Never allow an extra or swapped action effect as a terminal
     // outstanding member.
@@ -340,14 +364,18 @@ function assertEveryEffectHasOwnedRoot(
     try {
       envelope = JSON.parse(boundRoot.payloadJson);
     } catch {
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("effects", "effect_payload_invalid_json", {
+        table: "account_financial_effects",
+      });
     }
     if (
       !isObject(envelope) ||
       !isObject(envelope.payload) ||
       !Array.isArray(envelope.payload.accountEffects)
     )
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("effects", "effect_payload_invalid_shape", {
+        table: "account_financial_effects",
+      });
     const original = envelope.payload.accountEffects.filter(
       (value) => isObject(value) && value.effectId === record.id
     );
@@ -358,7 +386,9 @@ function assertEveryEffectHasOwnedRoot(
       original[0].amountMinorUnits !== record.amount_minor_units ||
       original[0].currency !== record.currency
     )
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("effects", "effect_immutable_fields_mismatch", {
+        table: "account_financial_effects",
+      });
   }
 }
 
@@ -459,7 +489,8 @@ function orderBundlesByAccountRevision(
   bundles.forEach((bundle, index) => {
     const id = createdAccountsByAction.get(bundle.candidate.actionId);
     if (!id) return;
-    if (creators.has(id)) throw new Error(MALFORMED_ROOT_ERROR);
+    if (creators.has(id))
+      rejectMalformedRoot("ordering", "creator_account_collision");
     creators.set(id, index);
   });
   let hasCreatorOrderingEdge = false;
@@ -501,7 +532,8 @@ function orderBundlesByAccountRevision(
   }
   if (orderedIndexes.length < bundles.length) {
     // Never fall back to action-ID order if a creator prerequisite cycles.
-    if (hasCreatorOrderingEdge) throw new Error(MALFORMED_ROOT_ERROR);
+    if (hasCreatorOrderingEdge)
+      rejectMalformedRoot("ordering", "creator_dependency_cycle");
     const emitted = new Set(orderedIndexes);
     orderedIndexes.push(
       ...bundles
@@ -540,14 +572,21 @@ export function collectAccountFinancialActionPushBundles(
     const envelope = readAccountBalanceEnvelope(candidate, changes);
     if (!envelope) return [];
     if (!actionId || !payloadHash || !payloadJson || !rootId || !state) {
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("collector", "root_identity_missing", {
+        rootState: candidate.state,
+      });
     }
+    if (refs.length === 0)
+      rejectMalformedRoot("collector", "root_references_empty", {
+        rootState: state,
+      });
     if (
-      refs.length === 0 ||
-      (envelope.accountGuards.length === 0 &&
-        envelope.verifiedZeroOpeningAdd !== true)
+      envelope.accountGuards.length === 0 &&
+      envelope.verifiedZeroOpeningAdd !== true
     ) {
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("collector", "root_guards_empty", {
+        rootState: state,
+      });
     }
     revisionsByAction.set(actionId, readGuardRevisions(candidate, changes));
     if (envelope.createdAccountId) {
