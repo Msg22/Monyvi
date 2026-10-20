@@ -234,13 +234,56 @@ design authority unverified.
 
 For **historically approved static/images only**, load the original approved
 reference, matching historical `*.binding.md` and immutable approval evidence
-for its original governed surface. Run the unchanged
-`scripts/verify-mockup-binding.js` before consuming historical Binding Facts. If
-the reviewed diff changes the verifier itself, do not trust a weakened
-target-branch verifier; use the trusted original contract or independently
-validate the historical reference/sidecar. The legacy migration procedure still
-applies only to those historical references. Preserve all existing historical
-artifact bytes.
+for its original governed surface. Run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and require
+exit status 0 before consuming historical Binding Facts. Require the historical
+sidecar's original `Binding metadata approval: APPROVED`, valid image and
+Binding Facts revisions, approved revisions, and approval evidence identifying
+the approved combined revision. This legacy verifier and sidecar authority
+contract applies ONLY to the original historically image-governed surface; never
+require its hash/revision ceremony for a future interactive design.
+
+If `scripts/verify-mockup-binding.js` is in the target diff, do not treat that
+target-branch verifier as independent authority for a historically approved
+image. Run the verifier from a trusted base revision only when that trusted
+implementation enforces the same complete sidecar authority contract. Otherwise,
+independently validate the complete sidecar authority contract from the reviewed
+historical image/sidecar bytes and the historical-image section of
+`.agent/workflows/mockup-implementation.md`. The independent fallback MUST,
+without relying on the target-branch verifier:
+
+- require valid UTF-8/LF input and locate exactly one real level-two
+  `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only
+  content when determining section boundaries;
+- require every canonical required Binding Facts key exactly once with a
+  non-empty visible value, recognizing supported Markdown unordered-list markers
+  and indentation and ignoring commented/fenced examples;
+- require all approval fields and SHA-256 revisions to be present and well
+  formed, including `Binding metadata approval: APPROVED`;
+- recompute the current approved image SHA-256 and exact original Binding Facts
+  SHA-256 from the reviewed bytes and require them to match the declared image
+  and `Binding metadata revision`;
+- require `Approved binding metadata revision` to equal
+  `Binding metadata revision`, rebuild the combined `Binding approval revision`,
+  and require `Approved binding approval revision` to equal
+  `Binding approval revision`; and
+- require the approval evidence/reference to identify the approved combined
+  `Approved binding approval revision`.
+
+If any part of that independent historical verification cannot be performed,
+mark the historical binding context unverified and the changed image-governed UI
+not approvable. A target-branch verifier result alone is insufficient. This
+fallback does NOT apply to the once-approved runnable interactive design path.
+
+If an approved reference predates the sidecar rule, complete the workflow's
+**Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
+before using reconstructed historical metadata for review. A missing sidecar,
+failed verifier, missing/malformed approved image revision, current-image digest
+mismatch, failed metadata or combined revision check, a sidecar still marked
+`PENDING`, missing approval reference, or image/sidecar materially changed after
+approval is non-authoritative for that original historical governed surface.
+Preserve historical artifact bytes and do not infer authority from filenames.
+This is not a new requirement on future interactive HTML.
 
 Check only approved product UI, excluding preview controls, device framing,
 browser chrome and export padding unless intentionally approved as product UI.

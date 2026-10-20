@@ -191,7 +191,7 @@ test("Claude task generation emits mandatory mockup visual and accessibility evi
   );
 });
 
-test("source-command review uses an independent trust path when the verifier is in the diff", () => {
+test("source-command review independently validates historical image bindings without gating future interactive UI", () => {
   const skill = fs.readFileSync(
     path.resolve(
       __dirname,
@@ -200,14 +200,28 @@ test("source-command review uses an independent trust path when the verifier is 
     ),
     "utf8"
   );
-
+  const interactiveStart = skill.indexOf("For **future interactive designs**");
+  const historicalStart = skill.indexOf(
+    "For **historically approved static/images only**"
+  );
+  assert.ok(
+    interactiveStart >= 0 && historicalStart > interactiveStart,
+    "review must distinguish prospective interactive design from historical image authority"
+  );
+  const interactive = skill.slice(interactiveStart, historicalStart);
+  const historical = skill.slice(historicalStart);
+  assert.match(interactive, /once-approved runnable[\s\S]*short README/i);
   assert.match(
-    skill,
+    interactive,
+    /no new HTML binding sidecar[\s\S]*legacy verifier run is required/i
+  );
+  assert.match(
+    historical,
     /If `scripts\/verify-mockup-binding\.js` is in the target diff/i
   );
-  assert.match(skill, /trusted\s+base revision/i);
+  assert.match(historical, /trusted\s+base revision/i);
   assert.match(
-    skill,
+    historical,
     /independently\s+validate[\s\S]{0,1400}recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i
   );
 });
@@ -221,14 +235,17 @@ test("source-command independent fallback validates the complete sidecar authori
     ),
     "utf8"
   );
+  const historicalStart = skill.indexOf(
+    "For **historically approved static/images only**"
+  );
   const start = skill.indexOf(
     "If `scripts/verify-mockup-binding.js` is in the target diff"
   );
   const end = skill.indexOf("\n\nIf an approved reference predates", start);
 
   assert.ok(
-    start >= 0 && end > start,
-    "expected independent-verifier fallback section"
+    historicalStart >= 0 && start > historicalStart && end > start,
+    "expected independent-verifier fallback only for historical approved images"
   );
   const fallback = skill.slice(start, end);
 
