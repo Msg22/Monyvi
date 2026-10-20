@@ -44,6 +44,7 @@ import {
   type AccountReviewSession,
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { autoSelectReadyReviewSession } from "../../../../packages/logic/src/account-review/reducer";
 import type { ReviewFeedbackBoundary } from "../../hooks/useReviewNotice";
 import type { HybridSmsUnresolvedCandidate } from "../../services/sms-parser-orchestrator";
 import {
@@ -102,6 +103,12 @@ const mockBootstrap = jest.fn<
 >();
 const mockOwnedRead = jest.fn<Promise<AccountReviewAccountSnapshots>, []>();
 const mockSmsCommand = jest.fn();
+type ReadySelectionInitializer =
+  (typeof import("../../services/account-review-command-service"))["initializeSmsAccountReviewReadySelection"];
+const mockInitializeReady = jest.fn<
+  ReturnType<ReadySelectionInitializer>,
+  Parameters<ReadySelectionInitializer>
+>();
 
 let mockActor: string | null = OWNER;
 let mockQueueOwner: string | null = OWNER;
@@ -172,6 +179,9 @@ jest.mock("@/services/account-review-read-model-service", () => ({
     (): Promise<AccountReviewAccountSnapshots> => mockOwnedRead(),
 }));
 jest.mock("@/services/account-review-command-service", () => ({
+  initializeSmsAccountReviewReadySelection: (
+    ...args: Parameters<ReadySelectionInitializer>
+  ): ReturnType<ReadySelectionInitializer> => mockInitializeReady(...args),
   executeSmsAccountReviewCommand: (...args: readonly unknown[]): unknown =>
     mockSmsCommand(...args),
 }));
@@ -315,11 +325,39 @@ beforeEach(() => {
   mockUnresolvedCandidates = [];
   mockSession = makeSaveFixture("sms-new-bank").session;
   mockItems = queueItems(makeSaveFixture("sms-new-bank"));
-  mockOwnedRead.mockResolvedValue({
-    ...makeOwnedContext(),
-    ownerId: OWNER,
-  });
+  const ownedSnapshots = { ...makeOwnedContext(), ownerId: OWNER };
+  mockOwnedRead.mockResolvedValue(ownedSnapshots);
   mockBootstrap.mockImplementation(() => Promise.resolve(mockSession));
+  // Replace the owned storage boundary, preserving the real readiness transition.
+  mockInitializeReady.mockImplementation(
+    ({ ownerId, queueId, expectedSession, signal }) => {
+      if (
+        signal?.aborted ||
+        expectedSession.ownerId !== ownerId ||
+        expectedSession.sessionId !== queueId ||
+        ownedSnapshots.ownerId !== ownerId
+      ) {
+        throw new Error("invalid_sms_bootstrap_expected_scope");
+      }
+      const manual = new Set(
+        expectedSession.rows
+          .filter(
+            (row) =>
+              row.source === "SMS" &&
+              mockItems.some(
+                (item) =>
+                  item.transaction.smsFingerprint === row.sourceFingerprint &&
+                  item.selectionOverride === false
+              )
+          )
+          .map((row) => row.rowId)
+      );
+      return Promise.resolve(
+        autoSelectReadyReviewSession(expectedSession, ownedSnapshots, manual)
+          .state
+      );
+    }
+  );
   mockSave.mockResolvedValue({ kind: "committed" });
   mockMarkComplete.mockResolvedValue(undefined);
   mockLegacySave.mockResolvedValue({ savedCount: 1 });
@@ -345,6 +383,15 @@ describe("#395 T054 SMS review owned queue-to-facade route", () => {
         queueId: SESSION,
       })
     );
+    expect(mockInitializeReady).toHaveBeenCalledTimes(1);
+    expect(mockInitializeReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: OWNER,
+        queueId: SESSION,
+        expectedSession: fixture.session,
+      })
+    );
+    expect(mockInitializeReady.mock.lastCall?.[0].signal?.aborted).toBe(false);
     expect(result.current.session?.rows.map((row) => row.rowId)).toEqual(
       fixture.session.rows.map((row) => row.rowId)
     );

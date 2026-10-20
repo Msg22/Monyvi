@@ -1,11 +1,15 @@
-import { fireEvent, render, screen, within } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import i18next from "i18next";
 import React from "react";
 
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
-import { palette } from "@/constants/colors";
 
 interface MockIconProps {
   readonly color?: string;
@@ -97,7 +101,7 @@ describe("CurrencyPicker", () => {
     );
     expect(
       selectedCodeRow.getByTestId("currency-selected-checkmark-EGP")
-    ).toHaveTextContent(`checkmark-circle:${palette.nileGreen[500]}`);
+    ).toHaveTextContent("checkmark-circle:white");
     expect(screen.getByTestId("currency-row-highlight-EGP")).toBeOnTheScreen();
     expect(screen.queryByTestId("currency-selected-checkmark-AED")).toBeNull();
   });

@@ -179,6 +179,7 @@ function addDirtyChanges(payload: AddPayload): AddProtectedFixture {
               {
                 id: item.after.id,
                 user_id: owner,
+                deleted: false,
                 is_default: false,
                 _status: "updated",
               },
