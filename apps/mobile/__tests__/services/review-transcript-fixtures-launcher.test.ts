@@ -103,6 +103,7 @@ const ids = {
   bills: "00000000-0000-4000-8000-000000000204",
   health: "00000000-0000-4000-8000-000000000205",
   other: "00000000-0000-4000-8000-000000000206",
+  incomeOther: "00000000-0000-4000-8000-000000000207",
 } as const;
 
 const realNodeSha256: Sha256Provider = {
@@ -219,11 +220,22 @@ const CATEGORY_IDS: ReadonlyMap<string, string> = new Map([
   ["bills", ids.bills],
   ["health", ids.health],
   ["other", ids.other],
+  ["income_other", ids.incomeOther],
+]);
+
+const CATEGORY_DISPLAY_NAMES: ReadonlyMap<string, string> = new Map([
+  ["food", "Food & Drinks"],
+  ["shopping", "Shopping"],
+  ["salary", "Salary"],
+  ["bills", "Bills"],
+  ["health", "Health"],
+  ["other", "Other"],
+  ["income_other", "Other income"],
 ]);
 
 const FALLBACKS = new Map<"EXPENSE" | "INCOME", string>([
-  ["EXPENSE", "food"],
-  ["INCOME", "salary"],
+  ["EXPENSE", "other"],
+  ["INCOME", "income_other"],
 ]);
 
 function sessionIdFor(index: number): string {
@@ -237,7 +249,8 @@ function requestKeyFor(index: number): string {
 async function resolveScenario(
   scenario: (typeof REVIEW_TRANSCRIPT_FIXTURE_SCENARIOS)[number],
   index: number,
-  snapshots: AccountReviewOwnedContext = makeSnapshots()
+  snapshots: AccountReviewOwnedContext = makeSnapshots(),
+  fallbacks: ReadonlyMap<"EXPENSE" | "INCOME", string> = FALLBACKS
 ): Promise<AccountReviewSession> {
   const input = buildVoiceReviewNormalizationInput({
     scenario,
@@ -246,7 +259,8 @@ async function resolveScenario(
     requestKey: requestKeyFor(index),
     reviewAccountSnapshots: snapshots,
     categoryIdsBySystemName: CATEGORY_IDS,
-    fallbackCategorySystemNameByType: FALLBACKS,
+    categoryDisplayNamesBySystemName: CATEGORY_DISPLAY_NAMES,
+    fallbackCategorySystemNameByType: fallbacks,
     hashProvider: realNodeSha256,
   });
   const normalized = await normalizeAccountReviewParserResult(input);
@@ -257,6 +271,42 @@ async function resolveScenario(
 }
 
 describe("#395 review transcript fixture catalogue", () => {
+  it.each([
+    ["EXPENSE", ids.other, "Other"],
+    ["INCOME", ids.incomeOther, "Other income"],
+  ] as const)(
+    "uses eligible %s neutral with a friendly label",
+    async (type, id, label) => {
+      const original = REVIEW_TRANSCRIPT_FIXTURE_SCENARIOS.find((scene) =>
+        scene.transactions.some((row) => row.categoryType === type)
+      );
+      if (!original) throw new Error("missing fixture category type");
+      const scenario = {
+        ...original,
+        transactions: original.transactions.map((row) =>
+          row.categoryType === type
+            ? {
+                ...row,
+                preferredCategorySystemName: "missing_fixture_category",
+              }
+            : row
+        ),
+      };
+      const session = await resolveScenario(scenario, 0);
+      expect(
+        session.rows.find((row) => row.transaction.type === type)?.transaction
+      ).toMatchObject({ categoryId: id, categoryDisplayName: label });
+      await expect(
+        resolveScenario(
+          scenario,
+          0,
+          makeSnapshots(),
+          new Map<"EXPENSE" | "INCOME", string>()
+        )
+      ).rejects.toThrow(`review_transcript_fixture_category_missing:${type}`);
+    }
+  );
+
   it("ships 19 unique scenarios with in-bounds, grounded seeds", () => {
     expect(REVIEW_TRANSCRIPT_FIXTURE_SCENARIOS).toHaveLength(19);
     expect(new Set(REVIEW_TRANSCRIPT_FIXTURE_SCENARIO_IDS).size).toBe(19);
@@ -549,7 +599,7 @@ describe("#395 review transcript fixture runtime gate", () => {
           accounts: [],
         }),
         categoryIdsBySystemName: CATEGORY_IDS,
-        categoryDisplayNamesBySystemName: new Map(),
+        categoryDisplayNamesBySystemName: CATEGORY_DISPLAY_NAMES,
         fallbackCategorySystemNameByType: FALLBACKS,
         categories: [],
       },
@@ -588,7 +638,7 @@ describe("#395 review transcript fixture launch identity", () => {
     return {
       ...snapshots,
       categoryIdsBySystemName: CATEGORY_IDS,
-      categoryDisplayNamesBySystemName: new Map(),
+      categoryDisplayNamesBySystemName: CATEGORY_DISPLAY_NAMES,
       fallbackCategorySystemNameByType: FALLBACKS,
       categories: [],
     };
@@ -722,7 +772,7 @@ describe("#395 review transcript fixture setup", () => {
       })),
     }),
     categoryIdsBySystemName: CATEGORY_IDS,
-    categoryDisplayNamesBySystemName: new Map(),
+    categoryDisplayNamesBySystemName: CATEGORY_DISPLAY_NAMES,
     fallbackCategorySystemNameByType: FALLBACKS,
     categories: [],
   });

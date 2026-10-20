@@ -61,20 +61,26 @@ function buildCategoryIndexes(categories: readonly Category[]): {
   const fallbacks = new Map<TransactionType, string>();
   const summaries: ReviewTranscriptFixtureCategorySummary[] = [];
   for (const category of categories) {
-    if (category.isInternal) continue;
+    if (category.deleted || category.isHidden || category.isInternal) continue;
     const systemName = category.systemName?.trim();
+    const displayName = category.displayName?.trim();
     const type = category.type;
-    if (!systemName || (type !== "EXPENSE" && type !== "INCOME")) continue;
-    if (!ids.has(systemName)) {
+    if (
+      !systemName ||
+      !displayName ||
+      (type !== "EXPENSE" && type !== "INCOME")
+    )
+      continue;
+    // Prefer the accessible system-owned neutral when an owned category
+    // happens to share its system name. Never select an arbitrary first row.
+    const neutral = type === "EXPENSE" ? "other" : "income_other";
+    const isNeutral = category.isSystem && systemName === neutral;
+    if (!ids.has(systemName) || isNeutral) {
       ids.set(systemName, category.id);
-      displayNames.set(systemName, category.displayName);
+      displayNames.set(systemName, displayName);
     }
-    if (!fallbacks.has(type)) fallbacks.set(type, systemName);
-    summaries.push({
-      systemName,
-      displayName: category.displayName,
-      type,
-    });
+    if (isNeutral) fallbacks.set(type, systemName);
+    summaries.push({ systemName, displayName, type });
   }
   return { ids, displayNames, fallbacks, summaries };
 }

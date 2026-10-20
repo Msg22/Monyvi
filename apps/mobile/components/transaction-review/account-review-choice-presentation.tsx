@@ -19,6 +19,8 @@ import {
   View,
 } from "react-native";
 import { ReviewSheetHandle } from "./shared-account-presentation";
+import { ReviewInlineNotice } from "./ReviewInlineNotice";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 
 export type ChoiceLanguage = "en" | "ar";
 const fallbackCopy = {
@@ -126,6 +128,7 @@ export interface ChoiceModalFrameProps {
   readonly language: ChoiceLanguage;
   readonly children: React.ReactNode;
   readonly footer: React.ReactNode;
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
 }
 interface ChoiceModalContentProps {
   readonly props: ChoiceModalFrameProps;
@@ -181,28 +184,33 @@ function ChoiceModalContent({
       style={{ maxHeight }}
     >
       <ReviewSheetHandle />
+      <View className="gap-1 px-5">
+        <ChoiceModalHeader props={props} />
+        {props.contextSubtitle ? (
+          <Text
+            className={
+              "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+              (rtl ? "text-right" : "text-left")
+            }
+          >
+            {props.contextSubtitle}
+          </Text>
+        ) : null}
+      </View>
+      <ReviewInlineNotice
+        notice={props.reviewFeedback?.modalNotice ?? null}
+        surface="modal"
+        onDismiss={() => props.reviewFeedback?.dismiss("modal")}
+      />
       <ScrollView
         className="min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
       >
-        <View className="w-full gap-3">
-          <ChoiceModalHeader props={props} />
-          {props.contextSubtitle ? (
-            <Text
-              className={
-                "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-                (rtl ? "text-right" : "text-left")
-              }
-            >
-              {props.contextSubtitle}
-            </Text>
-          ) : null}
-          {props.children}
-        </View>
+        <View className="w-full gap-3">{props.children}</View>
       </ScrollView>
-      {props.footer}
+      <View className="pb-3">{props.footer}</View>
     </View>
   );
 }

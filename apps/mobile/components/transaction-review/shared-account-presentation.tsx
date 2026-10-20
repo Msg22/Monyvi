@@ -191,8 +191,8 @@ export function presentReviewRowIssueKeys(
   const missingDestination =
     row.source === "SMS" &&
     row.transaction.isAtmWithdrawal === true &&
-    row.toAssignment !== null &&
-    (row.toAssignment.state === "unresolved" ||
+    (row.toAssignment === null ||
+      row.toAssignment.state === "unresolved" ||
       (row.toAssignment.state === "suggested" &&
         row.toAssignment.confirmation === "pending"));
   const actualAccountProblem =
@@ -214,6 +214,15 @@ export function presentReviewRowIssueKeys(
   return result;
 }
 
+/** R2 presentation combines account and currency blockers, not domain reasons. */
+function hasAccountResolutionIssue(row: AccountReviewRow): boolean {
+  const issues = presentReviewRowIssueKeys(row);
+  return (
+    issues.includes("account_review_issue_account") ||
+    issues.includes("account_review_issue_currency")
+  );
+}
+
 export function presentReviewIssueKeys(
   rows: readonly AccountReviewRow[],
   distinctNeedsReviewCount: number
@@ -222,10 +231,15 @@ export function presentReviewIssueKeys(
   const ordered: ReviewIssueKey[] = [
     "account_review_issue_amount",
     "account_review_issue_category",
-    "account_review_issue_currency",
     "account_review_issue_account",
   ];
-  const issues = ordered.filter((key) => found.has(key));
+  // A currency-only row is still account-needed in the R2 summary/recovery;
+  // the original currency reason remains on the canonical row for guarded Save.
+  const issues = ordered.filter((key) =>
+    key === "account_review_issue_account"
+      ? found.has(key) || found.has("account_review_issue_currency")
+      : found.has(key)
+  );
   // Pending shared groups have their own Confirm action, not a duplicate
   // row-level Choose account issue or generic recovery.
   if (
@@ -248,7 +262,9 @@ export function presentIssueRecoveryTarget(
     rows.find((row) =>
       key === "account_review_group_needs_review"
         ? row.assignment.state !== "suggested" && row.reviewReasons.length > 0
-        : presentReviewRowIssueKeys(row).includes(key)
+        : key === "account_review_issue_account"
+          ? hasAccountResolutionIssue(row)
+          : presentReviewRowIssueKeys(row).includes(key)
     ) ?? null
   );
 }
@@ -289,7 +305,7 @@ export function isReviewChoiceFresh(
 }
 
 /** Global issue rows use the canonical row set, not the currently filtered list.
- * A single transaction can contribute to more than one issue count.
+ * One row can have multiple blockers but counts once in the unified account issue.
  */
 export interface ReviewIssueEntry {
   readonly key: ReviewIssueKey;
@@ -302,17 +318,39 @@ export function presentReviewIssues(
   language: ReviewDisplayLanguage
 ): readonly ReviewIssueEntry[] {
   return presentReviewIssueKeys(rows, distinctNeedsReviewCount).map((key) => {
-    const count = rows.filter((row) =>
+    const affectedRows = rows.filter((row) =>
       key === "account_review_group_needs_review"
         ? row.assignment.state !== "suggested" && row.reviewReasons.length > 0
-        : presentReviewRowIssueKeys(row).includes(key)
-    ).length;
+        : key === "account_review_issue_account"
+          ? hasAccountResolutionIssue(row)
+          : presentReviewRowIssueKeys(row).includes(key)
+    );
+    // Only the unified account/currency union has distinct-by-ID semantics.
+    // Amount, category and generic pending counts retain their old behavior.
+    const count =
+      key === "account_review_issue_account"
+        ? new Set(affectedRows.map((row) => row.rowId)).size
+        : affectedRows.length;
     return {
       key,
       label:
         key === "account_review_group_needs_review"
           ? reviewCopy(key, language)
-          : t(key, { ns: "transactions", lng: language, defaultValue: key }),
+          : t(
+              key === "account_review_issue_account"
+                ? "account_review_issue_account_needed"
+                : key,
+              {
+                ns: "transactions",
+                lng: language,
+                defaultValue:
+                  key === "account_review_issue_account"
+                    ? language === "ar"
+                      ? "مطلوب اختيار حساب"
+                      : "Account needed"
+                    : key,
+              }
+            ),
       count: count === 0 ? distinctNeedsReviewCount : count,
     };
   });

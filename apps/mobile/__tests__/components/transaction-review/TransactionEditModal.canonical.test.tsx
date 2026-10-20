@@ -70,6 +70,10 @@ jest.mock("@/components/add-transaction/TypeTabs", () => ({
     );
   },
 }));
+// The controlled editor's real ReviewInlineNotice uses LocaleContext.
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({ language: "en", isRTL: false }),
+}));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,

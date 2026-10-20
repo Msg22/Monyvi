@@ -8,7 +8,10 @@ import { t } from "i18next";
 import React, { useEffect, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { TextField } from "@/components/ui/TextField";
+import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
+import { currencyCode } from "../../../../packages/logic/src/account-review/schema-primitives";
 import type { AccountReviewCommand } from "@monyvi/logic";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 import { displayIdentity } from "./shared-account-presentation";
 import {
   ChoiceActionButton,
@@ -33,10 +36,12 @@ export interface AccountChoiceCandidateView {
     | "help-circle-outline";
 }
 
-type ManualDraftIdentity = Extract<
+type ManualDraftCommand = Extract<
   AccountReviewCommand,
   { kind: "create_row_account_draft" }
->["identity"];
+>;
+type ManualDraftIdentity = ManualDraftCommand["identity"];
+type DraftCurrency = NonNullable<ManualDraftCommand["currency"]>;
 
 export interface AccountChoiceSheetProps {
   readonly visible: boolean;
@@ -50,18 +55,25 @@ export interface AccountChoiceSheetProps {
   readonly onSelectCandidate: (id: string) => void;
   readonly onUseSelected: () => void;
   readonly onClose: () => void;
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
   readonly explicitCurrencyChoice?: {
     readonly previousConfirmedCurrency: string | null;
   };
   readonly isCashDestination?: boolean;
   readonly onEditExistingDraft?: () => void;
   readonly draftCreation?: {
+    /** Existing row currency, or null when the owner has not confirmed one. */
+    readonly initialCurrency?: string | null;
+    /** Generated supported currencies, never provider-derived suggestions. */
+    readonly currencyOptions?: readonly string[];
     readonly lockedCurrencyLabel: string;
     readonly typeOptions: ReadonlyArray<{
       readonly id: ManualDraftIdentity["type"];
       readonly label: string;
     }>;
-    readonly onSubmit: (identity: ManualDraftIdentity) => void;
+    readonly onSubmit: (
+      identity: ManualDraftIdentity & { readonly currency: DraftCurrency }
+    ) => void;
   };
 }
 
@@ -119,11 +131,15 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
       }
     >
       <AccountOptionBackground selected={props.selected} />
-      <Ionicons
-        name={props.option.iconName ?? "help-circle-outline"}
-        size={22}
-        color={palette.slate[500]}
-      />
+      <View className="h-7 w-7 shrink-0 items-center justify-center">
+        <Ionicons
+          name={props.option.iconName ?? "help-circle-outline"}
+          size={22}
+          color={palette.slate[500]}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      </View>
       <View className="min-w-0 flex-1 gap-1">
         <Text
           className={
@@ -250,6 +266,20 @@ function AccountChoices({
         </Text>
       ) : null}
       <AccountCandidateList source={source} language={language} />
+      {source.explicitCurrencyChoice &&
+      source.candidateOptions.some(
+        (option) =>
+          option.id === source.selectedCandidateId &&
+          option.isEligible &&
+          option.currencyCode
+      ) ? (
+        <Text
+          testID="account-review-account-currency-no-conversion"
+          className="text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+        >
+          {choiceCopy("account_review_choice_no_conversion", language)}
+        </Text>
+      ) : null}
       {source.draftCreation && eligibleCount > 0 ? (
         <TouchableOpacity
           testID="account-review-create-draft"
@@ -328,7 +358,19 @@ function AccountChoiceFooter({
       ) : (
         <ChoiceActionButton
           testID="account-review-account-use"
-          label={choiceCopy("account_review_choice_use_account", language)}
+          label={
+            selected && source.explicitCurrencyChoice && selected.currencyCode
+              ? choiceCopy(
+                  "account_review_choice_use_account_currency",
+                  language
+                ) +
+                ": " +
+                selected.displayName +
+                " (" +
+                selected.currencyCode +
+                ")"
+              : choiceCopy("account_review_choice_use_account", language)
+          }
           primary
           disabled={disabled}
           onPress={() => {
@@ -336,98 +378,6 @@ function AccountChoiceFooter({
           }}
         />
       )}
-    </View>
-  );
-}
-
-/** Same reviewed name, type and fixed-currency fields as the suggested editor. */
-function AccountCurrencyConfirmation({
-  source,
-  language,
-  onBack,
-}: {
-  readonly source: AccountChoiceSheetProps;
-  readonly language: ChoiceLanguage;
-  readonly onBack: () => void;
-}): React.JSX.Element {
-  const selected = source.candidateOptions.find(
-    (option) => option.id === source.selectedCandidateId && option.isEligible
-  );
-  const currentCode = source.explicitCurrencyChoice?.previousConfirmedCurrency;
-  const newCode = selected?.currencyCode;
-  const canConfirm = !!selected && !!newCode && !source.isBusy;
-  const detail = (label: string, value: string): React.JSX.Element => (
-    <View
-      className={
-        "items-start gap-2 " +
-        (language === "ar" ? "flex-row-reverse" : "flex-row")
-      }
-    >
-      <Text
-        className={
-          "max-w-[45%] shrink-0 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-          (language === "ar" ? "text-right" : "text-left")
-        }
-      >
-        {label}
-      </Text>
-      <Text
-        className={
-          "min-w-0 flex-1 text-sm font-semibold leading-5 text-text-primary dark:text-text-primary-dark " +
-          (language === "ar" ? "text-right" : "text-left")
-        }
-      >
-        {displayIdentity(value, language)}
-      </Text>
-    </View>
-  );
-  return (
-    <View className="gap-4">
-      <Text
-        testID="account-review-confirm-account-currency"
-        accessibilityRole="header"
-        className="text-xl font-bold text-text-primary dark:text-text-primary-dark"
-      >
-        {choiceCopy("account_review_choice_confirm_currency_title", language)}
-      </Text>
-      {detail(
-        choiceCopy("account_review_choice_confirm_account", language),
-        selected?.displayName ?? ""
-      )}
-      {detail(
-        choiceCopy("account_review_choice_draft_currency", language),
-        newCode ?? ""
-      )}
-      {detail(
-        choiceCopy("account_review_choice_previous_currency", language),
-        currentCode ??
-          choiceCopy("account_review_choice_currency_not_confirmed", language)
-      )}
-      <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-        {choiceCopy("account_review_choice_no_conversion", language)}
-      </Text>
-      <View
-        className={
-          "flex-row gap-3 border-t border-border pt-3 dark:border-border-dark " +
-          (language === "ar" ? "flex-row-reverse" : "")
-        }
-      >
-        <ChoiceActionButton
-          label={choiceCopy("account_review_choice_back", language)}
-          testID="account-review-confirm-account-back"
-          onPress={onBack}
-        />
-        <ChoiceActionButton
-          label={choiceCopy(
-            "account_review_choice_use_account_currency",
-            language
-          )}
-          testID="account-review-confirm-account-use"
-          primary
-          disabled={!canConfirm}
-          onPress={source.onUseSelected}
-        />
-      </View>
     </View>
   );
 }
@@ -440,6 +390,8 @@ function AccountDraftFields({
   isTypeExpanded,
   onToggleType,
   draft,
+  draftCurrency,
+  onOpenCurrencyPicker,
   isBusy,
   language,
 }: {
@@ -450,6 +402,8 @@ function AccountDraftFields({
   readonly isTypeExpanded: boolean;
   readonly onToggleType: () => void;
   readonly draft: NonNullable<AccountChoiceSheetProps["draftCreation"]>;
+  readonly draftCurrency: DraftCurrency | null;
+  readonly onOpenCurrencyPicker: () => void;
   readonly isBusy: boolean;
   readonly language: ChoiceLanguage;
 }): React.JSX.Element {
@@ -537,32 +491,34 @@ function AccountDraftFields({
         <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
           {choiceCopy("account_review_choice_draft_currency", language)}
         </Text>
-        <View
+        <TouchableOpacity
           testID="account-review-manual-draft-currency"
-          accessible
-          accessibilityRole="text"
-          accessibilityState={{ disabled: true }}
+          accessibilityRole="button"
+          accessibilityLabel={choiceCopy(
+            "account_review_choice_draft_currency",
+            language
+          )}
+          accessibilityState={{ disabled: isBusy }}
+          disabled={isBusy}
+          onPress={onOpenCurrencyPicker}
           className={
             (rtl ? "flex-row-reverse " : "flex-row ") +
             "min-h-12 items-center justify-between rounded-lg border border-border bg-slate-100 px-3 dark:border-border-dark dark:bg-slate-800"
           }
         >
-          <Text
-            className={
-              "min-w-0 flex-1 text-base leading-6 text-text-secondary dark:text-text-secondary-dark " +
-              (rtl ? "text-right" : "text-left")
-            }
-          >
-            {displayIdentity(draft.lockedCurrencyLabel, language)}
+          <Text className="min-w-0 flex-1 text-base text-text-primary dark:text-text-primary-dark">
+            {draftCurrency
+              ? displayIdentity(draftCurrency, language)
+              : language === "ar"
+                ? "اختر العملة"
+                : "Choose currency"}
           </Text>
-          <View className="h-5 w-5 shrink-0 items-center justify-center">
-            <Ionicons
-              name="lock-closed-outline"
-              size={20}
-              color={palette.slate[500]}
-            />
-          </View>
-        </View>
+          <Ionicons
+            name="chevron-down-outline"
+            size={20}
+            color={palette.slate[500]}
+          />
+        </TouchableOpacity>
       </View>
       <Text className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
         {choiceCopy("account_review_choice_draft_save_note", language)}
@@ -576,7 +532,10 @@ export function AccountChoiceSheet(
 ): React.JSX.Element | null {
   const language = useChoiceLanguage();
   const [editingDraft, setEditingDraft] = useState(false);
-  const [confirmingCurrency, setConfirmingCurrency] = useState(false);
+  const [draftCurrency, setDraftCurrency] = useState<DraftCurrency | null>(
+    null
+  );
+  const [draftCurrencyPickerOpen, setDraftCurrencyPickerOpen] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftType, setDraftType] = useState<
     ManualDraftIdentity["type"] | null
@@ -585,16 +544,28 @@ export function AccountChoiceSheet(
   useEffect(() => {
     if (props.visible) return;
     setEditingDraft(false);
-    setConfirmingCurrency(false);
+    setDraftCurrency(null);
+    setDraftCurrencyPickerOpen(false);
     setDraftName("");
     setDraftType(null);
     setTypeExpanded(false);
   }, [props.visible]);
   if (!props.visible) return null;
   const submit = (): void => {
-    if (props.isBusy || !props.draftCreation || !draftName.trim() || !draftType)
+    const currency = currencyCode.safeParse(draftCurrency);
+    if (
+      props.isBusy ||
+      !props.draftCreation ||
+      !draftName.trim() ||
+      !draftType ||
+      !currency.success
+    )
       return;
-    props.draftCreation.onSubmit({ name: draftName.trim(), type: draftType });
+    props.draftCreation.onSubmit({
+      name: draftName.trim(),
+      type: draftType,
+      currency: currency.data,
+    });
   };
   const cancelDraft = (): void => {
     if (props.isBusy) return;
@@ -602,8 +573,17 @@ export function AccountChoiceSheet(
     setDraftName("");
     setDraftType(null);
     setTypeExpanded(false);
+    setDraftCurrency(null);
   };
-  const footer = confirmingCurrency ? null : editingDraft ? (
+  const startDraft = (): void => {
+    const initial =
+      props.draftCreation?.initialCurrency ??
+      props.draftCreation?.lockedCurrencyLabel;
+    const checked = currencyCode.safeParse(initial);
+    setDraftCurrency(checked.success ? checked.data : null);
+    setEditingDraft(true);
+  };
+  const footer = editingDraft ? (
     <View
       className={
         "flex-row gap-3 border-t border-border px-5 pt-3 dark:border-border-dark " +
@@ -620,7 +600,12 @@ export function AccountChoiceSheet(
         testID="account-review-manual-draft-submit"
         label={choiceCopy("account_review_choice_confirm_draft", language)}
         primary
-        disabled={props.isBusy || !draftName.trim() || !draftType}
+        disabled={
+          props.isBusy ||
+          !draftName.trim() ||
+          !draftType ||
+          !currencyCode.safeParse(draftCurrency).success
+        }
         onPress={submit}
       />
     </View>
@@ -628,54 +613,68 @@ export function AccountChoiceSheet(
     <AccountChoiceFooter
       source={props}
       language={language}
-      onStartDraft={() => setEditingDraft(true)}
-      onUseAction={() => {
-        if (props.explicitCurrencyChoice) setConfirmingCurrency(true);
-        else props.onUseSelected();
-      }}
+      onStartDraft={startDraft}
+      onUseAction={props.onUseSelected}
     />
   );
+  const validatedDraftCurrency = currencyCode.safeParse(draftCurrency);
   return (
-    <ChoiceModalFrame
-      visible
-      testID="account-review-account-choice-sheet"
-      title={props.title}
-      contextSubtitle={props.contextSubtitle}
-      closeAccessibilityLabel={
-        language === "ar" ? "إغلاق اختيار الحساب" : "Close account chooser"
-      }
-      language={language}
-      onClose={props.onClose}
-      footer={footer}
-    >
-      {confirmingCurrency && props.explicitCurrencyChoice ? (
-        <AccountCurrencyConfirmation
-          source={props}
-          language={language}
-          onBack={() => setConfirmingCurrency(false)}
-        />
-      ) : editingDraft && props.draftCreation ? (
-        <AccountDraftFields
-          name={draftName}
-          onNameChange={setDraftName}
-          typeOptionId={draftType}
-          onTypeChange={(option) => {
-            setDraftType(option);
-            setTypeExpanded(false);
+    <>
+      <ChoiceModalFrame
+        visible={!draftCurrencyPickerOpen}
+        testID="account-review-account-choice-sheet"
+        title={props.title}
+        contextSubtitle={props.contextSubtitle}
+        closeAccessibilityLabel={
+          language === "ar" ? "إغلاق اختيار الحساب" : "Close account chooser"
+        }
+        language={language}
+        onClose={props.onClose}
+        footer={footer}
+        reviewFeedback={props.reviewFeedback}
+      >
+        {editingDraft && props.draftCreation ? (
+          <AccountDraftFields
+            name={draftName}
+            onNameChange={setDraftName}
+            typeOptionId={draftType}
+            onTypeChange={(option) => {
+              setDraftType(option);
+              setTypeExpanded(false);
+            }}
+            isTypeExpanded={typeExpanded}
+            onToggleType={() => setTypeExpanded((value) => !value)}
+            draft={props.draftCreation}
+            draftCurrency={draftCurrency}
+            onOpenCurrencyPicker={() => {
+              if (!props.isBusy) setDraftCurrencyPickerOpen(true);
+            }}
+            isBusy={props.isBusy}
+            language={language}
+          />
+        ) : (
+          <AccountChoices
+            source={props}
+            language={language}
+            onStartDraft={startDraft}
+          />
+        )}
+      </ChoiceModalFrame>
+      {draftCurrencyPickerOpen ? (
+        <CurrencyPicker
+          visible
+          selectedCurrency={
+            validatedDraftCurrency.success ? validatedDraftCurrency.data : null
+          }
+          allowedCurrencies={props.draftCreation?.currencyOptions}
+          contextSubtitle={props.contextSubtitle}
+          onSelect={(currency) => {
+            setDraftCurrency(currency);
+            setDraftCurrencyPickerOpen(false);
           }}
-          isTypeExpanded={typeExpanded}
-          onToggleType={() => setTypeExpanded((value) => !value)}
-          draft={props.draftCreation}
-          isBusy={props.isBusy}
-          language={language}
+          onClose={() => setDraftCurrencyPickerOpen(false)}
         />
-      ) : (
-        <AccountChoices
-          source={props}
-          language={language}
-          onStartDraft={() => setEditingDraft(true)}
-        />
-      )}
-    </ChoiceModalFrame>
+      ) : null}
+    </>
   );
 }

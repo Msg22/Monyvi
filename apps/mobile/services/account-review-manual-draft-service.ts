@@ -19,14 +19,18 @@ export interface PrepareManualSourceDraftInput {
   readonly session: AccountReviewSession;
   readonly row: AccountReviewRow;
   readonly identity: ManualDraftCommand["identity"];
+  readonly currency?: ManualDraftCommand["currency"];
   readonly role: ManualDraftCommand["role"];
 }
 export async function prepareAccountReviewManualSourceDraft(
   input: PrepareManualSourceDraftInput
 ): Promise<ManualDraftCommand["manualDraft"]> {
+  const currency =
+    input.currency ??
+    (input.row.currency.state === "known" ? input.row.currency.code : null);
   if (
     input.row.source !== input.session.source ||
-    input.row.currency.state !== "known" ||
+    currency === null ||
     (input.role === "source"
       ? input.row.assignment.state !== "unresolved" ||
         (input.session.source === "SMS" && input.identity.type === "CASH")
@@ -44,7 +48,7 @@ export async function prepareAccountReviewManualSourceDraft(
     rowId: input.row.rowId,
     role: input.role,
     nonce,
-    identity: { ...input.identity, currency: input.row.currency.code },
+    identity: { ...input.identity, currency },
     hashProvider: sha256,
   });
   return { nonce, ...identity };

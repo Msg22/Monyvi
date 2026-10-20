@@ -666,6 +666,8 @@ export const accountReviewCommandSchema = z
         ...rowCommand,
         kind: z.literal("create_row_account_draft"),
         role: z.enum(["source", "destination"]),
+        // Legacy known-currency commands omit this; explicit selection is atomic.
+        currency: currencyCode.optional(),
         identity: z.object({ name: nonblankText, type: accountType }).strict(),
         manualDraft: z
           .object({

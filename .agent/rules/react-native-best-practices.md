@@ -3,6 +3,14 @@ trigger: always_on
 description: when working on mobile app that uses react native
 ---
 
+Apply `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md`, and `.agent/rules/styling-rules.md` before these
+general patterns. Changed UI must use intrinsic container/text fit with 44/48 dp
+accessible targets, readable dark/RTL states, reachable keyboard-aware footer
+with one safe-area inset, and page/modal inline notices rather than new
+error/warning/success toasts. Legacy migration is gradual; do not add a
+mandatory cosmetic test/device matrix.
+
 - Leverage native modules for performance-critical tasks.
 - Optimize images and assets for mobile to reduce load times.
 - Type all `props` and `state` using interfaces.

@@ -78,6 +78,10 @@ export interface SharedAccountSuggestionsProps {
   readonly onIssuePress?: (key: ReviewIssueKey) => void;
 }
 type GroupCommandAction = "edit" | "replace" | "remove";
+type RenderGroupRow = (
+  group: SharedSuggestedGroupView,
+  showDivider: boolean
+) => React.JSX.Element;
 function GroupActionChoices({
   group,
   language,
@@ -216,7 +220,7 @@ interface AllGroupsSheetProps {
   readonly open: boolean;
   readonly groups: readonly SharedSuggestedGroupView[];
   readonly language: ReviewDisplayLanguage;
-  readonly renderGroup: (item: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly renderGroup: RenderGroupRow;
   readonly onClose: () => void;
   readonly activeMenu: SharedSuggestedGroupView | null;
   readonly onMenuAction: (action: GroupCommandAction) => void;
@@ -256,14 +260,16 @@ function FullGroupsList({
   renderGroup,
 }: {
   readonly groups: readonly SharedSuggestedGroupView[];
-  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly renderGroup: RenderGroupRow;
 }): React.JSX.Element {
   return (
     <FlatList
       data={groups}
       keyExtractor={(group) => group.groupId}
       className="shrink"
-      renderItem={({ item }) => renderGroup(item)}
+      renderItem={({ item, index }) =>
+        renderGroup(item, index < groups.length - 1)
+      }
       initialNumToRender={10}
       removeClippedSubviews={false}
       contentContainerClassName="px-5 pb-3"
@@ -318,7 +324,7 @@ interface OverviewPanelProps {
   readonly groups: readonly SharedSuggestedGroupView[];
   readonly summary: SharedReviewSummaryView;
   readonly language: ReviewDisplayLanguage;
-  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly renderGroup: RenderGroupRow;
   readonly onViewAll: () => void;
   readonly disabled: boolean;
   readonly defaultAccountName?: string | null;
@@ -331,12 +337,14 @@ function GroupIssues({
   language,
   disabled,
   onIssuePress,
+  hasFollowingSection,
 }: {
   readonly labels: readonly string[];
   readonly issues?: readonly ReviewIssueEntry[];
   readonly language: ReviewDisplayLanguage;
   readonly disabled: boolean;
   readonly onIssuePress?: (key: ReviewIssueKey) => void;
+  readonly hasFollowingSection: boolean;
 }): React.JSX.Element | null {
   const { colorScheme } = useColorScheme();
   const rtl = language === "ar";
@@ -349,20 +357,32 @@ function GroupIssues({
   return (
     <View className="mt-3 gap-2">
       {displayed.map((issue, index) => {
-        const actionLabel = t(
+        const viewTransactions =
           issue.key === "account_review_issue_account" ||
-            issue.key === "account_review_issue_category"
-            ? "account_review_issue_choose"
-            : "account_review_issue_review",
-          { ns: "transactions", lng: language }
-        );
+          issue.key === "account_review_issue_currency";
+        const actionLabel = viewTransactions
+          ? t("account_review_issue_view_transactions", {
+              ns: "transactions",
+              lng: language,
+              defaultValue:
+                language === "ar" ? "عرض المعاملات" : "View transactions",
+            })
+          : t(
+              issue.key === "account_review_issue_category"
+                ? "account_review_issue_choose"
+                : "account_review_issue_review",
+              { ns: "transactions", lng: language }
+            );
         const inactive = disabled || issue.key === null || !onIssuePress;
         return (
           <View
             key={issue.key ?? String(index)}
             testID={"account-review-issue-" + (issue.key ?? index)}
             className={
-              "min-h-[68px] flex-wrap items-center gap-2 border-b border-border py-3 dark:border-border-dark " +
+              "min-h-[68px] flex-wrap items-center gap-2 py-3 " +
+              (index < displayed.length - 1 || hasFollowingSection
+                ? "border-b border-border dark:border-border-dark "
+                : "") +
               (rtl ? "flex-row-reverse" : "flex-row")
             }
           >
@@ -446,6 +466,13 @@ function GroupIssues({
 function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
   const { summary, groups, language } = props;
   const rtl = language === "ar";
+  const displayedGroups = groups.slice(0, 2);
+  const hasDefaultDisclosure =
+    Boolean(props.defaultAccountName) &&
+    summary.defaultAssignmentCount > 0 &&
+    props.onDefaultWhyPress !== undefined;
+  const hasFollowingSection =
+    summary.issueLabels.length > 0 || hasDefaultDisclosure || groups.length > 1;
   return (
     <View
       testID="account-review-details-panel"
@@ -501,9 +528,12 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
               .join(" · ")}{" "}
       </Text>
       <View className="mt-3">
-        {groups.slice(0, 2).map((group) => (
+        {displayedGroups.map((group, index) => (
           <React.Fragment key={group.groupId}>
-            {props.renderGroup(group)}
+            {props.renderGroup(
+              group,
+              index < displayedGroups.length - 1 || hasFollowingSection
+            )}
           </React.Fragment>
         ))}
       </View>
@@ -513,9 +543,10 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
         language={language}
         disabled={props.disabled}
         onIssuePress={props.onIssuePress}
+        hasFollowingSection={hasDefaultDisclosure || groups.length > 1}
       />
-      {props.defaultAccountName &&
-      summary.defaultAssignmentCount > 0 &&
+      {hasDefaultDisclosure &&
+      props.defaultAccountName &&
       props.onDefaultWhyPress ? (
         <DefaultAccountInfo
           defaultAccountName={props.defaultAccountName}
@@ -524,7 +555,9 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
         />
       ) : null}
       {groups.length > 1 ? (
-        <View className="mt-3">
+        <View
+          className={"self-center " + (hasDefaultDisclosure ? "mt-1" : "mt-2")}
+        >
           <ReviewActionButton
             testID="account-review-group-view-all"
             tone="quiet"
@@ -539,7 +572,7 @@ function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
 }
 interface GroupSurfaceCompositionProps {
   readonly source: SharedAccountSuggestionsProps;
-  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly renderGroup: RenderGroupRow;
   readonly menu: SharedSuggestedGroupView | null;
   readonly language: ReviewDisplayLanguage;
   readonly disabled: boolean;
@@ -589,7 +622,6 @@ export function SharedAccountSuggestions(
   props: SharedAccountSuggestionsProps
 ): React.JSX.Element | null {
   const { language } = useLocale();
-  const { width, fontScale } = useWindowDimensions();
   const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
   const menu =
     props.groups.find((group) => group.groupId === menuGroupId) ?? null;
@@ -607,12 +639,11 @@ export function SharedAccountSuggestions(
     }
     if (action === "remove" && menu.canRemove) props.onRemove(menu.groupId);
   };
-  const renderGroup = (group: SharedSuggestedGroupView): React.JSX.Element => (
+  const renderGroup: RenderGroupRow = (group, showDivider) => (
     <SharedAccountGroupRow
       group={group}
       language={language}
-      viewportWidth={width}
-      fontScale={fontScale}
+      showDivider={showDivider}
       disabled={props.isBusy || group.isBusy}
       onConfirm={() => props.onConfirm(group.groupId)}
       onMenu={() => setMenuGroupId(group.groupId)}

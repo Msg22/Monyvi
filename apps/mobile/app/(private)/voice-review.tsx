@@ -17,7 +17,12 @@
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
-import { useToast } from "@/components/ui/Toast";
+import { ReviewInlineNotice } from "@/components/transaction-review/ReviewInlineNotice";
+import { useReviewNotice } from "@/hooks/useReviewNotice";
+import {
+  logReviewFailure,
+  type ReviewFailureStage,
+} from "@/services/account-review-feedback-diagnostics";
 import { palette } from "@/constants/colors";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -62,7 +67,7 @@ export default function VoiceReviewScreen(): React.JSX.Element {
     /** Test-only allowlisted identifier, never a serialized financial object. */
     reviewFixtureSceneId?: string | string[];
   }>();
-  const { showToast } = useToast();
+  const reviewFeedback = useReviewNotice({ source: "VOICE" });
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
   const { userId, isResolvingUser } = useCurrentUser();
@@ -166,46 +171,59 @@ export default function VoiceReviewScreen(): React.JSX.Element {
       toAccountMap: ReadonlyMap<number, string>
     ): Promise<void> => {
       setIsSaving(true);
+      let confirmedFinancialSave = false;
       try {
         const result = await batchCreateTransactions(
           selected,
           transactionAccountMap,
           toAccountMap
         );
-
         if (result.failedCount > 0) {
-          showToast({
-            type: "error",
-            title: tCommon("error"),
-            message: t("voice_save_partial", {
-              saved: result.savedCount,
-              failed: result.failedCount,
-              errors: result.errors.join(", "),
-            }),
+          // Do not retry a partially committed legacy batch automatically.
+          logReviewFailure({
+            source: "VOICE",
+            stage: "save_result",
+            error: new Error("account_review_legacy_save_partial_result"),
+          });
+          reviewFeedback.showNotice({
+            surface: "page",
+            tone: "warning",
+            title: t(
+              result.savedCount > 0
+                ? "review_notice_partial_title"
+                : "review_notice_partial_noresult_title"
+            ),
+            message: t(
+              result.savedCount > 0
+                ? "review_notice_partial_message"
+                : "review_notice_partial_noresult_message"
+            ),
           });
           return;
         }
-
-        showToast({
-          type: "success",
-          title: tCommon("success"),
-          message: t("voice_saved_count", { count: result.savedCount }),
-        });
-
-        // Navigate back to origin tab (FR-024: post-save navigation)
+        if (result.savedCount <= 0) {
+          reviewFeedback.reportFailure({
+            surface: "page",
+            stage: "save_result",
+            error: new Error("account_review_legacy_save_empty_result"),
+          });
+          return;
+        }
+        confirmedFinancialSave = true;
         router.replace(originTabRoute);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        showToast({
-          message: t("voice_save_error", { message }),
-          title: tCommon("error"),
-          type: "error",
+      } catch (error: unknown) {
+        reviewFeedback.reportFailure({
+          surface: "page",
+          stage: confirmedFinancialSave
+            ? "navigation_after_save"
+            : "legacy_save",
+          error,
         });
       } finally {
         setIsSaving(false);
       }
     },
-    [router, showToast, originTabRoute, t, tCommon]
+    [router, originTabRoute, reviewFeedback, t]
   );
 
   /** Only the existing atomic financial Save service may persist V2. */
@@ -214,6 +232,8 @@ export default function VoiceReviewScreen(): React.JSX.Element {
       if (saveAdmissionRef.current) return;
       saveAdmissionRef.current = true;
       setIsSaving(true);
+      let stage: ReviewFailureStage = "route_admission";
+      let confirmedFinancialSave = false;
       try {
         if (
           !canonical ||
@@ -228,11 +248,16 @@ export default function VoiceReviewScreen(): React.JSX.Element {
         ) {
           throw new Error("account_review_voice_scope_changed");
         }
+        stage = "capture";
         const capture = captureAccountReviewRuntimeSave(
           selectedSession,
           saveCaptureRef.current
         );
+        // Preserve the SAME immutable capture for retry, including rejection.
         saveCaptureRef.current = capture;
+        // The route observes the combined preparation/writer promise; it
+        // cannot truthfully label a nested database or preparation stage.
+        stage = "save_invocation";
         const result = await saveCapturedAccountReview(
           capture,
           (): Promise<AccountReviewSession> => {
@@ -244,30 +269,24 @@ export default function VoiceReviewScreen(): React.JSX.Element {
                 );
           }
         );
+        stage = "save_result";
         if (result.kind !== "committed" && result.kind !== "replay")
           throw new Error("account_review_voice_save_not_committed");
+        confirmedFinancialSave = true;
+        stage = "navigation_after_save";
         router.replace(originTabRoute);
-      } catch {
-        showToast({
-          type: "error",
-          title: tCommon("error"),
-          message: t("voice_error_default"),
+      } catch (error: unknown) {
+        reviewFeedback.reportFailure({
+          surface: "page",
+          stage: confirmedFinancialSave ? "navigation_after_save" : stage,
+          error,
         });
       } finally {
         saveAdmissionRef.current = false;
         setIsSaving(false);
       }
     },
-    [
-      canonical,
-      userId,
-      isResolvingUser,
-      router,
-      originTabRoute,
-      showToast,
-      t,
-      tCommon,
-    ]
+    [canonical, userId, isResolvingUser, router, originTabRoute, reviewFeedback]
   );
 
   // ── Discard ─────────────────────────────────────────────────────────
@@ -358,6 +377,11 @@ export default function VoiceReviewScreen(): React.JSX.Element {
           },
         }}
       />
+      <ReviewInlineNotice
+        notice={reviewFeedback.pageNotice}
+        surface="page"
+        onDismiss={() => reviewFeedback.dismiss("page")}
+      />
 
       {/* Transcript preview (S-04 + S-05) */}
       {originalTranscript.length > 0 && (
@@ -428,6 +452,7 @@ export default function VoiceReviewScreen(): React.JSX.Element {
         }
         onDiscard={handleDiscard}
         isSaving={isSaving}
+        reviewFeedback={reviewFeedback}
         accountReview={
           hasV2Payload && canonical && userId
             ? {

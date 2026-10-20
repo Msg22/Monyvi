@@ -3,6 +3,11 @@
 This document outlines the project-specific styling and UI rules for Monyvi's
 mobile application.
 
+The governing guidance is `AGENTS.md`, `docs/development-workflow.md`, and
+`docs/design/design-system.md`, alongside current approved UI bindings and
+owner-approved business decisions. These rules supplement—not replace—the
+current responsive, feedback, and delivery contracts.
+
 ## 🎨 Styling Rules
 
 ### 1. Tailwind CSS First
@@ -27,6 +32,26 @@ mobile application.
 - **DO NOT** use static hex codes or `rgba` values in components.
 - Note: `palette.slate[25]` is the standard "pure white" for backgrounds/text in
   light mode.
+
+### 4. Content fit, dark readability, and feedback
+
+- Lay out against **actual component space and intrinsic text**, not character
+  counts or screen-width guesses. Preserve scaled names and financial identity;
+  use modest visual chrome inside **44/48 dp accessible hit targets** before
+  wrapping. Keep status/count together where possible, without orphaned
+  separators, and reuse the same row renderer across summary/detail surfaces.
+- Use readable semantic secondary text in dark mode. Transparent informational
+  icon backing is **state-specific**, not a license to remove meaningful
+  alert/selected fills.
+- In **new or changed app UI**, do not add error/warning/success toasts. Show a
+  persistent dismissible page notice directly below the header **outside
+  scroll**, or place modal-specific feedback at the top of the active modal;
+  migrate unrelated legacy feedback gradually. Do not announce an unconfirmed
+  Save.
+- For sheets, keep focused fields and actions reachable with keyboard-aware
+  scrolling, usable-height limits, and a **single** runtime bottom inset. Follow
+  the central design system and delivery policy; do not add a cosmetic
+  viewport/className test matrix.
 
 ## 🏗️ UI Architecture
 

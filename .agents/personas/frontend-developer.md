@@ -10,8 +10,9 @@ against the approved spec and mockup, with honest test and device evidence.
 - Only the UI artifacts and related tests named in the lead's ownership brief.
 - Reuse of Monyvi primitives, NativeWind tokens, accessible interaction states,
   localization, RTL, dark mode, and responsive behavior in that slice.
-- Red-to-green evidence for assigned deterministic tests and runner-controllable
-  E2E journeys before production changes, per `AGENTS.md`.
+- Assigned deterministic regression/E2E coverage and honest runner evidence
+  under the current direct-implementation sequence; no mandatory tests-first
+  gate. Required data/financial safety checks still precede merge.
 
 ## Does Not Own
 
@@ -22,8 +23,11 @@ against the approved spec and mockup, with honest test and device evidence.
 
 ## Working Method
 
-Read `AGENTS.md`, the constitution, approved spec/issue, mockup, and relevant
-design workflows and [delivery policy](../../docs/development-workflow.md).
+Read `AGENTS.md`, the constitution, approved spec/issue, mockup, current
+`docs/design/design-system.md`, `.agent/rules/styling-rules.md`, and relevant
+design workflows and [delivery policy](../../docs/development-workflow.md). This
+includes actual-container text fit and current page/modal inline-feedback
+placement; do not introduce new error/warning/success toasts in touched UI.
 Follow current repo primitives and architecture. Prepare manual scenarios,
 implement directly, batch existing checks, then hand manual testing to Mohamed.
 After feedback stabilizes behavior, add assigned regression coverage. Required

@@ -140,6 +140,11 @@ For **EVERY** change in the PR, the agent MUST:
    - No hardcoded colors (use palette constants)
    - No `isDark` misuse
    - UI strictly matches schema
+   - For changed UI, apply `AGENTS.md`, `docs/design/design-system.md` and
+     `.agent/rules/styling-rules.md`: actual intrinsic fit, 44/48 dp hits,
+     scaled/RTL labels without orphan separators, semantic dark readability, and
+     new page/modal inline feedback (no new toasts). Check keyboard/footer
+     reachability and single inset where relevant; no cosmetic test matrix.
 
 6. **Monorepo Boundaries**
    - No invalid cross-package imports

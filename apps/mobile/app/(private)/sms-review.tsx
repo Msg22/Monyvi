@@ -5,7 +5,12 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
 import { SmsReviewUndoBanner } from "@/components/transaction-review/SmsReviewUndoBanner";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useToast } from "@/components/ui/Toast";
+import { useReviewNotice } from "@/hooks/useReviewNotice";
+import { ReviewInlineNotice } from "@/components/transaction-review/ReviewInlineNotice";
+import {
+  logReviewFailure,
+  type ReviewFailureStage,
+} from "@/services/account-review-feedback-diagnostics";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
@@ -203,7 +208,12 @@ export default function SmsReviewScreen(): React.JSX.Element {
     queue.items.length > 0;
   const undo = useSmsReviewUndo();
   const { markSyncComplete } = useSmsSync();
-  const { showToast } = useToast();
+  const reviewFeedback = useReviewNotice({ source: "SMS" });
+  const reportPageFailure = useCallback(
+    (stage: ReviewFailureStage, error: unknown): void =>
+      reviewFeedback.reportFailure({ surface: "page", stage, error }),
+    [reviewFeedback.reportFailure]
+  );
   const smsRetry = useSmsReviewRetry();
   const aiConsent = useAiProcessingConsent();
   const [isSaving, setIsSaving] = useState(false);
@@ -348,65 +358,72 @@ export default function SmsReviewScreen(): React.JSX.Element {
     });
   }, [optimisticallyRestoredItem, queue.items]);
 
+  /** Save status never turns committed money into a failure. */
+  const completeScanAfterSave = (): void => {
+    if (unresolvedCandidates.length !== 0) return;
+    try {
+      void markSyncComplete().catch((error: unknown) =>
+        logReviewFailure({ source: "SMS", stage: "scan_bookkeeping", error })
+      );
+    } catch (error: unknown) {
+      logReviewFailure({ source: "SMS", stage: "scan_bookkeeping", error });
+    }
+  };
+
   const handleSave = useCallback(
     async (
       selected: readonly ReviewableTransaction[],
       transactionAccountMap: ReadonlyMap<number, string>,
       toAccountMap: ReadonlyMap<number, string>
     ): Promise<void> => {
-      if (!queue.userId) return;
-      const selectedItems = selected.map((transaction) => {
-        const fingerprint = getSmsFingerprint(transaction);
-        const item = fingerprint
-          ? itemByFingerprint.get(fingerprint)
-          : undefined;
-        if (!item) throw new Error("sms_review_draft_item_not_found");
-        return {
-          ...item,
-          transaction: transaction as ParsedSmsTransaction,
-        };
-      });
-
       setIsSaving(true);
+      let confirmedFinancialSave = false;
       try {
+        if (!queue.userId)
+          throw new Error("account_review_sms_session_scope_changed");
+        const selectedItems = selected.map((transaction) => {
+          const fingerprint = getSmsFingerprint(transaction);
+          const item = fingerprint
+            ? itemByFingerprint.get(fingerprint)
+            : undefined;
+          if (!item) throw new Error("sms_review_draft_item_not_found");
+          return {
+            ...item,
+            transaction: transaction as ParsedSmsTransaction,
+          };
+        });
         const result = await saveSelectedSmsReviewDrafts({
           selectedItems,
           expectedUserId: queue.userId,
           transactionAccountMap,
           toAccountMap,
         });
-        showToast({
-          type: "success",
-          title: t("sms_review_saved", { count: result.savedCount }),
-        });
-        if (unresolvedCandidates.length === 0) {
-          void markSyncComplete().catch((error: unknown) => {
-            logger.warn("smsReview.markSyncComplete.failed", {
-              errorName: error instanceof Error ? error.name : "unknown",
-            });
-          });
-        }
-        clearTransactions();
+        confirmedFinancialSave = true;
+        completeScanAfterSave();
         setIsLeavingAfterSave(true);
         router.replace("/(private)/(tabs)/transactions");
+        clearTransactions();
         if (result.savedCount === 0) setIsLeavingAfterSave(false);
       } catch (error: unknown) {
+        setIsLeavingAfterSave(false);
         const isValidationError =
+          !confirmedFinancialSave &&
           error instanceof SmsReviewDraftSaveValidationError;
-        if (isValidationError) await queue.refetch();
-        logger.warn("smsReview.save.failed", {
-          errorName: error instanceof Error ? error.name : "unknown",
-          isValidationError,
-        });
-        showToast({
-          type: isValidationError ? "warning" : "error",
-          title: isValidationError
-            ? t("sms_review_fix_selected")
-            : t("save_error"),
-          message: isValidationError
-            ? t("sms_review_fix_selected_message")
-            : t("sms_review_save_failed_message"),
-        });
+        if (isValidationError) {
+          try {
+            await queue.refetch();
+          } catch (refreshError: unknown) {
+            logReviewFailure({
+              source: "SMS",
+              stage: "legacy_save",
+              error: refreshError,
+            });
+          }
+        }
+        reportPageFailure(
+          confirmedFinancialSave ? "navigation_after_save" : "legacy_save",
+          error
+        );
       } finally {
         setIsSaving(false);
       }
@@ -414,13 +431,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
     [
       clearTransactions,
       itemByFingerprint,
-      markSyncComplete,
+      completeScanAfterSave,
       queue.userId,
       queue.refetch,
       router,
-      showToast,
-      t,
-      unresolvedCandidates.length,
+      reportPageFailure,
     ]
   );
 
@@ -430,6 +445,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
       if (v2SaveInFlight.current) return;
       v2SaveInFlight.current = true;
       setIsSaving(true);
+      let stage: ReviewFailureStage = "route_admission";
+      let confirmedFinancialSave = false;
       try {
         const checked = accountReviewSessionSchema.parse(selectedSession);
         if (
@@ -461,14 +478,13 @@ export default function SmsReviewScreen(): React.JSX.Element {
           )
         )
           throw new Error("account_review_sms_display_queue_changed");
+        stage = "capture";
         const capture = captureAccountReviewRuntimeSave(
           checked,
           v2SaveRef.current
         );
         v2SaveRef.current = capture;
-        // A retained V2 route callback must not invoke financial Save after
-        // logout or actor switch, even if React has not rerendered yet.
-        // The financial service independently repeats its owner/CAS fences.
+        stage = "save_invocation";
         await assertRuntimeOwner(capture.ownerId);
         const result = await saveCapturedAccountReview(
           capture,
@@ -478,33 +494,25 @@ export default function SmsReviewScreen(): React.JSX.Element {
               queueId,
             })
         );
+        stage = "save_result";
         if (
           result.kind !== "committed" &&
           result.kind !== "replay" &&
           result.kind !== "cleanup_only"
         )
           throw new Error("account_review_sms_save_uncommitted");
-        // A completed canonical review has the same first-scan bookkeeping
-        // gate as the legacy path; unresolved scan candidates stay pending.
-        if (unresolvedCandidates.length === 0) {
-          void markSyncComplete().catch((error: unknown) => {
-            logger.warn("smsReview.markSyncComplete.failed", {
-              errorName: error instanceof Error ? error.name : "unknown",
-            });
-          });
-        }
-        clearTransactions();
+        confirmedFinancialSave = true;
+        completeScanAfterSave();
+        stage = "navigation_after_save";
         setIsLeavingAfterSave(true);
         router.replace("/(private)/(tabs)/transactions");
+        clearTransactions();
       } catch (error: unknown) {
-        logger.warn("smsReview.canonicalSave.failed", {
-          errorName: error instanceof Error ? error.name : "unknown",
-        });
-        showToast({
-          type: "error",
-          title: t("save_error"),
-          message: t("sms_review_save_failed_message"),
-        });
+        if (confirmedFinancialSave) setIsLeavingAfterSave(false);
+        reportPageFailure(
+          confirmedFinancialSave ? "navigation_after_save" : stage,
+          error
+        );
       } finally {
         setIsSaving(false);
         v2SaveInFlight.current = false;
@@ -518,11 +526,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
       activeUserId,
       isResolvingUser,
       clearTransactions,
-      markSyncComplete,
-      unresolvedCandidates.length,
+      completeScanAfterSave,
       router,
-      showToast,
-      t,
+      reportPageFailure,
     ]
   );
 
@@ -615,13 +621,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
           });
           setLatestDiscardedItem(previousDiscardedItem);
         }
-        logger.warn("smsReview.discard.failed", {
-          errorName: error instanceof Error ? error.name : "unknown",
-        });
-        showToast({ type: "error", title: t("sms_review_discard_failed") });
+        reportPageFailure("discard", error);
       }
     },
-    [latestDiscardedItem, queue.userId, reviewItems, showToast, t, undo]
+    [latestDiscardedItem, queue.userId, reviewItems, reportPageFailure, undo]
   );
 
   const handleUndoDiscard = useCallback(async (): Promise<void> => {
@@ -675,16 +678,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
           );
         }
       }
-      logger.warn("smsReview.undo.failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
-      });
-      showToast({
-        type: "error",
-        title: t("sms_review_undo_failed"),
-        message: t("sms_review_undo_failed_message"),
-      });
+      reportPageFailure("undo", error);
     }
-  }, [latestDiscardedItem, showToast, t, undo]);
+  }, [latestDiscardedItem, reportPageFailure, undo]);
 
   const handleCloseUndo = useCallback((): void => {
     undo.close();
@@ -705,18 +701,15 @@ export default function SmsReviewScreen(): React.JSX.Element {
       setDiscardConfirmation(null);
       router.replace("/(private)/(tabs)");
     } catch (error: unknown) {
-      logger.warn("smsReview.discardAll.failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
-      });
-      showToast({ type: "error", title: t("sms_review_discard_failed") });
+      setDiscardConfirmVisible(false);
+      reportPageFailure("discard", error);
     }
   }, [
     clearTransactions,
     discardConfirmation,
     queue.userId,
     router,
-    showToast,
-    t,
+    reportPageFailure,
   ]);
 
   const handleRequestDiscardAll = useCallback((): void => {
@@ -739,12 +732,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
       smsRetry.dismissConsentRequired();
       await smsRetry.retry();
     } catch (error: unknown) {
-      logger.warn("smsReview.retryConsent.failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
-      });
-      showToast({ type: "error", title: t("ai_consent_retry_error") });
+      smsRetry.dismissConsentRequired();
+      reportPageFailure("retry_consent", error);
     }
-  }, [aiConsent, showToast, smsRetry, t]);
+  }, [aiConsent, reportPageFailure, smsRetry]);
 
   const retryConsentSheet = (
     <AiProcessingConsentSheet
@@ -764,36 +755,48 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   if (transactions.length === 0) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-background px-6 dark:bg-background-dark">
-        <Ionicons
-          name={queue.error ? "warning-outline" : "checkmark-circle-outline"}
-          size={48}
-          color={palette.slate[400]}
-        />
-        <Text className="mt-4 text-center text-lg text-text-secondary dark:text-text-secondary-dark">
-          {queue.error
-            ? t("sms_review_load_failed")
-            : t("no_transactions_to_review")}
-        </Text>
-        {partialResults && (
-          <View className="mt-6 w-full">
-            <PartialSmsResultsNotice
-              {...partialResults}
-              hasReviewableSuggestions={false}
-            />
-          </View>
-        )}
-        <View className="w-full">
-          <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+        <View testID="sms-review-empty-page-notice-region" className="w-full">
+          <ReviewInlineNotice
+            notice={reviewFeedback.pageNotice}
+            surface="page"
+            onDismiss={() => reviewFeedback.dismiss("page")}
+          />
         </View>
-        <TouchableOpacity
-          onPress={() => router.replace("/(private)/(tabs)")}
-          className="mt-6 rounded-lg bg-slate-800 px-6 py-3"
+        <View
+          testID="sms-review-empty-content"
+          className="flex-1 items-center justify-center px-6"
         >
-          <Text className="font-semibold text-white">
-            {t("back_to_dashboard")}
+          <Ionicons
+            name={queue.error ? "warning-outline" : "checkmark-circle-outline"}
+            size={48}
+            color={palette.slate[400]}
+          />
+          <Text className="mt-4 text-center text-lg text-text-secondary dark:text-text-secondary-dark">
+            {queue.error
+              ? t("sms_review_load_failed")
+              : t("no_transactions_to_review")}
           </Text>
-        </TouchableOpacity>
+          {partialResults && (
+            <View className="mt-6 w-full">
+              <PartialSmsResultsNotice
+                {...partialResults}
+                hasReviewableSuggestions={false}
+              />
+            </View>
+          )}
+          <View className="w-full">
+            <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+          </View>
+          <TouchableOpacity
+            onPress={() => router.replace("/(private)/(tabs)")}
+            className="mt-6 rounded-lg bg-slate-800 px-6 py-3"
+          >
+            <Text className="font-semibold text-white">
+              {t("back_to_dashboard")}
+            </Text>
+          </TouchableOpacity>
+        </View>
         {retryConsentSheet}
         <ActiveSmsReviewUndoBanner
           undo={{ ...undo, close: handleCloseUndo }}
@@ -807,6 +810,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
       <StatusBar style="auto" />
       <TransactionReview
+        reviewFeedback={reviewFeedback}
         transactions={transactions}
         accountReview={
           canonicalOwnedQueue && queue.userId && queue.queueId

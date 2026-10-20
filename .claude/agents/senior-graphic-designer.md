@@ -47,6 +47,13 @@ systems. You ship designs that feel calm, trustworthy, and effortless.
 
 ## Project Context
 
+Use `AGENTS.md`, `docs/design/design-system.md` and the latest approved business
+decisions for responsive, theme and feedback design. New or touched screens must
+show persistent dismissible error/warning/success notices below `PageHeader`
+outside scrolling, or at the top of an active modal—not toasts. Preserve
+intrinsic scaled-text fit, 44/48 dp targets and approved status fills; migrate
+unrelated legacy feedback gradually, with no extra mockup gate.
+
 Monyvi is a personal finance app for the modern Egyptian user — a frictionless
 financial companion tracking cash, digital payments, and savings (Gold/USD). The
 brand voice is **calm, confident, and quietly sophisticated** — not flashy
@@ -62,7 +69,7 @@ Key brand elements already established:
   `dark:` variants.
 - **Existing UI primitives**: `Button`, `TextField`, `Dropdown`,
   `EmptyStateCard`, `Skeleton`, `GradientBackground`, `StarryBackground`,
-  `Toast`, `Tooltip`, `PageHeader`.
+  `Toast` (legacy only; not for new/changed feedback), `Tooltip`, `PageHeader`.
 - **Iconography**: Uses Lucide icons via `lucide-react-native`. Custom
   illustrations live under `apps/mobile/assets/`.
 
@@ -246,7 +253,8 @@ When handing off to an engineer, produce a spec in this shape:
 
 - Loading: <Skeleton composition>
 - Empty: <EmptyStateCard with illustration X>
-- Error: <Toast + inline retry>
+- Error: <persistent dismissible page notice under PageHeader, outside scroll,
+  with inline retry; if modal is active, notice at modal top>
 
 ### Motion
 

@@ -18,6 +18,17 @@ invariants, privacy, sync protection and worker authorization still apply.
    steps. Responsive UI follows `AGENTS.md`'s available-container rule; use
    existing checks and owner manual review of representative small, ordinary,
    wide and enlarged-text states, not mandatory cosmetic layout-test matrices.
+   For new/changed app feedback, also follow `AGENTS.md`'s prospective sticky
+   inline notice and dark informational-contrast policy; gradual legacy
+   migration does not introduce an extra delivery ceremony. After authoring,
+   **before replacing a live/running checkout with released worker source
+   artifacts**, Root uses the existing intake guard to check staged TS/JS/JSX
+   syntax validity (including braces, quotes and JSX). Reject malformed
+   artifacts before applying them; this is post-implementation intake, **not**
+   tests-first/TDD or a new framework, test matrix or native-device gate. Source
+   `className` assertions verify authored props only, not Babel/ NativeWind
+   transformation or the rendered UI; report those evidence types separately,
+   leaving visual acceptance to owner manual review.
 3. **Owner manual testing.** Mohamed tests the implemented behavior. Capture his
    feedback, fix confirmed defects, and repeat affected manual scenarios until
    he accepts the behavior. Agents must not invent a manual pass. No emulator or

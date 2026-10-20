@@ -5,7 +5,12 @@ description: Run styling checks and common refactorings for Monyvi UI
 # 🎨 Monyvi Styling Workflow
 
 This workflow helps ensure that building components follow the established
-styling rules:
+styling rules. Apply `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md`, and `.agent/rules/styling-rules.md` before
+making UI changes. Current owner-approved UI/feedback decisions take precedence
+over generic checklist examples; this is not another approval gate.
+
+The basic checks are:
 
 1. Tailwind CSS first
 2. Dark mode compliance (using `dark:` variant)
@@ -40,3 +45,10 @@ When creating a new screen:
 - [ ] Text uses `text-slate-800 dark:text-white` (or similar slate variants).
 - [ ] No static hex codes used.
 - [ ] Interactive elements have proper `activeOpacity` or `Pressable` feedback.
+- [ ] Labels fit their **actual container** with font scaling and 44/48 dp hit
+      areas; status/count wraps without an orphan dot. Reused rows agree.
+- [ ] Informational dark text remains legible; selected/alert fills are
+      preserved.
+- [ ] New/changed error, warning and success feedback uses dismissible page
+      notice below the header, outside scrolling, or the active modal's top—not
+      a new toast. Keyboard and footer remain reachable with one inset.

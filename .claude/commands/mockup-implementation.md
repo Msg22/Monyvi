@@ -4,6 +4,15 @@ description: Instructions for implementing mockups
 
 # Mobile UI Mockup Generation Prompt (Stitch MCP)
 
+The current `.agent/workflows/mockup-implementation.md`, `AGENTS.md`,
+`docs/design/design-system.md` and approved business decisions govern this
+legacy command. Respect current owner-approved scoped amendments: intrinsic
+container/label fit, accessible action targets, readable dark/RTL feedback, and
+keyboard/inset reachability. For new/changed feedback design, use dismissible
+page notices directly below the header **outside scroll** or feedback at the
+**top of the active modal**, not a new error/warning/success toast. Do not
+create a second approval gate or alter approved mockup bytes.
+
 ## Product Context
 
 - App name: **Monyvi**

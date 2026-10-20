@@ -132,7 +132,7 @@ Use these primitives before creating new local variants:
 | `Dropdown`             | Inline or bottom-sheet selection control.                                                               |
 | `OptionalSection`      | Expandable optional form section.                                                                       |
 | `Skeleton`             | Theme-aware shimmer loading primitive.                                                                  |
-| `ToastProvider`        | Global toast feedback.                                                                                  |
+| `ToastProvider`        | **Legacy retained** for untouched screens; no new error/warning/success toasts.                         |
 | `SectionErrorBoundary` | Recoverable section-level failure UI.                                                                   |
 | `RetrySyncScreen`      | Startup recovery when sync/profile state is unsafe.                                                     |
 | `StartupLoadingView`   | Branded startup/account loading state.                                                                  |
@@ -140,6 +140,17 @@ Use these primitives before creating new local variants:
 `PageHeader` is the default for private screens. Known exception:
 `LiveRatesHeader` mirrors PageHeader for a specialized live-rates status layout;
 prefer folding future header needs back into `PageHeader`.
+
+**Prospective feedback (owner-approved 2026-10-19):** New/changed app flows use
+a persistent, dismissible page-scoped inline notice directly beneath the header
+and outside scrolling content. Modal feedback belongs at the top **within the
+active modal**. No new or changed error/warning/success toasts. The existing
+`ToastProvider` and untouched legacy callers **remain installed** pending
+gradual migration; do not claim removal. Dark informational text uses readable
+primary/secondary contrast (not disabled/muted); preserve approved semantic
+selected/warning fills and only the approved transparent information-icon
+backdrop. Follow `AGENTS.md` and the #395
+[owner R2 feedback](../../specs/395-shared-account-review/validation/owner-feedback-r2.md).
 
 ## 6. Loading And Progress
 
@@ -173,7 +184,10 @@ Rules:
 
 Preferred:
 
-- NativeWind `className`.
+- NativeWind `className` through its configured JSX transform. A source
+  assertion of the class string is not proof of Babel/NativeWind interop or
+  applied native styling; see `AGENTS.md` for raw `React.createElement` in `.ts`
+  helpers and the rendered-evidence distinction.
 - `dark:` variants for theme differences.
 - Palette and semantic Tailwind tokens.
 - `palette` imports only for component props that require raw color values, such
@@ -203,7 +217,11 @@ using the active icon system unless a broader migration is planned.
 
 Guidelines:
 
-- Prefer icon buttons for familiar actions.
+- Prefer icon buttons for familiar actions. A quiet pencil/icon can stay
+  visually small and unbordered while its **effective** 44/48 dp hit target uses
+  available parent space and in-bounds touch extension; the target is not a
+  mandatory 48 dp visible border/fill box. Do not overlap neighboring
+  interactive targets; see `AGENTS.md`.
 - Pair icons with text when the action is not obvious.
 - Keep destructive actions visually distinct with red states.
 - Make modal and sheet actions explicit and reversible where financial data is
@@ -216,7 +234,9 @@ Monyvi supports English and Arabic.
 Implementation:
 
 - i18n resources are namespace-based.
-- Translation resources are validated at initialization.
+- Translation resources load at initialization; this does **not** prove that
+  each new namespaced screen key exists. Resolve changed user-visible labels in
+  both English and Arabic, rather than displaying raw missing-key text.
 - The root gesture view sets `accessibilityLanguage`.
 - RTL changes force an app reload when necessary.
 - Use `useTranslation("namespace")` inside functional components.

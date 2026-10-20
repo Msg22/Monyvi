@@ -86,6 +86,8 @@ interface TransactionItemProps {
   readonly onDiscard?: (index: number, wasSelected: boolean) => void;
   /** Optional parent-shaped #395 row actions; legacy consumers are unchanged. */
   readonly accountReview?: AccountReviewRowPresentationProps;
+  /** The action footer supplies the only terminal list divider. */
+  readonly isLastCanonicalRow?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +213,7 @@ function TransactionItemInner({
   isSmsWorkspace = false,
   onDiscard,
   accountReview,
+  isLastCanonicalRow = false,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -282,7 +285,12 @@ function TransactionItemInner({
     return (
       <View
         testID="transaction-review-row"
-        className="relative min-h-[68px] border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
+        className={
+          "relative min-h-[68px] bg-background dark:bg-background-dark " +
+          (isLastCanonicalRow
+            ? ""
+            : "border-b border-border dark:border-border-dark")
+        }
       >
         {showSmsDiscard ? (
           <TouchableOpacity
@@ -694,6 +702,7 @@ function areTransactionItemPropsEqual(
     previous.isSmsWorkspace === next.isSmsWorkspace &&
     previous.institutionLogo === next.institutionLogo &&
     previous.onDiscard === next.onDiscard &&
+    previous.isLastCanonicalRow === next.isLastCanonicalRow &&
     areAccountReviewRowPropsEqual(previous.accountReview, next.accountReview)
   );
 }

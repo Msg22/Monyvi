@@ -1,23 +1,23 @@
 import {
-  accountReviewCommandSchema,
   type AccountReviewSession,
   type AccountReviewRow,
   type AccountReviewCommand,
 } from "@monyvi/logic";
 import { getExplicitAccountCurrencyOptions } from "../../../../packages/logic/src/account-review/candidates";
-import { prepareAccountReviewManualSourceDraft } from "@/services/account-review-manual-draft-service";
 import {
+  freshAccountReviewChoice,
+  makeExplicitRowAccountCurrencyCommand,
+  dispatchReviewChoiceCommand,
+  submitPreparedManualReviewDraft,
   preselectedOwnedAccountId,
   reviewGroupChoiceRole,
   renderAccountReviewChoiceSheets,
   type ReviewChoice,
 } from "./account-review-choice-controller";
-import {
-  accountType,
-  currencyCode,
-} from "../../../../packages/logic/src/account-review/schema-primitives";
+import { accountType } from "../../../../packages/logic/src/account-review/schema-primitives";
 import { useAccountReview } from "@/hooks/useAccountReview";
-import { useToast } from "@/components/ui/Toast";
+import { useReviewNotice } from "@/hooks/useReviewNotice";
+import { ReviewInlineNotice } from "./ReviewInlineNotice";
 import { AccountReviewPanel } from "./AccountReviewPanel";
 import {
   type ReviewIssueKey,
@@ -26,8 +26,6 @@ import {
   intersectGuardedGroupAccountChoices,
   presentIssueRecoveryTarget,
   reviewChoiceStamp,
-  isReviewChoiceFresh,
-  presentReviewTransactionContext,
   presentCanonicalRowDetails,
   presentReviewGroup,
 } from "./shared-account-presentation";
@@ -42,6 +40,12 @@ import { getExpandedContent } from "./get-expanded-content";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { TransactionItem } from "./TransactionItem";
 import { AtmDestinationStatus } from "./account-review-row-presentation";
+import {
+  AccountReviewCategoryChoice,
+  useReviewCategoryShortcut,
+} from "./account-review-category-choice";
+import { useTemporaryAccountNeededFilter } from "./account-review-row-filter";
+import { AccountNeededTemporaryHeader } from "./account-review-filter-header";
 import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import type {
@@ -74,14 +78,12 @@ export function CanonicalAccountReview(
   const { t: tTransactions, i18n } = useTranslation("transactions");
   const { t: tAccounts } = useTranslation("accounts");
   const language = i18n.language.startsWith("ar") ? "ar" : "en";
-  const { showToast } = useToast();
+  const localFeedback = useReviewNotice({ source: props.boundary.input.mode });
+  const feedback = props.reviewFeedback ?? localFeedback;
   const [choice, setChoice] = useState<ReviewChoice>(null);
   const [transactionEdit, setTransactionEdit] =
     useState<ReviewTransactionEditTarget | null>(null);
   const [candidateId, setCandidateId] = useState<string | null>(null);
-  const [currencySelection, setCurrencySelection] = useState<string | null>(
-    null
-  );
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [showDefaultWhy, setShowDefaultWhy] = useState(false);
   const [busySave, setBusySave] = useState(false);
@@ -174,29 +176,13 @@ export function CanonicalAccountReview(
     if (transactionEdit !== null && editingRow === null)
       setTransactionEdit(null);
   }, [transactionEdit, editingRow]);
-  const choiceRevision = choice
-    ? choice.kind === "row" ||
-      choice.kind === "currency" ||
-      choice.kind === "picker"
-      ? (rows.get(choice.rowId)?.revision ?? null)
-      : choice.kind === "replace" || choice.kind === "edit"
-        ? (groups.get(choice.groupId)?.revision ?? null)
-        : null
-    : null;
-  const activeChoice =
-    choice &&
-    session &&
-    props.boundary.input.ownerId === session.ownerId &&
-    props.boundary.input.sessionId === session.sessionId &&
-    !props.boundary.input.signal?.aborted &&
-    isReviewChoiceFresh(choice, session, choiceRevision)
-      ? choice
-      : null;
+  const activeChoice = freshAccountReviewChoice(
+    choice,
+    session,
+    props.boundary.input
+  );
   const currentRow =
-    activeChoice &&
-    (activeChoice.kind === "row" ||
-      activeChoice.kind === "currency" ||
-      activeChoice.kind === "picker")
+    activeChoice && activeChoice.kind === "row"
       ? (rows.get(activeChoice.rowId) ?? null)
       : null;
   const currentGroup =
@@ -205,29 +191,31 @@ export function CanonicalAccountReview(
       ? (groups.get(activeChoice.groupId) ?? null)
       : null;
 
-  // Never expose internal reason codes or exception messages in the UI.
-  const showCommandFailure = (type: "warning" | "error"): void => {
-    if (props.boundary.input.signal?.aborted) return;
-    showToast({
-      type,
-      title: tTransactions("update_error"),
-      message: tTransactions("voice_error_default"),
+  /** The owner-scoped facade remains the sole command mutation authority. */
+  const dispatchCommand = (
+    command: unknown,
+    surface: "page" | "modal" = "page"
+  ): Promise<boolean> => {
+    if (!session || !model || busy || props.boundary.input.signal?.aborted)
+      return Promise.resolve(false);
+    return dispatchReviewChoiceCommand({
+      command,
+      surface,
+      signal: props.boundary.input.signal,
+      feedback,
+      dispatch: view.dispatch,
     });
   };
-  /** Every command is schema-checked; the reducer and service decide policy. */
   const send = (command: unknown): void => {
-    if (!session || !model || busy) return;
-    try {
-      const validated = accountReviewCommandSchema.parse(command);
-      void view
-        .dispatch(validated)
-        .then((result) => {
-          if (result.reasonCodes.length > 0) showCommandFailure("warning");
-        })
-        .catch(() => showCommandFailure("error"));
-    } catch {
-      showCommandFailure("error");
-    }
+    void dispatchCommand(command);
+  };
+  const submitModalCommand = (command: unknown): void => {
+    const stamp = activeChoice;
+    void dispatchCommand(command, "modal").then((accepted) => {
+      if (!accepted || props.boundary.input.signal?.aborted) return;
+      feedback.dismiss("modal");
+      setChoice((current) => (current === stamp ? null : current));
+    });
   };
   const sendGroup = (
     groupId: string,
@@ -270,6 +258,7 @@ export function CanonicalAccountReview(
     const row = rows.get(rowId);
     if (!row || !session || busy || props.boundary.input.signal?.aborted)
       return;
+    feedback.dismiss("modal");
     setChoice(null);
     setTransactionEdit({
       ownerId: session.ownerId,
@@ -291,10 +280,10 @@ export function CanonicalAccountReview(
       props.boundary.input.signal?.aborted
     )
       return false;
-    try {
-      // The facade command, reducer and owned SMS writer (or Voice memory
-      // bridge) remain the SOLE mutation authority, not the old modal hook.
-      const command = accountReviewCommandSchema.parse({
+    // Keep the active controlled editor mounted when ownership, CAS or
+    // category admission rejects its row-only patch.
+    return dispatchCommand(
+      {
         kind: "edit_row_transaction",
         ownerId: transactionEdit.ownerId,
         sessionId: transactionEdit.sessionId,
@@ -303,17 +292,9 @@ export function CanonicalAccountReview(
         rowId: transactionEdit.rowId,
         expectedRowRevision: transactionEdit.rowRevision,
         patch,
-      });
-      const result = await view.dispatch(command);
-      if (result.reasonCodes.length > 0) {
-        showCommandFailure("warning");
-        return false;
-      }
-      return true;
-    } catch {
-      showCommandFailure("error");
-      return false;
-    }
+      },
+      "modal"
+    );
   };
   const openRowChoice = (
     rowId: string,
@@ -321,6 +302,7 @@ export function CanonicalAccountReview(
   ): void => {
     const row = rows.get(rowId);
     if (!row || !session || busy) return;
+    feedback.dismiss("modal");
     const endpoint = role === "source" ? row.assignment : row.toAssignment;
     if (endpoint?.state === "suggested") {
       const existingDraft = groups.get(endpoint.groupId);
@@ -348,22 +330,6 @@ export function CanonicalAccountReview(
       role,
     });
   };
-  const openCurrency = (rowId: string): void => {
-    const row = rows.get(rowId);
-    if (!row || !session || busy) return;
-    // Neither a candidate nor the display currency is a confirmed choice.
-    setCurrencySelection(null);
-    setChoice({
-      ...reviewChoiceStamp(session, row.revision),
-      kind:
-        row.currency.state === "unconfirmed" &&
-        row.currency.candidateCodes.length === 0
-          ? "picker"
-          : "currency",
-      rowId,
-      context: presentReviewTransactionContext(row.transaction, language),
-    });
-  };
   const eligibleCandidates =
     activeChoice?.kind === "row" && currentRow && session
       ? getExplicitAccountCurrencyOptions({
@@ -382,7 +348,7 @@ export function CanonicalAccountReview(
         : [];
   const canCreateDraft =
     activeChoice?.kind === "row" &&
-    currentRow?.currency.state === "known" &&
+    currentRow !== null &&
     (activeChoice.role === "source"
       ? currentRow.assignment.state === "unresolved"
       : currentRow.toAssignment?.state === "unresolved") &&
@@ -393,25 +359,16 @@ export function CanonicalAccountReview(
     const candidate = eligibleCandidates.find((a) => a.id === candidateId);
     if (!candidate) return;
     if (activeChoice?.kind === "row" && currentRow) {
-      send({
-        ...scope,
-        kind: "confirm_row_account_and_currency",
-        rowId: currentRow.rowId,
-        expectedRowRevision: currentRow.revision,
-        role: activeChoice.role,
-        accountId: candidate.id,
-        acknowledgedCurrency: candidate.currency,
-        expectedAccountIdentity: {
-          name: candidate.name,
-          type: candidate.type,
-          currency: candidate.currency,
-          institutionId: candidate.institutionId,
-          providerDisplayName: candidate.providerDisplayName,
-          cardLast4: candidate.cardLast4,
-        },
-      });
+      submitModalCommand(
+        makeExplicitRowAccountCurrencyCommand({
+          scope,
+          row: currentRow,
+          role: activeChoice.role,
+          account: candidate,
+        })
+      );
     } else if (activeChoice?.kind === "replace" && currentGroup) {
-      send({
+      submitModalCommand({
         ...scope,
         kind: "replace_group_account",
         groupId: currentGroup.groupId,
@@ -420,14 +377,20 @@ export function CanonicalAccountReview(
         disclosedLinkedRowCount: currentGroup.linkedRowIds.length,
       });
     }
-    setChoice(null);
   };
 
   const submitManualDraft = async (
-    identity: Extract<
+    value: Extract<
       AccountReviewCommand,
       { kind: "create_row_account_draft" }
-    >["identity"]
+    >["identity"] & {
+      readonly currency: NonNullable<
+        Extract<
+          AccountReviewCommand,
+          { kind: "create_row_account_draft" }
+        >["currency"]
+      >;
+    }
   ): Promise<void> => {
     if (
       !scope ||
@@ -442,67 +405,67 @@ export function CanonicalAccountReview(
     draftInFlight.current = true;
     setPreparingDraft(true);
     const epoch = draftEpoch.current;
+    const stamp = activeChoice;
     try {
-      const manualDraft = await prepareAccountReviewManualSourceDraft({
+      const outcome = await submitPreparedManualReviewDraft({
         session,
         row: currentRow,
         role: activeChoice.role,
-        identity,
+        scope,
+        value,
+        signal: props.boundary.input.signal,
+        current: () => draftEpoch.current === epoch,
+        dispatch: view.dispatch,
       });
-      if (props.boundary.input.signal?.aborted || draftEpoch.current !== epoch)
-        return;
-      const command = accountReviewCommandSchema.parse({
-        ...scope,
-        kind: "create_row_account_draft",
-        rowId: currentRow.rowId,
-        expectedRowRevision: currentRow.revision,
-        role: activeChoice.role,
-        identity,
-        manualDraft,
-      });
-      const result = await view.dispatch(command);
-      if (result.reasonCodes.length > 0) showCommandFailure("warning");
-      else setChoice(null);
-    } catch {
-      showCommandFailure("error");
+      if (outcome.status === "rejected") {
+        if (draftEpoch.current === epoch)
+          feedback.reportFailure({
+            stage: "command",
+            surface: "modal",
+            reasonCodes: outcome.reasonCodes,
+          });
+      } else if (
+        outcome.status === "accepted" &&
+        draftEpoch.current === epoch
+      ) {
+        feedback.dismiss("modal");
+        setChoice((current) => (current === stamp ? null : current));
+      }
+    } catch (error) {
+      if (!props.boundary.input.signal?.aborted && draftEpoch.current === epoch)
+        feedback.reportFailure({ stage: "command", surface: "modal", error });
     } finally {
       draftInFlight.current = false;
       setPreparingDraft(false);
     }
   };
-  const confirmCurrency = (currency: string | null): void => {
-    if (
-      !scope ||
-      (activeChoice?.kind !== "currency" && activeChoice?.kind !== "picker") ||
-      !currentRow
-    )
-      return;
-    const checked = currencyCode.safeParse(currency);
-    if (!checked.success) return;
-    send({
-      ...scope,
-      kind: "confirm_row_currency",
-      rowId: currentRow.rowId,
-      expectedRowRevision: currentRow.revision,
-      currency: checked.data,
-    });
-    setChoice(null);
+  const categoryShortcut = useReviewCategoryShortcut({
+    session,
+    boundary: props.boundary.input,
+    busy,
+    send: (command) => dispatchCommand(command, "modal"),
+  });
+  const openCategoryShortcut = (rowId: string): void => {
+    if (busy) return;
+    feedback.dismiss("modal");
+    categoryShortcut.open(rowId);
   };
+  const accountNeededFilter = useTemporaryAccountNeededFilter(session);
+
   const recoverIssue = (key: ReviewIssueKey): void => {
     if (busy) return;
+    if (
+      key === "account_review_issue_account" ||
+      key === "account_review_issue_currency"
+    ) {
+      setChoice(null);
+      accountNeededFilter.showAccountNeeded();
+      return;
+    }
     const target = presentIssueRecoveryTarget(session?.rows ?? [], key);
     if (!target) return;
-    if (key === "account_review_issue_currency") openCurrency(target.rowId);
-    else if (key === "account_review_issue_account")
-      openRowChoice(
-        target.rowId,
-        target.assignment.state !== "unresolved" &&
-          target.source === "SMS" &&
-          target.transaction.isAtmWithdrawal === true &&
-          target.toAssignment?.state !== "existing"
-          ? "destination"
-          : "source"
-      );
+    if (key === "account_review_issue_category")
+      openCategoryShortcut(target.rowId);
     else openTransactionEdit(target.rowId);
   };
   const useEdit = (value: {
@@ -512,7 +475,7 @@ export function CanonicalAccountReview(
     if (!scope || activeChoice?.kind !== "edit" || !currentGroup) return;
     const kind = accountType.safeParse(value.typeOptionId);
     if (!kind.success) return;
-    send({
+    submitModalCommand({
       ...scope,
       kind: "edit_group",
       groupId: currentGroup.groupId,
@@ -527,7 +490,6 @@ export function CanonicalAccountReview(
       },
       reconfirm: true,
     });
-    setChoice(null);
   };
   const presentGroup = (
     group: AccountReviewSession["groups"][number]
@@ -570,10 +532,12 @@ export function CanonicalAccountReview(
     );
   }
 
-  const visibleRows = model.visibleRowIds.flatMap((id) => {
-    const row = rows.get(id);
-    return row ? [row] : [];
-  });
+  const visibleRows = accountNeededFilter.active
+    ? accountNeededFilter.rows
+    : model.visibleRowIds.flatMap((id) => {
+        const row = rows.get(id);
+        return row ? [row] : [];
+      });
   const defaultAccountName = presentReviewDefaultAccountName(
     session.rows,
     view.choiceAccounts
@@ -622,6 +586,7 @@ export function CanonicalAccountReview(
         <TransactionItem
           transaction={row.transaction}
           index={index}
+          isLastCanonicalRow={index === visibleRows.length - 1}
           isSelected={row.selected}
           accountName={details.accountName}
           expandedContentTitle={content?.title}
@@ -659,7 +624,11 @@ export function CanonicalAccountReview(
             accountStatusTone: details.accountStatusTone,
             isBusy: busy,
             onChooseAccount: openRowChoice,
-            onChooseCurrency: openCurrency,
+            onChooseCurrency: (rowId) => openRowChoice(rowId),
+            canEditCategory: !(
+              row.source === "SMS" && row.transaction.isAtmWithdrawal === true
+            ),
+            onEditCategory: openCategoryShortcut,
           }}
         />
         {details.isSmsAtm ? (
@@ -691,6 +660,13 @@ export function CanonicalAccountReview(
           backAccessibilityLabel={tCommon("back")}
         />
       ) : null}
+      {props.boundary.input.mode === "SMS" ? (
+        <ReviewInlineNotice
+          notice={feedback.pageNotice}
+          surface="page"
+          onDismiss={() => feedback.dismiss("page")}
+        />
+      ) : null}
       <FlatList
         data={visibleRows}
         keyExtractor={(row) => row.rowId}
@@ -711,75 +687,87 @@ export function CanonicalAccountReview(
             <SafeguardQaDiagnosticsPanel
               diagnostics={props.qaDiagnostics ?? null}
             />
-            <AccountReviewPanel
-              filter={session.filter}
-              visibleRowIds={model.visibleRowIds}
-              readyVisibleRowIds={model.readyVisibleRowIds}
-              selectedVisibleCount={
-                visibleRows.filter((row) => row.selected).length
-              }
-              groups={session.groups.map(presentGroup)}
-              summary={summary}
-              isAllGroupsSheetOpen={showAllGroups}
-              isBusy={busy}
-              defaultAccountName={defaultAccountName}
-              isWhySheetOpen={showDefaultWhy}
-              onFilterChange={(filter) =>
-                send({ ...scope, kind: "set_filter", filter })
-              }
-              onSelectReady={() =>
-                send({
-                  ...scope,
-                  kind: "select_ready",
-                  filter: session.filter,
-                })
-              }
-              onClearSelection={() =>
-                send({
-                  ...scope,
-                  kind: "clear_selection",
-                  filter: session.filter,
-                })
-              }
-              onDefaultWhyPress={() => setShowDefaultWhy(true)}
-              onCloseWhy={() => setShowDefaultWhy(false)}
-              onConfirm={(groupId) => sendGroup(groupId, "confirm_group")}
-              onEdit={(groupId) => {
-                const group = groups.get(groupId);
-                if (!session || !group) return;
-                setChoice({
-                  ...reviewChoiceStamp(session, group.revision),
-                  kind: "edit",
-                  groupId,
-                });
-              }}
-              onReplace={(groupId) => {
-                const group = groups.get(groupId);
-                if (!session || !group) return;
-                setCandidateId(null);
-                setChoice({
-                  ...reviewChoiceStamp(session, group.revision),
-                  kind: "replace",
-                  groupId,
-                });
-              }}
-              onRemove={(groupId) => sendGroup(groupId, "remove_group")}
-              onUndo={(groupId) => {
-                if (busy || !view.undoToken || view.undoGroupId !== groupId)
-                  return;
-                void view.undoRemoval().catch(() => {
-                  if (props.boundary.input.signal?.aborted) return;
-                  showToast({
-                    type: "error",
-                    title: tTransactions("sms_review_undo_failed"),
-                    message: tTransactions("sms_review_undo_failed_message"),
+            {accountNeededFilter.active ? (
+              <AccountNeededTemporaryHeader
+                count={visibleRows.length}
+                disabled={busy}
+                onShowAll={() => {
+                  accountNeededFilter.showAll();
+                  if (session.filter !== "all")
+                    send({ ...scope, kind: "set_filter", filter: "all" });
+                }}
+              />
+            ) : (
+              <AccountReviewPanel
+                filter={session.filter}
+                visibleRowIds={model.visibleRowIds}
+                readyVisibleRowIds={model.readyVisibleRowIds}
+                selectedVisibleCount={
+                  visibleRows.filter((row) => row.selected).length
+                }
+                groups={session.groups.map(presentGroup)}
+                summary={summary}
+                isAllGroupsSheetOpen={showAllGroups}
+                isBusy={busy}
+                defaultAccountName={defaultAccountName}
+                isWhySheetOpen={showDefaultWhy}
+                onFilterChange={(filter) =>
+                  send({ ...scope, kind: "set_filter", filter })
+                }
+                onSelectReady={() =>
+                  send({
+                    ...scope,
+                    kind: "select_ready",
+                    filter: session.filter,
+                  })
+                }
+                onClearSelection={() =>
+                  send({
+                    ...scope,
+                    kind: "clear_selection",
+                    filter: session.filter,
+                  })
+                }
+                onDefaultWhyPress={() => setShowDefaultWhy(true)}
+                onCloseWhy={() => setShowDefaultWhy(false)}
+                onConfirm={(groupId) => sendGroup(groupId, "confirm_group")}
+                onEdit={(groupId) => {
+                  const group = groups.get(groupId);
+                  if (!session || !group) return;
+                  setChoice({
+                    ...reviewChoiceStamp(session, group.revision),
+                    kind: "edit",
+                    groupId,
                   });
-                });
-              }}
-              onViewAll={() => setShowAllGroups(true)}
-              onCloseAllGroups={() => setShowAllGroups(false)}
-              onIssuePress={recoverIssue}
-            />
+                }}
+                onReplace={(groupId) => {
+                  const group = groups.get(groupId);
+                  if (!session || !group) return;
+                  setCandidateId(null);
+                  setChoice({
+                    ...reviewChoiceStamp(session, group.revision),
+                    kind: "replace",
+                    groupId,
+                  });
+                }}
+                onRemove={(groupId) => sendGroup(groupId, "remove_group")}
+                onUndo={(groupId) => {
+                  if (busy || !view.undoToken || view.undoGroupId !== groupId)
+                    return;
+                  void view.undoRemoval().catch((error) => {
+                    if (!props.boundary.input.signal?.aborted)
+                      feedback.reportFailure({
+                        stage: "undo",
+                        surface: "page",
+                        error,
+                      });
+                  });
+                }}
+                onViewAll={() => setShowAllGroups(true)}
+                onCloseAllGroups={() => setShowAllGroups(false)}
+                onIssuePress={recoverIssue}
+              />
+            )}
           </View>
         }
         contentContainerClassName="pb-2"
@@ -804,6 +792,14 @@ export function CanonicalAccountReview(
           }
         }}
         onDiscard={props.onDiscard}
+        hideDiscard={accountNeededFilter.active}
+        onUnhandledSaveError={(error) =>
+          feedback.reportFailure({
+            stage: "footer_unhandled",
+            surface: "page",
+            error,
+          })
+        }
         isSmsWorkspace={props.workspaceVariant === "sms"}
         onReviewLater={props.onReviewLater}
       />
@@ -814,9 +810,9 @@ export function CanonicalAccountReview(
         source: session.source,
         candidates: eligibleCandidates,
         selectedCandidateId: candidateId,
-        currencySelection,
         canCreateDraft,
         busy,
+        reviewFeedback: feedback,
         language,
         tTransactions,
         tAccounts,
@@ -835,13 +831,8 @@ export function CanonicalAccountReview(
         },
         onClose: () => {
           draftEpoch.current += 1;
+          feedback.dismiss("modal");
           setChoice(null);
-        },
-        onCurrencyCandidate: setCurrencySelection,
-        onConfirmCurrency: confirmCurrency,
-        onOpenCurrencyPicker: () => {
-          if (activeChoice?.kind === "currency")
-            setChoice({ ...activeChoice, kind: "picker" });
         },
         onEditGroup: useEdit,
         onReplaceEditingGroup: () => {
@@ -854,17 +845,29 @@ export function CanonicalAccountReview(
           });
         },
       })}
+      <AccountReviewCategoryChoice
+        row={categoryShortcut.currentRow}
+        ownerId={session.ownerId}
+        signal={props.boundary.input.signal}
+        reviewFeedback={feedback}
+        onSelect={async (categoryId) => {
+          const accepted = await categoryShortcut.choose(categoryId);
+          if (accepted) feedback.dismiss("modal");
+          return accepted;
+        }}
+        onClose={() => {
+          feedback.dismiss("modal");
+          categoryShortcut.close();
+        }}
+      />
       {editingRow && transactionEdit && (
         <TransactionEditModal
-          key={
-            transactionEdit.ownerId +
-            ":" +
-            transactionEdit.sessionId +
-            ":" +
-            transactionEdit.rowId +
-            ":" +
-            transactionEdit.rowRevision
-          }
+          key={[
+            transactionEdit.ownerId,
+            transactionEdit.sessionId,
+            transactionEdit.rowId,
+            transactionEdit.rowRevision,
+          ].join(":")}
           controlledReview
           visible
           row={editingRow}
@@ -872,7 +875,9 @@ export function CanonicalAccountReview(
           signal={props.boundary.input.signal}
           isBusy={busy}
           onSubmit={submitTransactionEdit}
-          onClose={() =>
+          reviewFeedback={feedback}
+          onClose={() => {
+            feedback.dismiss("modal");
             setTransactionEdit((active) =>
               active &&
               active.ownerId === transactionEdit.ownerId &&
@@ -884,8 +889,8 @@ export function CanonicalAccountReview(
               active.rowRevision === transactionEdit.rowRevision
                 ? null
                 : active
-            )
-          }
+            );
+          }}
         />
       )}
     </View>

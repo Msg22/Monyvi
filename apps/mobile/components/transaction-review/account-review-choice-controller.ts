@@ -1,26 +1,29 @@
 /** #395 Bounded canonical chooser composition; no persistence or account authority. */
 import React from "react";
-import type {
-  AccountReviewCommand,
+import { prepareAccountReviewManualSourceDraft } from "@/services/account-review-manual-draft-service";
+import {
+  accountReviewCommandSchema,
+  type AccountReviewCommand,
   AccountReviewGroup,
   AccountReviewRow,
   AccountReviewSession,
 } from "@monyvi/logic";
-import type { AccountReviewChoiceAccount } from "@/hooks/account-review-facade-state";
-import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
+import type {
+  AccountReviewChoiceAccount,
+  UseAccountReviewInput,
+} from "@/hooks/account-review-facade-state";
 import {
   ACCOUNT_REVIEW_ACCOUNT_TYPES,
   ACCOUNT_REVIEW_CURRENCIES,
 } from "../../../../packages/logic/src/account-review/generated-vocabulary";
-import { currencyCode } from "../../../../packages/logic/src/account-review/schema-primitives";
 import { AccountChoiceSheet } from "./AccountChoiceSheet";
-import { CurrencyConfirmationSheet } from "./CurrencyConfirmationSheet";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 import { EditSuggestedAccountSheet } from "./EditSuggestedAccountSheet";
 import {
   presentReviewAccountChoices,
   presentReviewCurrencyLabel,
-  presentReviewCurrencyOptions,
   presentReviewReplaceScope,
+  isReviewChoiceFresh,
   presentReviewTransactionContext,
   type ReviewDisplayLanguage,
   type ReviewChoiceStamp,
@@ -34,15 +37,33 @@ export type ReviewChoice =
           readonly role: "source" | "destination";
         }
       | { readonly kind: "replace"; readonly groupId: string }
-      | {
-          readonly kind: "currency" | "picker";
-          readonly rowId: string;
-          readonly context: string;
-        }
       | { readonly kind: "edit"; readonly groupId: string }
     ) &
       ReviewChoiceStamp)
   | null;
+
+/** Live command scope must match both the row/group revision and active actor. */
+export function freshAccountReviewChoice(
+  choice: ReviewChoice,
+  session: AccountReviewSession | null,
+  boundary: Pick<UseAccountReviewInput, "ownerId" | "sessionId" | "signal">
+): ReviewChoice {
+  if (
+    !choice ||
+    !session ||
+    boundary.signal?.aborted ||
+    boundary.ownerId !== session.ownerId ||
+    boundary.sessionId !== session.sessionId
+  )
+    return null;
+  const revision =
+    choice.kind === "row"
+      ? (session.rows.find((row) => row.rowId === choice.rowId)?.revision ??
+        null)
+      : (session.groups.find((group) => group.groupId === choice.groupId)
+          ?.revision ?? null);
+  return isReviewChoiceFresh(choice, session, revision) ? choice : null;
+}
 
 export function reviewGroupChoiceRole(
   source: AccountReviewSession["source"],
@@ -70,10 +91,12 @@ export function preselectedOwnedAccountId(
     : null;
 }
 
-type ManualDraftIdentity = Extract<
+type ManualDraftCommand = Extract<
   AccountReviewCommand,
   { kind: "create_row_account_draft" }
->["identity"];
+>;
+type ManualDraftIdentity = ManualDraftCommand["identity"];
+type DraftCurrency = NonNullable<ManualDraftCommand["currency"]>;
 
 export interface RenderAccountReviewChoicesInput {
   readonly activeChoice: ReviewChoice;
@@ -82,25 +105,138 @@ export interface RenderAccountReviewChoicesInput {
   readonly source: AccountReviewSession["source"];
   readonly candidates: readonly AccountReviewChoiceAccount[];
   readonly selectedCandidateId: string | null;
-  readonly currencySelection: string | null;
   readonly canCreateDraft: boolean;
   readonly busy: boolean;
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
   readonly language: ReviewDisplayLanguage;
   readonly tTransactions: (key: string) => string;
   readonly tAccounts: (key: string) => string;
   readonly onCandidate: (id: string) => void;
   readonly onUseAccount: () => void;
-  readonly onCreateDraft: (identity: ManualDraftIdentity) => void;
+  readonly onCreateDraft: (
+    identity: ManualDraftIdentity & { readonly currency: DraftCurrency }
+  ) => void;
   readonly onEditExistingDraft: () => void;
   readonly onClose: () => void;
-  readonly onCurrencyCandidate: (currency: string) => void;
-  readonly onConfirmCurrency: (currency: string | null) => void;
-  readonly onOpenCurrencyPicker: () => void;
   readonly onEditGroup: (value: {
     readonly name: string;
     readonly typeOptionId: string;
   }) => void;
   readonly onReplaceEditingGroup: () => void;
+}
+
+/** Dispatch a scoped command, with only sanitized feedback at its surface. */
+export async function dispatchReviewChoiceCommand(input: {
+  readonly command: unknown;
+  readonly surface: "page" | "modal";
+  readonly signal?: AbortSignal;
+  readonly feedback: ReviewFeedbackBoundary;
+  readonly dispatch: (
+    command: AccountReviewCommand
+  ) => Promise<{ readonly reasonCodes: readonly string[] }>;
+}): Promise<boolean> {
+  try {
+    const checked = accountReviewCommandSchema.parse(input.command);
+    const outcome = await input.dispatch(checked);
+    if (input.signal?.aborted) return false;
+    if (outcome.reasonCodes.length > 0) {
+      input.feedback.reportFailure({
+        stage: "command",
+        surface: input.surface,
+        reasonCodes: outcome.reasonCodes,
+      });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    if (!input.signal?.aborted)
+      input.feedback.reportFailure({
+        stage: "command",
+        surface: input.surface,
+        error,
+      });
+    return false;
+  }
+}
+
+/** Construct the existing atomic owned account-and-currency row command. */
+export function makeExplicitRowAccountCurrencyCommand(input: {
+  readonly scope: Pick<
+    AccountReviewCommand,
+    | "ownerId"
+    | "sessionId"
+    | "expectedReviewRevision"
+    | "expectedOperationGeneration"
+  >;
+  readonly row: AccountReviewRow;
+  readonly role: "source" | "destination";
+  readonly account: AccountReviewChoiceAccount;
+}): AccountReviewCommand {
+  const { account, row, scope, role } = input;
+  return accountReviewCommandSchema.parse({
+    ...scope,
+    kind: "confirm_row_account_and_currency",
+    rowId: row.rowId,
+    expectedRowRevision: row.revision,
+    role,
+    accountId: account.id,
+    acknowledgedCurrency: account.currency,
+    expectedAccountIdentity: {
+      name: account.name,
+      type: account.type,
+      currency: account.currency,
+      institutionId: account.institutionId,
+      providerDisplayName: account.providerDisplayName,
+      cardLast4: account.cardLast4,
+    },
+  });
+}
+
+/** No intermediate currency state: prepare and dispatch one guarded draft. */
+export async function submitPreparedManualReviewDraft(input: {
+  readonly session: AccountReviewSession;
+  readonly row: AccountReviewRow;
+  readonly scope: Pick<
+    AccountReviewCommand,
+    | "ownerId"
+    | "sessionId"
+    | "expectedReviewRevision"
+    | "expectedOperationGeneration"
+  >;
+  readonly role: "source" | "destination";
+  readonly value: ManualDraftIdentity & { readonly currency: DraftCurrency };
+  readonly signal?: AbortSignal;
+  readonly current: () => boolean;
+  readonly dispatch: (
+    command: AccountReviewCommand
+  ) => Promise<{ readonly reasonCodes: readonly string[] }>;
+}): Promise<
+  | { readonly status: "accepted" | "cancelled" }
+  | { readonly status: "rejected"; readonly reasonCodes: readonly string[] }
+> {
+  const identity = { name: input.value.name, type: input.value.type };
+  const manualDraft = await prepareAccountReviewManualSourceDraft({
+    session: input.session,
+    row: input.row,
+    role: input.role,
+    identity,
+    currency: input.value.currency,
+  });
+  if (input.signal?.aborted || !input.current()) return { status: "cancelled" };
+  const command = accountReviewCommandSchema.parse({
+    ...input.scope,
+    kind: "create_row_account_draft",
+    rowId: input.row.rowId,
+    expectedRowRevision: input.row.revision,
+    role: input.role,
+    identity,
+    currency: input.value.currency,
+    manualDraft,
+  });
+  const result = await input.dispatch(command);
+  return result.reasonCodes.length > 0
+    ? { status: "rejected", reasonCodes: result.reasonCodes }
+    : { status: "accepted" };
 }
 
 /** Identical B1 sheets/picker, with one role-specific chooser and no fake IDs. */
@@ -126,14 +262,7 @@ export function renderAccountReviewChoiceSheets(
     label: p.tAccounts("type_" + type.toLowerCase()),
   }));
   const canDraft =
-    rowChoice !== null &&
-    p.currentRow?.currency.state === "known" &&
-    p.canCreateDraft;
-  const checkedCurrency = currencyCode.safeParse(p.currencySelection);
-  const currencyOptions = presentReviewCurrencyOptions(
-    p.currentRow?.currency,
-    checkedCurrency.success ? checkedCurrency.data : null
-  );
+    rowChoice !== null && p.currentRow !== null && p.canCreateDraft;
   const group = p.activeChoice?.kind === "edit" ? p.currentGroup : null;
 
   return React.createElement(
@@ -177,11 +306,22 @@ export function renderAccountReviewChoiceSheets(
         : undefined,
       isCashDestination: isDestination,
       draftCreation:
-        canDraft && p.currentRow?.currency.state === "known"
+        canDraft && p.currentRow
           ? {
-              lockedCurrencyLabel: presentReviewCurrencyLabel(
-                p.currentRow.currency.code,
-                p.language
+              initialCurrency:
+                p.currentRow.currency.state === "known"
+                  ? p.currentRow.currency.code
+                  : null,
+              lockedCurrencyLabel:
+                p.currentRow.currency.state === "known"
+                  ? presentReviewCurrencyLabel(
+                      p.currentRow.currency.code,
+                      p.language
+                    )
+                  : "",
+              currencyOptions: ACCOUNT_REVIEW_CURRENCIES.filter(
+                (code) =>
+                  !p.candidates.some((account) => account.currency === code)
               ),
               typeOptions: allowedTypes,
               onSubmit: p.onCreateDraft,
@@ -194,33 +334,7 @@ export function renderAccountReviewChoiceSheets(
       onSelectCandidate: p.onCandidate,
       onUseSelected: p.onUseAccount,
       onClose: p.onClose,
-    }),
-    React.createElement(CurrencyConfirmationSheet, {
-      visible: p.activeChoice?.kind === "currency",
-      contextSubtitle:
-        p.activeChoice?.kind === "currency" ? p.activeChoice.context : "",
-      candidateOptions: currencyOptions.map((code) => ({
-        code,
-        label: presentReviewCurrencyLabel(code, p.language),
-        accessibilityLabel:
-          presentReviewCurrencyLabel(code, p.language) + ", " + code,
-      })),
-      selectedCandidateCode: p.currencySelection,
-      canUseSelection: checkedCurrency.success,
-      isBusy: p.busy,
-      onSelectCandidate: p.onCurrencyCandidate,
-      onUseSelected: () => p.onConfirmCurrency(p.currencySelection),
-      onChooseAnother: p.onOpenCurrencyPicker,
-      onClose: p.onClose,
-    }),
-    React.createElement(CurrencyPicker, {
-      visible: p.activeChoice?.kind === "picker",
-      selectedCurrency: checkedCurrency.success ? checkedCurrency.data : null,
-      allowedCurrencies: ACCOUNT_REVIEW_CURRENCIES,
-      contextSubtitle:
-        p.activeChoice?.kind === "picker" ? p.activeChoice.context : undefined,
-      onSelect: p.onConfirmCurrency,
-      onClose: p.onClose,
+      reviewFeedback: p.reviewFeedback,
     }),
     group !== null
       ? React.createElement(EditSuggestedAccountSheet, {
@@ -245,6 +359,7 @@ export function renderAccountReviewChoiceSheets(
           canSubmit: !p.busy && group.status !== "removed",
           isBusy: p.busy,
           validationMessage: null,
+          reviewFeedback: p.reviewFeedback,
           onSubmit: p.onEditGroup,
           onReplace: p.onReplaceEditingGroup,
           onCancel: p.onClose,

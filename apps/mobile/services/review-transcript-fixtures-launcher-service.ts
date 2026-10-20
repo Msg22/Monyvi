@@ -124,6 +124,8 @@ export async function buildReviewTranscriptFixtureLaunch(input: {
         providerContext: input.context.providerContext,
       },
       categoryIdsBySystemName: input.context.categoryIdsBySystemName,
+      categoryDisplayNamesBySystemName:
+        input.context.categoryDisplayNamesBySystemName,
       fallbackCategorySystemNameByType:
         input.context.fallbackCategorySystemNameByType,
       hashProvider: productionFinancialActionHashProvider,

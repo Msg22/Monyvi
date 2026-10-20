@@ -58,6 +58,8 @@ interface CategorySelectorModalProps {
   readonly onSelect: (id: string) => void;
   /** Close the modal */
   readonly onClose: () => void;
+  /** Optional caller-owned feedback below the fixed header, outside the list. */
+  readonly inlineNotice?: React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,11 +81,16 @@ export function CategorySelectorModal({
   type,
   onSelect,
   onClose,
+  inlineNotice,
 }: CategorySelectorModalProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { width, height } = useWindowDimensions();
   const bottomInset = useModalBottomInset();
   const { t } = useTranslation("common");
+  const [noticeHeight, setNoticeHeight] = React.useState(0);
+  useEffect(() => {
+    if (!inlineNotice) setNoticeHeight(0);
+  }, [inlineNotice]);
 
   // Navigation state machine
   const navigation = useCategoryNavigation();
@@ -102,7 +109,10 @@ export function CategorySelectorModal({
 
   // Approximate height reserved for header (~68px), breadcrumb (~42px), search (~48px), padding
   const HEADER_AREA_HEIGHT = depth > 0 ? 180 : 140;
-  const listMaxHeight = height * 0.8 - HEADER_AREA_HEIGHT;
+  const listMaxHeight = Math.max(
+    0,
+    height * 0.8 - HEADER_AREA_HEIGHT - (inlineNotice ? noticeHeight : 0)
+  );
 
   // Fetch children for the current parent (null at root → returns [])
   const parentId = currentLevel.category?.id ?? null;
@@ -248,6 +258,23 @@ export function CategorySelectorModal({
                 </TouchableOpacity>
               </View>
 
+              {inlineNotice ? (
+                <View
+                  testID="category-selector-inline-notice-region"
+                  onLayout={(event) => {
+                    const measured = Math.max(
+                      0,
+                      event.nativeEvent.layout.height
+                    );
+                    setNoticeHeight((previous) =>
+                      previous === measured ? previous : measured
+                    );
+                  }}
+                >
+                  {inlineNotice}
+                </View>
+              ) : null}
+
               {/* Breadcrumb (only when drilled in) */}
               {depth > 0 && (
                 <Breadcrumb
@@ -266,6 +293,7 @@ export function CategorySelectorModal({
 
               {/* Category list with slide animation */}
               <Animated.View
+                testID="category-selector-list-viewport"
                 style={[animatedStyle, { maxHeight: listMaxHeight }]}
               >
                 {isLoading && depth > 0 ? (

@@ -9,13 +9,7 @@ import type {
   ReviewableTransaction,
 } from "@monyvi/logic";
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { palette } from "@/constants/colors";
 import {
   getCategoryIconConfig,
@@ -46,6 +40,8 @@ export interface AccountReviewRowPresentationProps {
   readonly accountStatusTone?: AccountReviewRowStatusTone;
   readonly isBusy: boolean;
   readonly onChooseAccount: (rowId: AccountReviewRow["rowId"]) => void;
+  readonly canEditCategory?: boolean;
+  readonly onEditCategory?: (rowId: AccountReviewRow["rowId"]) => void;
   readonly onChooseCurrency: (
     rowId: AccountReviewRow["rowId"],
     contextLabel: string
@@ -69,6 +65,8 @@ export function areAccountReviewRowPropsEqual(
     a.accountStatusTone === b.accountStatusTone &&
     a.isBusy === b.isBusy &&
     a.onChooseAccount === b.onChooseAccount &&
+    a.canEditCategory === b.canEditCategory &&
+    a.onEditCategory === b.onEditCategory &&
     a.onChooseCurrency === b.onChooseCurrency
   );
 }
@@ -94,56 +92,93 @@ interface AccountMetadataProps {
   readonly source: AccountReviewRowPresentationProps;
   readonly name: string | null;
   readonly rtl: boolean;
-  readonly dense: boolean;
 }
+
 function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
-  const { source, name, rtl, dense } = props;
+  const { source, name, rtl } = props;
   const textAlign = rtl ? "text-right" : "text-left";
   const direction = rtl
     ? rowWritingDirectionStyles.rtl
     : rowWritingDirectionStyles.ltr;
+  const ordering = rtl ? "flex-row-reverse" : "flex-row";
   const action = source.accountActionLabel;
   const title = name ?? action;
   const status = source.accountStatusLabel;
-  const content = (
-    <>
+
+  return (
+    <View
+      testID="account-review-row-account"
+      className={"min-w-0 max-w-full shrink-0 items-start gap-1.5 " + ordering}
+    >
       {title !== null || source.accountType ? (
-        <View className="h-5 w-5 shrink-0 items-center justify-center">
+        <View className="h-11 w-7 shrink-0 items-center justify-center">
           <Ionicons
             testID="account-review-account-type-icon"
             name={accountTypeIcon(source.accountType)}
             color={palette.slate[500]}
-            size={dense ? 18 : 20}
+            size={20}
             accessibilityElementsHidden
             importantForAccessibility="no"
           />
         </View>
       ) : null}
-      <View className="min-w-0 grow shrink">
-        {title !== null ? (
-          <Text
-            testID={
-              name !== null
-                ? "transaction-account-match"
-                : "account-review-account-label"
-            }
-            className={
-              (dense
-                ? "text-[13px] font-semibold leading-[18px] "
-                : "text-sm font-semibold leading-5 ") +
-              "text-text-primary dark:text-text-primary-dark " +
-              textAlign
-            }
-            style={direction}
-          >
-            {title}
-          </Text>
-        ) : null}
+      <View className="min-w-0 max-w-full shrink gap-1">
+        <View
+          testID="account-review-account-name-and-pencil"
+          className={
+            "min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-1 " +
+            ordering
+          }
+        >
+          {title !== null ? (
+            <Text
+              testID={
+                name !== null
+                  ? "transaction-account-match"
+                  : "account-review-account-label"
+              }
+              className={
+                "min-w-0 max-w-full shrink text-sm font-semibold leading-5 " +
+                "text-text-primary dark:text-text-primary-dark " +
+                textAlign
+              }
+              style={direction}
+            >
+              {title}
+            </Text>
+          ) : null}
+          {action !== null ? (
+            <TouchableOpacity
+              testID="account-review-row-account-action"
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={[action, name, status]
+                .filter(Boolean)
+                .join(", ")}
+              accessibilityState={{ disabled: source.isBusy }}
+              disabled={source.isBusy}
+              hitSlop={8}
+              onPress={(event) => {
+                event.stopPropagation();
+                source.onChooseAccount(source.rowId);
+              }}
+              className="h-11 w-10 shrink-0 items-center justify-center"
+            >
+              <Ionicons
+                name="pencil-outline"
+                size={19}
+                color={palette.slate[500]}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         {status !== null ? (
           <Text
             testID="account-review-row-status"
             className={
-              "text-xs leading-[18px] " +
+              "text-xs leading-5 " +
               statusToneColor(source.accountStatusTone) +
               " " +
               textAlign
@@ -154,40 +189,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
           </Text>
         ) : null}
       </View>
-      {action !== null && name !== null ? (
-        <View className="h-4 w-4 shrink-0 items-center justify-center">
-          <Ionicons
-            name="pencil-outline"
-            size={dense ? 14 : 16}
-            color={palette.slate[500]}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
-        </View>
-      ) : null}
-    </>
-  );
-  const classes =
-    "w-full min-w-0 " +
-    (dense ? "items-start gap-1 " : "items-center gap-1.5 ") +
-    (rtl ? "flex-row-reverse" : "flex-row");
-  if (action === null) {
-    return <View className={classes}>{content}</View>;
-  }
-  return (
-    <TouchableOpacity
-      testID="account-review-row-account-action"
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={[action, name, status].filter(Boolean).join(", ")}
-      accessibilityState={{ disabled: source.isBusy }}
-      disabled={source.isBusy}
-      onPress={() => source.onChooseAccount(source.rowId)}
-      activeOpacity={0.8}
-      className={"min-h-11 rounded-lg " + classes}
-    >
-      {content}
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -204,28 +206,10 @@ export function AccountReviewRowPresentation({
   categoryDisplayName,
 }: RowPresentationProps): React.JSX.Element | null {
   const { language } = useLocale();
-  const { width, fontScale } = useWindowDimensions();
-  const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
   const rtl = language === "ar";
-  // Canonical TransactionItem allocates 44 dp for selection, 32 dp gutters,
-  // and a 4 dp gap. Once measured, the actual row takes precedence.
-  const availableWidth = measuredWidth ?? Math.max(0, width - 80);
-  const dense = availableWidth < 288 || fontScale > 1.35;
-  const accountHasContent =
-    accountName !== null ||
-    source.accountActionLabel !== null ||
-    source.accountStatusLabel !== null ||
-    source.accountType !== undefined;
-  const accountMinimum =
-    20 +
-    6 +
-    Math.ceil(78 * fontScale) +
-    (accountName !== null && source.accountActionLabel !== null ? 22 : 0);
-  const categoryMinimum = 20 + 6 + Math.ceil(78 * fontScale);
-  const compact =
-    accountHasContent &&
-    Boolean(categoryDisplayName) &&
-    availableWidth < accountMinimum + categoryMinimum + (dense ? 8 : 12);
+  const ordering = rtl ? "flex-row-reverse" : "flex-row";
+  // Use intrinsic labels and real 48dp controls; flex-wrap makes the decision
+  // from available row space rather than viewport or character-width estimates.
   const categoryMap = useCategoryLookup();
   const category = categoryId ? categoryMap.get(categoryId) : null;
   const categoryIcon = category
@@ -235,107 +219,93 @@ export function AccountReviewRowPresentation({
         "Ionicons",
         palette.slate[500]
       );
-  const context = source.currencyContextLabel;
   if (
     accountName === null &&
     source.accountStatusLabel === null &&
     source.accountActionLabel === null &&
     source.currencyActionLabel === null &&
     source.sharedSelectionDisclosure === null &&
-    !categoryDisplayName
+    !categoryDisplayName &&
+    !source.canEditCategory
   )
     return null;
   return (
     <View testID="account-review-row-presentation" className="mt-1.5 gap-1.5">
       <View
         testID="account-review-row-metadata"
-        onLayout={(event) => {
-          const next = Math.round(event.nativeEvent.layout.width);
-          setMeasuredWidth((previous) => (previous === next ? previous : next));
-        }}
-        className={
-          (dense ? "gap-x-2 gap-y-1.5 " : "gap-x-3 gap-y-2 ") +
-          (compact
-            ? "items-start flex-col"
-            : rtl
-              ? "items-center flex-row-reverse"
-              : "items-center flex-row")
-        }
+        className={"flex-wrap items-start gap-x-2 gap-y-1.5 " + ordering}
       >
         {accountName !== null ||
         source.accountActionLabel !== null ||
         source.accountStatusLabel !== null ||
         source.accountType ? (
-          <View className={compact ? "w-full" : "min-w-0 flex-1"}>
-            <AccountMetadata
-              source={source}
-              name={accountName}
-              rtl={rtl}
-              dense={dense}
-            />
-          </View>
+          <AccountMetadata source={source} name={accountName} rtl={rtl} />
         ) : null}
-        {categoryDisplayName ? (
+        {categoryDisplayName || source.canEditCategory ? (
           <View
             testID="account-review-row-category"
             className={
-              "min-w-0 " +
-              (dense ? "items-start gap-1 " : "items-center gap-1.5 ") +
-              (compact ? "w-full " : "flex-1 ") +
-              (rtl ? "flex-row-reverse" : "flex-row")
+              "min-w-0 max-w-full shrink-0 items-start gap-1 " + ordering
             }
           >
-            <View className="h-5 w-5 shrink-0 items-center justify-center">
+            <View className="h-11 w-7 shrink-0 items-center justify-center">
               <CategoryIcon
                 iconName={categoryIcon.iconName}
                 iconLibrary={categoryIcon.iconLibrary}
                 color={categoryIcon.iconColor}
-                size={dense ? 16 : 18}
+                size={18}
               />
             </View>
-            <Text
+            <View
+              testID="account-review-category-name-and-pencil"
               className={
-                "min-w-0 grow shrink " +
-                (dense ? "text-[13px] leading-[18px] " : "text-sm leading-5 ") +
-                "text-text-secondary dark:text-text-secondary-dark " +
-                (rtl ? "text-right" : "text-left")
-              }
-              style={
-                rtl
-                  ? rowWritingDirectionStyles.rtl
-                  : rowWritingDirectionStyles.ltr
+                "min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-1 " +
+                ordering
               }
             >
-              {categoryDisplayName}
-            </Text>
+              <Text
+                className={
+                  "min-w-0 max-w-full shrink text-sm leading-5 " +
+                  "text-text-secondary dark:text-text-secondary-dark " +
+                  (rtl ? "text-right" : "text-left")
+                }
+                style={
+                  rtl
+                    ? rowWritingDirectionStyles.rtl
+                    : rowWritingDirectionStyles.ltr
+                }
+              >
+                {categoryDisplayName ||
+                  (rtl ? "اختر التصنيف" : "Choose category")}
+              </Text>
+              {source.canEditCategory && source.onEditCategory ? (
+                <TouchableOpacity
+                  testID="account-review-row-category-pencil"
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel={rtl ? "تعديل التصنيف" : "Edit category"}
+                  accessibilityState={{ disabled: source.isBusy }}
+                  disabled={source.isBusy}
+                  hitSlop={8}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    source.onEditCategory?.(source.rowId);
+                  }}
+                  className="h-11 w-10 shrink-0 items-center justify-center"
+                >
+                  <Ionicons
+                    name="pencil-outline"
+                    size={19}
+                    color={palette.slate[500]}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </View>
-      {source.currencyActionLabel !== null && context !== null ? (
-        <TouchableOpacity
-          testID="account-review-row-currency-action"
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={source.currencyActionLabel + ", " + context}
-          accessibilityState={{ disabled: source.isBusy }}
-          disabled={source.isBusy}
-          onPress={() => source.onChooseCurrency(source.rowId, context)}
-          activeOpacity={0.8}
-          className={
-            "min-h-12 min-w-11 self-start items-center gap-1.5 rounded-lg border border-border px-3 dark:border-border-dark " +
-            (rtl ? "flex-row-reverse" : "flex-row")
-          }
-        >
-          <Ionicons
-            name="globe-outline"
-            size={18}
-            color={palette.nileGreen[700]}
-          />
-          <Text className="text-sm font-semibold leading-5 text-nileGreen-700 dark:text-nileGreen-400">
-            {source.currencyActionLabel}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
       {source.sharedSelectionDisclosure !== null ? (
         <Text
           testID="account-review-row-shared-disclosure"

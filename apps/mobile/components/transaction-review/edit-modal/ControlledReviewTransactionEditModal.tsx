@@ -29,6 +29,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
+import { ReviewInlineNotice } from "../ReviewInlineNotice";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
 import { TypeTabs } from "../../add-transaction/TypeTabs";
 import { CategorySelectorModal } from "../../modals/CategorySelectorModal";
@@ -52,6 +54,7 @@ export interface ControlledReviewTransactionEditModalProps {
   readonly signal?: AbortSignal;
   readonly isBusy?: boolean;
   /** Resolve true only after canonical reducer/service accepted the command. */
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
   readonly onSubmit: (patch: TransactionEditPatch) => Promise<boolean>;
   readonly onClose: () => void;
 }
@@ -70,6 +73,7 @@ export function ControlledReviewTransactionEditModal({
   isBusy = false,
   onSubmit,
   onClose,
+  reviewFeedback,
   categories,
   categoriesLoaded,
   categoryLoadFailed,
@@ -280,10 +284,15 @@ export function ControlledReviewTransactionEditModal({
               </Text>
             </TouchableOpacity>
           </View>
+          <ReviewInlineNotice
+            notice={reviewFeedback?.modalNotice ?? null}
+            surface="modal"
+            onDismiss={() => reviewFeedback?.dismiss("modal")}
+          />
           <ScrollView
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            className="px-7"
+            className="min-h-0 shrink px-7"
           >
             <View className="mb-4 flex-row items-center gap-3 px-1 py-2">
               <View className="me-3 h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20">

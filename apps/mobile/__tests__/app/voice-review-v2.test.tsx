@@ -163,6 +163,9 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: (): null => null }));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),
 }));
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({ language: "en", isRTL: false }),
+}));
 
 import VoiceReviewScreen from "@/app/(private)/voice-review";
 
@@ -309,18 +312,69 @@ describe("#395 T054 Voice route boundary (real page, financial writer mocked)", 
     expect(mockSave).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockLegacyBatch).not.toHaveBeenCalled();
-    // Exact one friendly localized-key toast: never the injected private
-    // rollback code, its error text or an untranslated missing-key fallback.
-    expect(mockToast).toHaveBeenCalledTimes(1);
-    expect(mockToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "error",
-      message: "voice_error_default",
-    });
+    // The actual failure stays in the rejected financial boundary, not UI text.
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(screen.getByTestId("review-inline-notice-page")).toBeTruthy();
+    expect(screen.getByText("review_notice_save_title")).toBeTruthy();
+    expect(screen.getByText("review_notice_save_message")).toBeTruthy();
     expect(v2Boundary().input).toMatchObject({
       ownerId: OWNER,
       sessionId: fixture.session.sessionId,
     });
+  });
+
+  it("VR06b distinguishes committed Save followed by failed navigation", async () => {
+    const fixture = startV2();
+    mockReplace.mockImplementationOnce(() => {
+      throw new Error("private_navigation_details");
+    });
+    await act(async () => {
+      await v2Boundary().onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("review_notice_saved_navigation_title")
+    ).toBeTruthy();
+    expect(
+      screen.getByText("review_notice_saved_navigation_message")
+    ).toBeTruthy();
+  });
+
+  it("VR06c rejects unsupported Voice outcome without inventing success", async () => {
+    const fixture = startV2();
+    mockSave.mockResolvedValueOnce({
+      kind: "cleanup_only",
+      resolvedSmsDraftCount: 1,
+    });
+    await act(async () => {
+      await v2Boundary().onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByText("review_notice_save_title")).toBeTruthy();
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("VR06d retries the unchanged frozen Voice Save after a recoverable failure", async () => {
+    const fixture = startV2();
+    const boundary = v2Boundary();
+    mockSave.mockRejectedValueOnce(new Error("private_first_error"));
+    await act(async () => {
+      await boundary.onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    const first = mockSave.mock.calls[0]?.[0];
+    await act(async () => {
+      await boundary.onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(2);
+    expect(mockSave.mock.calls[1]?.[0].intent).toEqual(first?.intent);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("VR07 retains V1 legacy Save/navigation when canonical V2 session is absent", async () => {

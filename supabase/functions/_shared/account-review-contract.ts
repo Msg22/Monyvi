@@ -18,7 +18,7 @@ export {
 export const ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION = "account-review-edge/v1";
 
 export const ACCOUNT_REVIEW_CANONICAL_SHA256 =
-  "191ff98f3b33382bcdb08114383e6dc6366dbf1a14ce8c444e4a161c8095b894";
+  "5c96f9cbe85244ae135310bb0e229ce232367cc4bd990d7e9107ac3958947937";
 
 export const ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS = Object.freeze([
   "packages/logic/src/account-review/generated-vocabulary.ts",

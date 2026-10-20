@@ -342,7 +342,7 @@ function chooseRow(
   });
 }
 
-/** One explicit source-only draft. Other rows/selections remain untouched. */
+/** A named deferred row draft and its explicitly chosen currency are atomic. */
 function createRowDraft(
   state: AccountReviewSession,
   command: ManualRowDraft,
@@ -352,9 +352,10 @@ function createRowDraft(
   if (!row) return blocked("account_unavailable");
   if (row.revision !== command.expectedRowRevision)
     return blocked("review_revision_stale");
-  if (row.currency.state !== "known")
-    return blocked("currency_confirmation_needed");
-  const confirmedCurrency = row.currency.code;
+  const currency =
+    command.currency ??
+    (row.currency.state === "known" ? row.currency.code : null);
+  if (currency === null) return blocked("currency_confirmation_needed");
   const role = command.role;
   if (
     row.selected ||
@@ -366,18 +367,15 @@ function createRowDraft(
         row.toAssignment?.state !== "unresolved")
   )
     return blocked("account_group_snapshot_conflict");
+  // The previous opposite endpoint must still belong to the current owner.
   if (!oppositeIsCurrent(state, row, role, snapshots))
     return blocked("account_unavailable");
-  // Fresh owned eligibility inside the serialized SMS writer, not UI hints.
-  if (
-    getAccountReviewAccountCandidates({
-      session: state,
-      rowId: row.rowId,
-      role,
-      accountSnapshots: snapshots,
-    }).length > 0
-  )
-    return blocked("account_unavailable");
+  const offered =
+    role === "source"
+      ? eligibleSourceAccounts(snapshots.accounts, row.source, currency)
+      : eligibleCashDestinations(snapshots.accounts, currency);
+  if (offered.length > 0) return blocked("account_unavailable");
+
   const { nonce, groupId, evidenceKey } = command.manualDraft;
   if (uuidV8FromSha256(evidenceKey) !== groupId)
     return blocked("account_group_snapshot_conflict");
@@ -387,7 +385,7 @@ function createRowDraft(
         group.groupId === groupId ||
         group.evidenceKey === evidenceKey ||
         (group.status !== "removed" &&
-          group.currency === confirmedCurrency &&
+          group.currency === currency &&
           group.institutionId === null &&
           normalizeGroundedIdentity(group.name) ===
             normalizeGroundedIdentity(command.identity.name))
@@ -402,7 +400,7 @@ function createRowDraft(
     suggestionRefs: [manualRowAccountDraftRef(row.rowId, nonce)],
     name: command.identity.name.trim(),
     type: command.identity.type,
-    currency: confirmedCurrency,
+    currency,
     institutionId: null,
     providerDisplayName: null,
     cardLast4: null,
@@ -412,44 +410,71 @@ function createRowDraft(
     revision: "0",
     confirmedIdentityRevision: "0",
   };
-  const nextRevision = incrementReviewRevision(row.revision);
+  const opposite = role === "source" ? row.toAssignment : row.assignment;
+  // A currently owned account or group has exactly one currency. The earlier
+  // oppositeIsCurrent check proves it is safe to retain only at that currency.
+  const keptOpposite =
+    opposite === null ||
+    opposite.state === "unresolved" ||
+    (row.currency.state === "known" && row.currency.code === currency)
+      ? opposite
+      : unresolved(
+          role === "source" ? "cash_transfer_review" : "account_needed"
+        );
+  const draftAssignment: AccountReviewAssignment = {
+    state: "suggested",
+    accountId: null,
+    groupId,
+    groupRevision: group.revision,
+    confirmation: "confirmed",
+  };
+  const source = role === "source" ? draftAssignment : keptOpposite;
+  if (source === null) return blocked("account_unavailable");
+  const destination = role === "destination" ? draftAssignment : keptOpposite;
+  let reasons: AccountReviewReason[] = row.reviewReasons.filter(
+    (reason) => reason !== "currency_confirmation_needed"
+  );
+  reasons =
+    source.state === "unresolved"
+      ? addReason(
+          reasons.filter((reason) => !SOURCE_BLOCKERS.includes(reason)),
+          "account_needed"
+        )
+      : source.state === "suggested" && source.confirmation === "pending"
+        ? addReason(reasons, "account_group_unconfirmed")
+        : clearSourceBlockers(reasons);
+  if (isAtm(row))
+    reasons =
+      destination?.state === "unresolved"
+        ? addReason(reasons, "cash_transfer_review")
+        : reasons.filter((reason) => reason !== "cash_transfer_review");
+  const updates = {
+    assignment: source,
+    toAssignment: destination,
+    reviewReasons: reasons,
+    selected: false,
+  };
+  const changedCurrency =
+    row.currency.state !== "known" || row.currency.code !== currency;
+  const revised = changedCurrency
+    ? withCorrectedTransactionCurrency(row, currency, updates)
+    : { ...row, ...updates, revision: incrementReviewRevision(row.revision) };
+  const replacement =
+    role === "source" ? { ...revised, hasUserAccountOverride: true } : revised;
+  const detached = detachChangedGroups(state, row, replacement);
   return accepted({
-    rows: state.rows.map((item) =>
-      item.rowId === row.rowId
-        ? {
-            ...item,
-            revision: nextRevision,
-            ...(role === "destination"
-              ? {
-                  toAssignment: {
-                    state: "suggested" as const,
-                    accountId: null,
-                    groupId,
-                    groupRevision: group.revision,
-                    confirmation: "confirmed" as const,
-                  },
-                  reviewReasons: item.reviewReasons.filter(
-                    (reason) => reason !== "cash_transfer_review"
-                  ),
-                }
-              : {
-                  assignment: {
-                    state: "suggested" as const,
-                    accountId: null,
-                    groupId,
-                    groupRevision: group.revision,
-                    confirmation: "confirmed" as const,
-                  },
-                  reviewReasons: clearSourceBlockers(item.reviewReasons),
-                  hasUserAccountOverride: true,
-                }),
-            selected: false,
-          }
-        : item
-    ),
-    groups: [...state.groups, group],
-    affectedRowIds: [row.rowId],
-    affectedGroupIds: [groupId],
+    ...detached,
+    groups: [...detached.groups, group],
+    affectedRowIds: [
+      ...new Set([
+        row.rowId,
+        ...detached.affectedGroupIds.flatMap(
+          (id) =>
+            state.groups.find((item) => item.groupId === id)?.linkedRowIds ?? []
+        ),
+      ]),
+    ],
+    affectedGroupIds: [...detached.affectedGroupIds, groupId],
   });
 }
 

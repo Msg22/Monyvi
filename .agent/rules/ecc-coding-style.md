@@ -59,6 +59,13 @@ For new or changed authoritative financial calculations:
 
 ## Approved Mockup Fidelity
 
+Follow `AGENTS.md`, `docs/development-workflow.md`, and
+`docs/design/design-system.md` for the current authority and delivery order. For
+changed UI, also follow `.agent/rules/styling-rules.md` on actual content fit,
+accessible targets, semantic dark contrast and inline-notice feedback;
+owner-approved state-specific amendments supersede conflicting historical visual
+examples without changing approved image/binding bytes.
+
 For UI work governed by an approved scoped mockup:
 
 - Match the approved composition pixel-perfect at its declared UI viewport or

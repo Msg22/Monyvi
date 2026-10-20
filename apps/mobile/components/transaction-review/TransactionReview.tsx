@@ -35,6 +35,8 @@ import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDi
 import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
 import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
 import { CanonicalAccountReview } from "./CanonicalTransactionReview";
+import { ReviewInlineNotice } from "./ReviewInlineNotice";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
 
 export interface AccountReviewRuntimeBoundary {
   readonly input: UseAccountReviewInput;
@@ -43,6 +45,8 @@ export interface AccountReviewRuntimeBoundary {
 }
 
 export interface TransactionReviewProps {
+  /** Owner-scoped local notice transport; Canonical uses it in page/modals. */
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
   /** Canonical v2 only; absence preserves the original V1 review component. */
   readonly accountReview?: AccountReviewRuntimeBoundary;
   readonly transactions: readonly ReviewableTransaction[];
@@ -135,6 +139,7 @@ function LegacyTransactionReview({
   onDiscardItem,
   onReviewLater,
   undoBanner,
+  reviewFeedback,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -305,6 +310,13 @@ function LegacyTransactionReview({
           backAccessibilityLabel={t("back")}
         />
       )}
+      {title && reviewFeedback ? (
+        <ReviewInlineNotice
+          notice={reviewFeedback.pageNotice}
+          surface="page"
+          onDismiss={() => reviewFeedback.dismiss("page")}
+        />
+      ) : null}
 
       <FlatList
         data={state.listItems}
@@ -580,6 +592,16 @@ function LegacyTransactionReview({
         isSaving={isSaving}
         isReviewMetadataReady={state.isReviewMetadataReady}
         onSave={state.handleSave}
+        onUnhandledSaveError={
+          reviewFeedback
+            ? (error) =>
+                reviewFeedback.reportFailure({
+                  stage: "footer_unhandled",
+                  surface: "page",
+                  error,
+                })
+            : undefined
+        }
         onDiscard={onDiscard}
         isSmsWorkspace={isSmsWorkspace}
         onReviewLater={onReviewLater}

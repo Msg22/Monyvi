@@ -48,6 +48,7 @@ export interface BuildVoiceReviewNormalizationInputParams {
   readonly requestKey: string;
   readonly reviewAccountSnapshots: AccountReviewOwnedContext;
   readonly categoryIdsBySystemName: ReadonlyMap<string, string>;
+  readonly categoryDisplayNamesBySystemName: ReadonlyMap<string, string>;
   readonly fallbackCategorySystemNameByType: ReadonlyMap<
     TransactionType,
     string
@@ -231,12 +232,21 @@ function buildMappedTransaction(
   providerRow: AccountReviewVoiceResponseV2["transactions"][number],
   scenario: ReviewTranscriptFixtureScenario,
   categoryIdsBySystemName: ReadonlyMap<string, string>,
+  categoryDisplayNamesBySystemName: ReadonlyMap<string, string>,
   preferredCurrency: CurrencyType
 ): ParsedVoiceTransaction {
   const categoryId = readCategoryId(
     providerRow.categorySystemName,
     categoryIdsBySystemName
   );
+  const categoryDisplayName = categoryDisplayNamesBySystemName.get(
+    providerRow.categorySystemName
+  );
+  if (!categoryDisplayName?.trim()) {
+    throw new ReviewTranscriptFixtureBuildError(
+      `review_transcript_fixture_category_display_name_missing:${providerRow.categorySystemName}`
+    );
+  }
   return {
     amount: transaction.amount,
     // The provider row's currency is a wide parsed string; the only fallback we
@@ -246,7 +256,7 @@ function buildMappedTransaction(
     counterparty: providerRow.counterparty ?? undefined,
     date: parseCalendarDate(transaction.date),
     categoryId,
-    categoryDisplayName: providerRow.categorySystemName,
+    categoryDisplayName,
     confidence: transaction.confidenceScore,
     originLabel: "Voice",
     source: "VOICE",
@@ -268,6 +278,7 @@ export function buildVoiceReviewNormalizationInput(
     requestKey,
     reviewAccountSnapshots,
     categoryIdsBySystemName,
+    categoryDisplayNamesBySystemName,
     fallbackCategorySystemNameByType,
     hashProvider,
   } = params;
@@ -294,6 +305,7 @@ export function buildVoiceReviewNormalizationInput(
       providerRow,
       scenario,
       categoryIdsBySystemName,
+      categoryDisplayNamesBySystemName,
       reviewAccountSnapshots.preferredCurrency
     );
   });

@@ -241,7 +241,10 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
 - **i18n**: In functional components, use the `useTranslation` hook
   (`const { t } = useTranslation("namespace")`). In class components or
   non-component files, use the named import `import { t } from "i18next"` —
-  never `i18next.t()`.
+  never `i18next.t()`. For new/changed visible labels, confirm the **exact
+  namespaced key resolves to human-readable text in both EN and AR**. A `t(key)`
+  call or a source assertion does not prove the key exists; a raw key shown in
+  the app is a localization defect.
 - Translate only user-visible strings. Internal-only checks, sentinel values,
   error-code comparisons, and control-flow decisions MUST stay language-neutral
   (for example booleans, enums, or stable English codes), then translate only
@@ -259,6 +262,17 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   context with the intended audience. Prefer familiar words over internal domain
   terms; keep the same concept named consistently across screens, actions, and
   summaries. Put any proposed terminology change in the mockup for approval.
+- **New/changed app feedback (prospective):** Do not introduce toasts for
+  errors, warnings or successes. Use a persistent, user-dismissible, page-scoped
+  inline notice directly below the header and **outside the scrolling content**.
+  Feedback from an active modal appears at the top **inside that modal**.
+  Dismissal or actual issue resolution, not a toast timer, controls visibility.
+  Retain existing legacy toast infrastructure and migrate untouched screens
+  gradually, not as an app-wide rewrite. Informational text in dark mode needs
+  readable semantic primary/secondary contrast, not disabled/muted styling.
+  Preserve approved selected/warning fills and only use a transparent dark
+  information-icon backdrop where the approved mockup calls for one. An unknown
+  or rejected financial outcome must never display success.
 - Permission flows MUST use Monyvi custom explanatory/recovery UI before
   triggering any native permission request. Do not use Android native rationale
   dialogs or `Alert.alert()` as the app-level explanation. The OS permission
@@ -312,18 +326,34 @@ the true domain model.
   layouts from the **actual available component/container space**, not a blanket
   viewport-width cutoff; centralized `apps/mobile/constants/ui.ts` breakpoints
   are hints, not mandatory wrap decisions or permission to add device lists.
-  Reserve stable 44/48 dp action hit areas first, then give identity/labels
-  bounded, shrinkable, readable space. When space is tight, use modest approved
-  typography/icon/control/spacing variants (without disabling font scaling or
-  hiding financial identity); stack only when the real content cannot fit or
-  accessibility scaling requires it. Respect RTL, theme, rotation, keyboard,
-  scrolling and safe-area insets. Run existing applicable checks; owner manually
-  reviews representative small/ordinary/wide widths and enlarged text (plus
-  relevant RTL/keyboard states). Do not add cosmetic className/breakpoint test
-  matrices or claim a visual pass without rendered evidence.
+  Reserve stable 44/48 dp action **hit areas** first, then give identity/labels
+  bounded, shrinkable, readable space. Use **actual container and localized text
+  fit**, not character-count width estimates or fixed visual button chrome;
+  small visual padding/icon/gap changes may preserve the full touch hitbox. For
+  approved quiet pencil/icon actions, the visible affordance can be small and
+  unbordered while the **effective** touch target meets 44/48 dp through layout
+  and in-bounds `hitSlop`; never add a visible 48 dp border/fill box solely for
+  touch size. Touch extensions cannot escape parent bounds or overlap adjacent
+  actions. Keep shared-account status and linked count inline when they really
+  fit; if wrapped, put separators with their adjoining text so no line starts
+  with an orphan dot. Use the same shared group renderer in the overview and
+  View all: adapt presentation to space, not identity, status or action scope.
+  When space is tight, use modest approved typography/icon/control/spacing
+  variants (without disabling font scaling or hiding financial identity); stack
+  only when the real content cannot fit or accessibility scaling requires it.
+  Respect RTL, theme, rotation, keyboard, scrolling and safe-area insets. Run
+  existing applicable checks; owner manually reviews representative
+  small/ordinary/wide widths and enlarged text (plus relevant RTL/keyboard
+  states). Do not add cosmetic className/breakpoint test matrices or claim a
+  visual pass without rendered evidence.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
+  Prefer supported JSX in `.tsx` for NativeWind-styled elements. Raw
+  `React.createElement(...)` in a `.ts` render helper can bypass the configured
+  JSX/NativeWind transform; do not rely on its `className` without verifying the
+  actual interop path. A `className` assertion proves authored props, not Babel
+  transformation, applied native styles, or visual fidelity.
 - **Colors via Tailwind config**: All palette colors are registered in
   `tailwind.config.js`. Use NativeWind classes (`bg-slate-800`,
   `text-nileGreen-500`, `border-slate-300`) — never use inline

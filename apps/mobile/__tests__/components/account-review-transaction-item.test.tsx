@@ -4,7 +4,12 @@
  * This file tests proposed DISPLAY-ONLY props; missing source integration
  * produces behavioral Red, not fake SUT Green or a new account policy.
  */
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import {
   changeLanguage,
   init as initializeI18next,
@@ -96,8 +101,13 @@ function getAccountAction(): ReturnType<typeof screen.getByTestId> {
   return screen.getByTestId("account-review-row-account-action");
 }
 
-function getCurrencyAction(): ReturnType<typeof screen.getByTestId> {
-  return screen.getByTestId("account-review-row-currency-action");
+/** React Native press handlers receive an event; fireEvent does not create it. */
+function pressNative(
+  target: ReturnType<typeof screen.getByTestId>
+): jest.Mock<void, []> {
+  const stopPropagation = jest.fn<void, []>();
+  fireEvent.press(target, { stopPropagation });
+  return stopPropagation;
 }
 
 beforeAll(async (): Promise<void> => {
@@ -189,7 +199,8 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     const accountAction = getAccountAction();
     expect(accountAction).toHaveProp("accessibilityRole", "button");
     expect(accountAction.props.accessibilityLabel).toContain("QNB");
-    fireEvent.press(accountAction);
+    const accountStopPropagation = pressNative(accountAction);
+    expect(accountStopPropagation).toHaveBeenCalledTimes(1);
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
       props.accountReview.rowId
@@ -279,7 +290,7 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     expect(getAccountAction()).toHaveProp("accessibilityRole", "button");
     expect(getAccountAction().props.accessibilityLabel).toMatch(/Change|Cash/);
     expect(screen.queryByText("Review account")).toBeNull();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
       props.accountReview.rowId
     );
@@ -304,7 +315,7 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
       screen.getByText(props.transaction.categoryDisplayName)
     ).toBeTruthy();
     expect(screen.getByTestId("transaction-review-amount")).toBeTruthy();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
     expect(props.onToggleSelect).not.toHaveBeenCalled();
     expect(props.transaction).toBe(original);
@@ -331,7 +342,7 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     );
     expect(screen.queryByText("Cash")).toBeNull();
     expect(screen.getByTestId("transaction-review-amount")).toBeTruthy();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(chosen.accountReview.onChooseAccount).toHaveBeenCalledWith(
       original.accountReview.rowId
     );
@@ -345,7 +356,7 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     expect(props.onPress).toHaveBeenCalledWith(props.index);
     expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
     expect(props.onToggleSelect).not.toHaveBeenCalled();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.onPress).toHaveBeenCalledTimes(1);
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
   });
@@ -471,7 +482,7 @@ describe("#395 T021 — independently shaped pending/confirmed/removed group row
     expect(screen.getByTestId("account-review-row-status")).toHaveTextContent(
       "QNB suggestion removed"
     );
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
       props.accountReview.rowId
     );
@@ -496,7 +507,7 @@ describe("#395 T039 — per-row account/currency choice delegates to the parent"
     expect(screen.queryByTestId("transaction-account-match")).toBeNull();
     expect(screen.queryByText("QNB Everyday")).toBeNull();
     expect(screen.queryByText("QNB Savings")).toBeNull();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
       props.accountReview.rowId
@@ -505,7 +516,7 @@ describe("#395 T039 — per-row account/currency choice delegates to the parent"
     expect(props.onToggleSelect).not.toHaveBeenCalled();
   });
 
-  it("R3-03/04 conflicting currency uses the row's parent callback with transaction context", () => {
+  it("an unresolved currency uses one account pencil, never a standalone currency action", () => {
     const props = makeCombinedItem(
       6,
       { accountName: null, isSelected: false },
@@ -517,16 +528,14 @@ describe("#395 T039 — per-row account/currency choice delegates to the parent"
     );
     const amount = props.transaction.amount;
     renderRow(props);
-    expect(getCurrencyAction()).toHaveProp("accessibilityRole", "button");
-    expect(getCurrencyAction()).toHaveTextContent("Confirm currency");
-    expect(screen.queryByTestId("transaction-account-match")).toBeNull();
-    expect(screen.queryByTestId("currency-picker")).toBeNull();
-    fireEvent.press(getCurrencyAction());
-    expect(props.accountReview.onChooseCurrency).toHaveBeenCalledWith(
-      props.accountReview.rowId,
-      "For Lunch at Talabat"
+    expect(
+      screen.queryByTestId("account-review-row-currency-action")
+    ).toBeNull();
+    pressNative(getAccountAction());
+    expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
+      props.accountReview.rowId
     );
-    expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
+    expect(props.accountReview.onChooseCurrency).not.toHaveBeenCalled();
     expect(props.onToggleSelect).not.toHaveBeenCalled();
     expect(props.transaction.amount).toBe(amount);
   });
@@ -561,11 +570,64 @@ describe("#395 T039 — per-row account/currency choice delegates to the parent"
     expect(getAccountAction().props.accessibilityLabel).toContain(
       "اختيار حساب"
     );
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(props.accountReview.onChooseAccount).toHaveBeenCalledWith(
       props.accountReview.rowId
     );
     expect(props.accountReview.onChooseCurrency).not.toHaveBeenCalled();
+  });
+});
+
+describe("#395 isolated account and category pencil interactions", () => {
+  it("only the quiet adjacent pencil with a 48dp effective hit area opens the account", () => {
+    const props = makeDefaultItem();
+    renderRow(props);
+    const pair = screen.getByTestId("account-review-account-name-and-pencil");
+    expect(within(pair).getByTestId("transaction-account-match")).toBeTruthy();
+    expect(
+      within(pair).getByTestId("account-review-row-account-action")
+    ).toHaveProp("hitSlop", 8);
+    fireEvent.press(screen.getByTestId("transaction-account-match"), {
+      stopPropagation: jest.fn<void, []>(),
+    });
+    expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
+    // The static label still belongs to the parent row; isolate its tap from
+    // the pencil so we check that only the pencil stops parent propagation.
+    expect(props.onPress).toHaveBeenCalledTimes(1);
+    jest.mocked(props.onPress).mockClear();
+    const stopped = pressNative(getAccountAction());
+    expect(stopped).toHaveBeenCalledTimes(1);
+    expect(props.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
+    expect(props.onToggleSelect).not.toHaveBeenCalled();
+    expect(props.onPress).not.toHaveBeenCalled();
+  });
+
+  it("category pencil forwards only this canonical row ID without editing or selecting", () => {
+    const props = makeCombinedItem(1);
+    const onEditCategory = jest.fn();
+    renderRow({
+      ...props,
+      accountReview: {
+        ...props.accountReview,
+        canEditCategory: true,
+        onEditCategory,
+      },
+    });
+    const categoryPair = screen.getByTestId(
+      "account-review-category-name-and-pencil"
+    );
+    const action = within(categoryPair).getByTestId(
+      "account-review-row-category-pencil"
+    );
+    expect(action).toHaveProp("accessibilityRole", "button");
+    expect(action).toHaveProp("hitSlop", 8);
+    const stopped = pressNative(action);
+    expect(stopped).toHaveBeenCalledTimes(1);
+    expect(onEditCategory).toHaveBeenCalledTimes(1);
+    expect(onEditCategory).toHaveBeenCalledWith(props.accountReview.rowId);
+    expect(props.onPress).not.toHaveBeenCalled();
+    expect(props.onToggleSelect).not.toHaveBeenCalled();
+    expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
   });
 });
 
@@ -583,15 +645,17 @@ describe("#395 T021/T039 — lifecycle, accessibility, viewport and memo regress
     );
     renderRow(props);
     const account = getAccountAction();
-    const currency = getCurrencyAction();
     const checkbox = screen.getByRole("checkbox");
-    for (const button of [account, currency, checkbox]) {
+    expect(
+      screen.queryByTestId("account-review-row-currency-action")
+    ).toBeNull();
+    for (const button of [account, checkbox]) {
       expect(button).toHaveProp(
         "accessibilityState",
         expect.objectContaining({ disabled: true })
       );
       expect(button).toBeDisabled();
-      fireEvent.press(button);
+      pressNative(button);
     }
     expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
     expect(props.accountReview.onChooseCurrency).not.toHaveBeenCalled();
@@ -610,7 +674,7 @@ describe("#395 T021/T039 — lifecycle, accessibility, viewport and memo regress
     };
     view.rerender(<TransactionItem {...ready} />);
     expect(getAccountAction()).not.toBeDisabled();
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(ready.accountReview.onChooseAccount).toHaveBeenCalledTimes(1);
     expect(ready.transaction).toBe(busy.transaction);
   });
@@ -722,7 +786,7 @@ describe("#395 T021/T039 — lifecycle, accessibility, viewport and memo regress
     expect(screen.getByTestId("account-review-row-status")).toHaveTextContent(
       "Confirmed"
     );
-    fireEvent.press(getAccountAction());
+    pressNative(getAccountAction());
     expect(newChoose).toHaveBeenCalledWith(before.accountReview.rowId);
     expect(before.accountReview.onChooseAccount).not.toHaveBeenCalled();
   });

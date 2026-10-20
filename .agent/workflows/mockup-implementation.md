@@ -46,6 +46,16 @@ The screen type will be specified when invoking this workflow.
 
 ## 2. Design System & Colors (Mandatory)
 
+Follow `AGENTS.md`, `docs/design/design-system.md`, and
+`docs/business/business-decisions.md` for current product/UI treatments,
+including the latest approved scoped adjustments. Describe actual container and
+scaled-label fit, 44/48 dp hit areas, semantic dark informational text, RTL, and
+keyboard/inset reachability when they belong to the binding surface. New or
+changed feedback uses a persistent dismissible page notice directly below the
+header outside scroll, or a notice at the top of the active modal; do not
+propose new error/warning/success toasts. This adds **no** extra mockup approval
+gate and does not rewrite frozen approved references.
+
 - Use **only** the colors defined in `@colors.ts`.
 - Do **not** introduce new colors or shades.
 - Use gradients when the design system or an approved design direction uses

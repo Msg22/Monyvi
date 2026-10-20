@@ -35,6 +35,7 @@ import {
   act,
   render,
   renderHook,
+  screen,
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
@@ -43,6 +44,7 @@ import {
   type AccountReviewSession,
 } from "../../../../packages/logic/src/account-review/review-schemas";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { ReviewFeedbackBoundary } from "../../hooks/useReviewNotice";
 import type { HybridSmsUnresolvedCandidate } from "../../services/sms-parser-orchestrator";
 import {
   useAccountReview,
@@ -80,6 +82,7 @@ interface ReviewProps {
   readonly onReviewLater?: () => void;
   readonly onDiscard: () => void;
   readonly isSaving: boolean;
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
   /** Proposed additive V2-only typed facade; V1 props remain intact. */
   readonly accountReview?: V2SmsBoundary;
 }
@@ -273,6 +276,9 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: (): null => null }));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),
 }));
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({ language: "en", isRTL: false }),
+}));
 jest.mock("expo-crypto", () => ({
   randomUUID: (): string =>
     jest
@@ -465,7 +471,51 @@ describe("#395 T054 SMS review owned queue-to-facade route", () => {
     expect(mockClear).not.toHaveBeenCalled();
     expect(mockMarkComplete).not.toHaveBeenCalled();
     expect(mockItems).toEqual(before);
-    expect(mockToast).toHaveBeenCalled();
+    expect(lastReview().reviewFeedback?.pageNotice).toMatchObject({
+      tone: "error",
+      title: "review_notice_save_title",
+      message: "review_notice_save_message",
+    });
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("SR03b treats navigation failure AFTER committed Save as saved, retaining volatile review", async () => {
+    const fixture = startV2();
+    const prior = [...mockItems];
+    mockReplace.mockImplementationOnce(() => {
+      throw new Error("private_navigation_destination");
+    });
+    await act(async () => {
+      await v2Boundary().onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockClear).not.toHaveBeenCalled();
+    expect(mockItems).toEqual(prior);
+    expect(lastReview().reviewFeedback?.pageNotice).toMatchObject({
+      tone: "warning",
+      title: "review_notice_saved_navigation_title",
+      message: "review_notice_saved_navigation_message",
+    });
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("SR03c retains the exact frozen SMS intent for an explicit retry", async () => {
+    const fixture = startV2();
+    const boundary = v2Boundary();
+    mockSave.mockRejectedValueOnce(new Error("private_rollback_payload"));
+    await act(async () => {
+      await boundary.onSaveSelected(fixture.session);
+    });
+    const first = mockSave.mock.calls[0]?.[0];
+    expect(mockClear).not.toHaveBeenCalled();
+    await act(async () => {
+      await boundary.onSaveSelected(fixture.session);
+    });
+    expect(mockSave).toHaveBeenCalledTimes(2);
+    expect(mockSave.mock.calls[1]?.[0].intent).toEqual(first?.intent);
+    expect(mockClear).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("SR04 Review later clears volatile scan UI, not durable v2 queue, group, or selected rows", () => {
@@ -489,17 +539,18 @@ describe("#395 T054 SMS review owned queue-to-facade route", () => {
     const fixture = startV2();
     const oldSave = v2Boundary().onSaveSelected;
     mockActor = null;
-    let failed = false;
     await act(async () => {
-      try {
-        await oldSave(fixture.session);
-      } catch {
-        failed = true;
-      }
+      // The route catches the fresh actor-guard refusal; it does not rethrow.
+      await expect(oldSave(fixture.session)).resolves.toBeUndefined();
     });
-    expect(failed || mockToast.mock.calls.length > 0).toBe(true);
+    // The old review's captured props cannot show a new notice. Logout instead
+    // revokes the owned queue view; the feedback is not rendered for that actor.
+    expect(screen.queryByTestId("sms-canonical-v2-review")).toBeNull();
+    expect(mockToast).not.toHaveBeenCalled();
     expect(mockSave).not.toHaveBeenCalled();
     expect(mockLegacySave).not.toHaveBeenCalled();
+    expect(mockMarkComplete).not.toHaveBeenCalled();
+    expect(mockClear).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

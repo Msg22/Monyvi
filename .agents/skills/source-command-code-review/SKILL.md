@@ -113,6 +113,10 @@ Produce a PASS/FAIL checklist for these eight checks:
    - No hardcoded colors.
    - No invalid `isDark` styling ternaries.
    - UI fields match the actual schema.
+   - For changed UI, follow `AGENTS.md`, `docs/design/design-system.md`, and
+     `.agent/rules/styling-rules.md`: intrinsic scaled-text fit, 44/48 dp
+     targets, readable semantic dark/RTL, appropriate keyboard/inset layout, and
+     persistent page/modal notices rather than new feedback toasts.
 6. Monorepo boundaries
    - Dependency direction remains `apps -> packages/logic -> packages/db`.
    - Package imports do not reverse boundaries.

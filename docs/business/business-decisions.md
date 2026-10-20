@@ -375,9 +375,9 @@ and PR #396 for validation status; this decision record does not certify it.
   expose every suggestion with independent status/actions. Omit empty sections;
   filters/counts reflect actual checked rows, and bulk selection includes only
   eligible rows in the current filter.
-- Reuse the existing currency modal with transaction context and honest
-  unconfirmed selection. Opening/cancelling applies nothing; do not build a new
-  picker.
+- Reuse the existing CurrencyPicker within the new row-only draft's currency
+  field; opening/cancelling commits nothing. No standalone currency
+  correction/recovery/confirmation surface.
 
 #### #395 manual account choice, ATM Cash drafts and explicit currency (owner decisions 2026-10-19)
 
@@ -388,37 +388,104 @@ and PR #396 for validation status; this decision record does not certify it.
   currencies for **deliberate account-and-currency confirmation**, never
   automatic/default assignment. Automatic/default matching still requires a
   known matching currency.
-- When an ordinary Voice/SMS source row has **no compatible existing account**
-  and a known currency, the user may supply an account name and type to create
-  one **local, row-only confirmed draft**. This explicitly chosen draft does not
-  select the transaction, link other rows, create a physical account or change
-  balances/defaults. SMS source drafts cannot be Cash. Cancel commits nothing.
-  SMS draft choices survive Review later/restart through the authenticated local
-  review writer; Voice draft choices remain review-session only. Exactly
-  selected transactions referencing a confirmed draft cause account creation
-  only inside the existing guarded atomic/idempotent Save.
+- When an ordinary Voice/SMS source row has **no compatible existing account**,
+  the user may choose name, type and currency in the **same draft form** to
+  create one **local, row-only confirmed draft**. This explicitly chosen draft
+  does not select the transaction, link other rows, create a physical account or
+  change balances/defaults. SMS source drafts cannot be Cash. Cancel commits
+  nothing. SMS draft choices survive Review later/restart through the
+  authenticated local review writer; Voice draft choices remain review-session
+  only. Exactly selected transactions referencing a confirmed draft cause
+  account creation only inside the existing guarded atomic/idempotent Save.
 - An existing suggested group with no replacement candidates offers Edit/Keep
   for that same draft, not a duplicate. A missing Cash destination on an actual
   SMS ATM withdrawal may instead be prepared as a **row-only user-named Cash
-  draft** at the row's already confirmed currency; its source Bank/Wallet
-  assignment remains distinct and unchanged. The destination draft uses the
-  reciprocal `toAssignment`, never a fake source link, and only a selected ATM
-  Save may create the physical Cash account atomically. Ordinary SMS source
-  accounts still reject Cash. No new Voice/ordinary-transfer workflow is
-  authorized; those broader transfer questions are tracked separately (#404).
-- **Explicit existing-account currency override:** Choosing an owned existing
-  account in a row account chooser requires a separate, clear confirmation
-  naming the account and its actual current owned currency, with the previous
-  currency shown if confirmed and different. When the review currency is
-  missing, ambiguous, conflicting or known-but-different, the user's single
-  explicit `Use account and currency` acceptance atomically applies the chosen
-  account and its authoritative currency under current row/account/owner CAS.
-  The numeric amount remains **exactly unchanged**, with no conversion, AI
-  inference or automatic/default account choice. Cancel/dismiss commits nothing;
-  incompatible opposite ATM endpoints are invalidated safely. Existing currency
-  candidates and the standalone currency picker remain separately usable. Draft
-  account creation still requires a known, separately confirmed review currency
-  first.
+  draft** with currency selected in that same new-draft form; its source
+  Bank/Wallet assignment remains distinct and unchanged. The destination draft
+  uses the reciprocal `toAssignment`, never a fake source link, and only a
+  selected ATM Save may create the physical Cash account atomically. Ordinary
+  SMS source accounts still reject Cash. No new Voice/ordinary-transfer workflow
+  is authorized; those broader transfer questions are tracked separately (#404).
+- **Explicit existing-account currency override:** The existing account
+  chooser's final CTA names the chosen owned account **and authoritative
+  currency**; one deliberate tap applies both atomically under current
+  owner/account/row CAS even for missing, ambiguous, conflicting or previously
+  known-but-different currency. There is no second confirmation modal or
+  standalone currency-correction action. The numeric amount remains **exactly
+  unchanged**, with no FX conversion, AI inference or automatic default
+  override. Cancel/dismiss commits nothing; incompatible opposite ATM endpoints
+  are invalidated safely. New row-only drafts select currency within the form
+  using the existing CurrencyPicker.
+
+#### #395 R2 owner feedback — current UI amendments (2026-10-19)
+
+**Effective scoped supersession:** These newer owner-approved UI interactions
+replace only contradictory account/currency chooser, local draft and feedback
+presentation directions in the preceding #395 decisions and older mockup notes.
+The approved spec, all 23 B1 mockup/binding/image bytes, historical decisions,
+data safety and first-release scope stay intact. See
+[owner R2 feedback and checklist](../../specs/395-shared-account-review/validation/owner-feedback-r2.md).
+
+- **One owned existing-account chooser:** The final CTA **names the currently
+  selected owned account and authoritative currency**, e.g. "Use QNB · EGP". The
+  one final tap is explicit account+currency acceptance under current
+  authenticated account/row/owner CAS. **No extra "Confirm currency" or "Confirm
+  account and currency" modal/step.** Merely tapping a candidate, Back, Cancel
+  or Close changes nothing. Never infer a first candidate, change default
+  automatically or convert amounts: the numeric amount is identical without FX.
+  Automatic/default matching still requires a known compatible currency. There
+  is no separate currency-correction action/surface: the existing CurrencyPicker
+  is reused inside new row-only draft creation.
+- **New row-only draft:** Choose account **name, type and currency inside the
+  same new-draft form**, via existing CurrencyPicker, without a separate
+  currency confirmation. A bounded existing local command extension may carry
+  that explicit choice atomically under current owner/row/role guards with **no
+  SQL/database schema change**. Preserve permitted role (ordinary SMS source
+  Bank/Wallet; Cash destination only for genuine SMS ATM), source/destination
+  distinction, owner scope and unselected/unrelated rows. A confirmed local row
+  draft never creates a physical account or changes balances/defaults; only a
+  valid selected transaction's existing guarded atomic/idempotent Save may
+  create it. **Existing shared suggested groups retain locked group currency**
+  and independent edit/replace/remove/Undo until a separate approval.
+- **Review details recovery:** The account/currency-uncertain issue opens a
+  **temporary account-needed-only view** of the real rows in their original list
+  order, without persisting an alternative filter. **Show all** resets it; each
+  row is assigned independently. Disclosed group Replace remains confined to its
+  actual linked rows, never silently touching unrelated choices.
+- **Activation-only pencils:** The existing-account pencil opens its owned
+  chooser; a suggested-account pencil opens EditSuggestedAccountSheet with
+  linked-scope disclosure. Category pencil/quick category opens the existing
+  CategorySelectorModal **directly**, not the full TransactionEditModal. Only
+  final category choice dispatches the existing `edit_row_transaction` with
+  **only** `patch: { categoryId }` under its current guards; SMS ATM category
+  editing is prohibited. Pencil activation commits nothing and introduces no
+  alternate writer.
+- **Prospective feedback rule:** New/changed application code uses **no toasts
+  for errors, warnings or successes**. A page-scoped, persistent, dismissible
+  inline notice sits **directly under that page's header and outside scrolling
+  content** so it remains sticky while scrolling. Feedback belonging to an
+  active modal appears **at the top inside that modal**. Migrate unrelated
+  legacy screens gradually, not via an app-wide rewrite; touched #395 flows
+  follow the rule now. Unknown/rejected financial Save must never claim success;
+  keep owner/privacy/retry protections.
+- **Responsive and theme:** Adapt to real available container/label fit, not
+  character-count estimates, fixed button chrome or blanket viewport cutoffs;
+  reserve 44/48dp tap targets and natural text wrapping. Keep status+linked
+  count inline where it fits; a wrapped standalone line must not begin with a
+  separator dot. Dark informational text needs readable semantic contrast (not
+  disabled/muted), and an information icon uses a transparent dark backdrop
+  **only where the approved mockup requires it**; keep meaningful selected/alert
+  fills. Android Edit suggested account must retain keyboard-reachable focused
+  name and Cancel/Confirm footer under the existing scroll/KAV pattern with an
+  80% **usable** height cap and one bottom inset. Current type also needs
+  visibly selected styling alongside its accessible checked state.
+- **Evidence and scope:** The cause of the reported Save failure is not yet
+  established; diagnose the real protected path and display honest feedback, not
+  a speculative financial repair. Preserve the 19 DEV-only fixed transcript
+  scenarios and conspicuous TEST labels; their deliberately approved existing
+  selected Save remains a **real current-owner financial write**, not a mock. No
+  #239/#339, generalized transfers/#404, detector, SQL/schema, sync/ACK or
+  expanded recovery work follows from this UI amendment.
 
 #### #395 first-release scope — human decision (2026-10-17)
 

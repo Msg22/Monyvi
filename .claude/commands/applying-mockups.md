@@ -4,6 +4,14 @@ description: apply mockups guidelines
 
 # 🎯 Implementation Requirement — Pixel-Perfect UI
 
+Use the up-to-date `.agent/workflows/applying-mockups.md`, `AGENTS.md`,
+`docs/design/design-system.md` and owner-approved business decisions. Absolute
+fidelity applies to the **approved binding context**; an approved scoped
+responsive/state amendment may use intrinsic content fit, 44/48 dp targets,
+readable scaled labels and natural wrapping without changing frozen binding
+bytes. New/changed feedback uses sticky dismissible page notices below headers
+outside scrolling, or the top of an active modal—not new toasts.
+
 ## Approved Binding Gate
 
 Before consuming an approved mockup, load its matching binding sidecar and run
@@ -27,7 +35,8 @@ approved combined `Binding approval revision` must all verify. Follow
 
 ## 🚫 Constraints
 
-- **Do not deviate** from the mockups in any way.
+- **Do not deviate** from the approved binding at its declared context, except
+  where the owner explicitly approved a scoped subsequent treatment.
 - Do not introduce:
   - Alternative layouts
   - Different spacing or alignment

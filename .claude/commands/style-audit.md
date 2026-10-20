@@ -5,6 +5,14 @@ description:
 
 # 🎨 Style Audit Workflow
 
+Follow the current `.agent/workflows/style-audit.md`, `AGENTS.md`,
+`docs/design/design-system.md` and `.agent/rules/styling-rules.md` for this
+command's governed UI checks. Compare **actual container/intrinsic** label fit,
+accessible 44/48 dp targets, status/count wrapping without orphan separators,
+semantic dark readability and relevant page/modal inline feedback. Use only
+applicable approved states and honest owner-rendered evidence; this
+cross-reference adds no new visual approval or cosmetic test matrix.
+
 ## Approved Mockup Binding Gate
 
 When this workflow consumes an approved mockup or sidecar, run

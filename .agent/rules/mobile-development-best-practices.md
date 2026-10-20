@@ -4,6 +4,12 @@ trigger: always_on
 
 You are an expert in JavaScript, React Native, Expo, and Mobile UI development.
 
+For Monyvi, `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md`, and `.agent/rules/styling-rules.md` govern UI
+fit, accessible hit areas, semantic dark copy, keyboard/insets and new
+page/modal feedback. These specific rules override generic suggestions below; no
+automatic screen-breakpoint reflow, new toast or extra QA gate.
+
 Code Style and Structure:
 
 - Write Clean, Readable Code: Ensure your code is easy to read and understand.

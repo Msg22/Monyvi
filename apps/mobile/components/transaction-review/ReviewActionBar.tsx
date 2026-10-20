@@ -1,13 +1,8 @@
-import { useToast } from "@/components/ui/Toast";
+import { logReviewFailure } from "@/services/account-review-feedback-diagnostics";
 import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +11,8 @@ export interface ReviewActionBarProps {
   readonly isSaving: boolean;
   readonly isReviewMetadataReady: boolean;
   readonly onSave: () => Promise<void>;
+  /** Unhandled footer failure is reported by the owning Review surface. */
+  readonly onUnhandledSaveError?: (error: unknown) => void;
   readonly onDiscard: () => void;
   readonly isSmsWorkspace?: boolean;
   /** The V2 owned SMS route retains Review later; no legacy discard writer. */
@@ -25,60 +22,76 @@ export interface ReviewActionBarProps {
 
 export const SMS_REVIEW_ACTION_BAR_HEIGHT = 100;
 
-/**
- * Conservative intrinsic label-width budget for choosing an action layout.
- * Actual text remains shrinkable/wrappable; neither labels nor font scaling
- * are constrained to the estimate. The bar uses its measured content width.
- */
-function labelWidthBudget(
-  label: string,
-  fontSize: number,
-  fontScale: number
-): number {
-  return Array.from(label).length * fontSize * fontScale * 0.48;
-}
-
 export function ReviewActionBar({
   selectedCount,
   isSaving,
   isReviewMetadataReady,
   onSave,
+  onUnhandledSaveError,
   onDiscard,
+  isSmsWorkspace,
   onReviewLater,
   hideDiscard = false,
 }: ReviewActionBarProps): React.JSX.Element {
-  const { showToast } = useToast();
   const { t } = useTranslation("transactions");
-  const { width, fontScale } = useWindowDimensions();
   const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
+  const [discardTextWidth, setDiscardTextWidth] = React.useState(0);
+  const [saveTextWidth, setSaveTextWidth] = React.useState(0);
+  const [compactDiscardTextWidth, setCompactDiscardTextWidth] =
+    React.useState(0);
+  const [compactSaveTextWidth, setCompactSaveTextWidth] = React.useState(0);
   const discardLabel = t("discard_all");
   const saveLabel = t("save_selected_button_count", { count: selectedCount });
-  // The 20 dp outer gutters are already applied by this bar; use its actual
-  // measured inner width after layout, including for tablet/landscape layouts.
-  const available = measuredWidth ?? Math.max(0, width - 40);
-  const standardWidth =
-    Math.max(112, labelWidthBudget(discardLabel, 14, fontScale) + 42) +
-    Math.max(44, labelWidthBudget(saveLabel, 16, fontScale) + 58) +
-    12;
-  const compactWidth =
-    Math.max(44, labelWidthBudget(discardLabel, 13, fontScale) + 32) +
-    Math.max(44, labelWidthBudget(saveLabel, 14, fontScale) + 40) +
-    8;
-  const compact =
-    fontScale > 1.35 || (!hideDiscard && available < standardWidth);
-  const stacked = !hideDiscard && available < compactWidth;
+  // Actual intrinsic localized text widths and the measured footer container,
+  // never character estimates or an arbitrary font-scale threshold.
+  const measured =
+    !hideDiscard &&
+    measuredWidth !== null &&
+    measuredWidth > 0 &&
+    discardTextWidth > 0 &&
+    saveTextWidth > 0 &&
+    compactDiscardTextWidth > 0 &&
+    compactSaveTextWidth > 0;
+  const normalDiscardWidth = Math.max(112, discardTextWidth + 18 + 8 + 24 + 2);
+  const normalSaveWidth = Math.max(48, saveTextWidth + 18 + 8 + 32);
+  const compactDiscardWidth = Math.max(
+    48,
+    compactDiscardTextWidth + 16 + 6 + 16 + 2
+  );
+  const compactSaveWidth = Math.max(48, compactSaveTextWidth + 16 + 6 + 16);
+  // Discard's 45% cap must also be respected; otherwise the labels wrap.
+  const normalFits =
+    measured &&
+    normalDiscardWidth <= measuredWidth * 0.45 &&
+    normalDiscardWidth + normalSaveWidth + 12 <= measuredWidth;
+  const compactFits =
+    measured &&
+    compactDiscardWidth <= measuredWidth * 0.45 &&
+    compactDiscardWidth + compactSaveWidth + 8 <= measuredWidth;
+  const compact = measured && !normalFits && compactFits;
+  const stacked = measured && !normalFits && !compactFits;
   const isSaveDisabled =
     selectedCount === 0 || isSaving || !isReviewMetadataReady;
 
-  const handleSaveWrapper = (): void => {
-    onSave().catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      showToast({
-        type: "error",
-        title: t("save_error_title"),
-        message,
-      });
+  const reportUnhandled = (error: unknown): void => {
+    if (onUnhandledSaveError) {
+      onUnhandledSaveError(error);
+      return;
+    }
+    // Legacy callers without a notice host still receive privacy-safe Metro
+    // diagnostics; never resurrect a raw-error toast.
+    logReviewFailure({
+      source: isSmsWorkspace ? "SMS" : "VOICE",
+      stage: "footer_unhandled",
+      error,
     });
+  };
+  const handleSaveWrapper = (): void => {
+    try {
+      void onSave().catch(reportUnhandled);
+    } catch (error: unknown) {
+      reportUnhandled(error);
+    }
   };
 
   return (
@@ -97,6 +110,48 @@ export function ReviewActionBar({
           setMeasuredWidth((previous) => (previous === next ? previous : next));
         }}
       >
+        <View
+          pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          className="absolute start-0 top-0 items-start opacity-0"
+        >
+          <Text
+            className="text-sm font-semibold leading-5"
+            onLayout={(event) =>
+              setDiscardTextWidth(Math.ceil(event.nativeEvent.layout.width))
+            }
+          >
+            {discardLabel}
+          </Text>
+          <Text
+            className="text-base font-bold leading-6"
+            onLayout={(event) =>
+              setSaveTextWidth(Math.ceil(event.nativeEvent.layout.width))
+            }
+          >
+            {saveLabel}
+          </Text>
+          <Text
+            className="text-[13px] font-semibold leading-[18px]"
+            onLayout={(event) =>
+              setCompactDiscardTextWidth(
+                Math.ceil(event.nativeEvent.layout.width)
+              )
+            }
+          >
+            {discardLabel}
+          </Text>
+          <Text
+            className="text-sm font-bold leading-5"
+            onLayout={(event) =>
+              setCompactSaveTextWidth(Math.ceil(event.nativeEvent.layout.width))
+            }
+          >
+            {saveLabel}
+          </Text>
+        </View>
         {!hideDiscard && (
           <TouchableOpacity
             onPress={onDiscard}
@@ -106,7 +161,7 @@ export function ReviewActionBar({
               "min-h-12 flex-row items-center justify-center rounded-lg border border-border dark:border-border-dark " +
               (stacked ? "w-full " : "max-w-[45%] shrink-0 ") +
               (compact
-                ? "min-w-11 gap-1.5 px-2 py-2"
+                ? "min-w-12 gap-1.5 px-2 py-2"
                 : "min-w-28 gap-2 px-3 py-2")
             }
           >
@@ -132,7 +187,7 @@ export function ReviewActionBar({
           accessibilityState={{ disabled: isSaveDisabled }}
           activeOpacity={0.85}
           className={
-            "min-h-12 min-w-11 flex-row items-center justify-center rounded-lg " +
+            "min-h-12 min-w-12 flex-row items-center justify-center rounded-lg " +
             (stacked ? "w-full " : "min-w-0 flex-1 ") +
             (compact ? "gap-1.5 px-2 py-2 " : "gap-2 px-4 py-2 ") +
             (isSaveDisabled ? "bg-slate-700" : "bg-nileGreen-600")
@@ -159,7 +214,7 @@ export function ReviewActionBar({
           onPress={onReviewLater}
           disabled={isSaving}
           activeOpacity={0.7}
-          className="min-h-11 items-center justify-center py-2"
+          className="min-h-12 items-center justify-center py-2"
         >
           <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
             {t("sms_review_review_later")}

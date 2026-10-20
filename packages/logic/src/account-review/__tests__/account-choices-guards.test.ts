@@ -700,4 +700,130 @@ describe("#395 owner manual source/Cash drafts and explicit account currency", (
       confirmation: "confirmed",
     });
   });
+  it("prepares a single EUR draft from unconfirmed Voice currency without FX or a physical account", async () => {
+    const before = await unconfirmedCurrencyReview("ambiguous");
+    const row = before.rows[0];
+    if (!row) throw new Error("Missing unconfirmed row");
+    const owner = ownedContext(before);
+    const nonce = COMMAND_IDS.otherSession;
+    const proof = await deriveManualRowAccountReviewGroupIdentity({
+      ownerId: before.ownerId,
+      sessionId: before.sessionId,
+      source: before.source,
+      rowId: row.rowId,
+      role: "source",
+      nonce,
+      identity: { name: "Travel EUR", type: "BANK", currency: "EUR" },
+      hashProvider: syntheticHashProvider,
+    });
+    const input = {
+      ...scope(before),
+      kind: "create_row_account_draft" as const,
+      rowId: row.rowId,
+      expectedRowRevision: row.revision,
+      role: "source" as const,
+      identity: { name: "Travel EUR", type: "BANK" as const },
+      manualDraft: { nonce, ...proof },
+    };
+    const command = accountReviewCommandSchema.parse({
+      ...input,
+      currency: "EUR",
+    });
+    const accepted = apply(before, command, owner);
+    expect(accepted.reasonCodes).toEqual([]);
+    expect(accepted.effect).toBe("session_only");
+    const changed = requireRow(accepted.state, row.rowId);
+    expect(changed.currency).toMatchObject({
+      state: "known",
+      code: "EUR",
+      origin: "user",
+    });
+    expect(changed.transaction.currency).toBe("EUR");
+    expect(changed.transaction.amount).toBe(row.transaction.amount);
+    expect(changed.amountDecimal).toBe(row.amountDecimal);
+    expect(changed.transaction.categoryId).toBe(row.transaction.categoryId);
+    expect(changed.accountEvidence).toEqual(row.accountEvidence);
+    expect(changed.sourceRef).toBe(row.sourceRef);
+    expect(changed.selected).toBe(false);
+    expect(changed.assignment).toMatchObject({
+      state: "suggested",
+      confirmation: "confirmed",
+      groupId: proof.groupId,
+    });
+    expect(accepted.state.groups).toHaveLength(1);
+    expect(accepted.state.groups[0]).toMatchObject({
+      groupId: proof.groupId,
+      currency: "EUR",
+      linkedRowIds: [row.rowId],
+    });
+    expect(before).toEqual(accountReviewSessionSchema.parse(before));
+    assertUnchangedFailure(
+      apply(before, accountReviewCommandSchema.parse(input), owner),
+      before
+    );
+    assertUnchangedFailure(
+      apply(accepted.state, command, owner),
+      accepted.state
+    );
+    assertUnchangedFailure(
+      apply(before, command, { ...owner, ownerId: COMMAND_IDS.otherOwner }),
+      before
+    );
+  });
+
+  it("a USD Cash destination draft invalidates only its incompatible EGP ATM source", async () => {
+    const before = await smsAtmReview();
+    const original = before.rows[0];
+    if (!original) throw new Error("Missing SMS ATM row");
+    const chosen = apply(
+      before,
+      choose(before, original.rowId, COMMAND_IDS.cibAccount)
+    );
+    expect(chosen.reasonCodes).toEqual([]);
+    const row = requireRow(chosen.state, original.rowId);
+    const current = ownedContext(
+      chosen.state,
+      availableAccounts().filter((account) => account.type !== "CASH")
+    );
+    const nonce = COMMAND_IDS.otherSession;
+    const proof = await deriveManualRowAccountReviewGroupIdentity({
+      ownerId: chosen.state.ownerId,
+      sessionId: chosen.state.sessionId,
+      source: chosen.state.source,
+      rowId: row.rowId,
+      role: "destination",
+      nonce,
+      identity: { name: "USD pocket", type: "CASH", currency: "USD" },
+      hashProvider: syntheticHashProvider,
+    });
+    const cmd = accountReviewCommandSchema.parse({
+      ...scope(chosen.state),
+      kind: "create_row_account_draft",
+      rowId: row.rowId,
+      expectedRowRevision: row.revision,
+      role: "destination",
+      currency: "USD",
+      identity: { name: "USD pocket", type: "CASH" },
+      manualDraft: { nonce, ...proof },
+    });
+    const result = apply(chosen.state, cmd, current);
+    expect(result.reasonCodes).toEqual([]);
+    const changed = requireRow(result.state, row.rowId);
+    expect(changed.assignment.state).toBe("unresolved");
+    expect(changed.toAssignment).toMatchObject({
+      state: "suggested",
+      groupId: proof.groupId,
+      confirmation: "confirmed",
+    });
+    expect(changed.currency).toMatchObject({ state: "known", code: "USD" });
+    expect(changed.transaction.amount).toBe(row.transaction.amount);
+    expect(changed.amountDecimal).toBe(row.amountDecimal);
+    expect(changed.selected).toBe(false);
+    expect(
+      result.state.groups.find((group) => group.groupId === proof.groupId)
+    ).toMatchObject({ currency: "USD", linkedRowIds: [row.rowId] });
+    expect(chosen.state).toEqual(
+      accountReviewSessionSchema.parse(chosen.state)
+    );
+  });
 });

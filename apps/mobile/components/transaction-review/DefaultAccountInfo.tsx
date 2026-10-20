@@ -60,7 +60,6 @@ export function DefaultAccountInfo({
 }: DefaultAccountInfoProps): React.JSX.Element | null {
   const { t } = useTranslation("transactions");
   const { language } = useLocale();
-  const { width, fontScale } = useWindowDimensions();
   const { colorScheme } = useColorScheme();
   if (assignmentCount <= 0) return null;
 
@@ -72,8 +71,6 @@ export function DefaultAccountInfo({
       })}
       whyLabel={t("account_review_default_why_trigger")}
       onWhyPress={onWhyPress}
-      fallbackViewportWidth={width}
-      fontScale={fontScale}
       rtl={language === "ar"}
       iconColor={
         colorScheme === "dark" ? palette.slate[400] : palette.slate[500]
@@ -86,8 +83,6 @@ interface QuietDefaultDisclosureProps {
   readonly label: string;
   readonly whyLabel: string;
   readonly onWhyPress: () => void;
-  readonly fallbackViewportWidth: number;
-  readonly fontScale: number;
   readonly rtl: boolean;
   readonly iconColor: string;
 }
@@ -95,84 +90,67 @@ interface QuietDefaultDisclosureProps {
 function QuietDefaultDisclosure(
   props: QuietDefaultDisclosureProps
 ): React.JSX.Element {
-  const { rtl, whyLabel, onWhyPress, fontScale } = props;
-  const [measuredWidth, setMeasuredWidth] = React.useState<number | null>(null);
-  // R3-07 keeps Why beside the quiet note while it fits. A real measured
-  // content width takes precedence over the 20+16 dp gutter fallback.
-  const available =
-    measuredWidth ??
-    Math.max(0, Math.min(350, props.fallbackViewportWidth - 2 * (20 + 16)));
-  const compact = available < 22 + 16 + Math.ceil((140 + 64) * fontScale);
-  const tight = available < 288;
+  const { rtl, whyLabel, onWhyPress } = props;
   return (
     <View
       testID="account-review-default-info"
-      className="w-full max-w-[350px] self-center py-2 dark:bg-transparent"
-      onLayout={(event) => {
-        const next = Math.round(event.nativeEvent.layout.width);
-        setMeasuredWidth((previous) => (previous === next ? previous : next));
-      }}
+      className="w-full max-w-[350px] self-center py-1 dark:bg-transparent"
     >
       <View
         className={
-          compact
-            ? "items-start gap-1"
-            : rtl
-              ? "flex-row-reverse items-center " + (tight ? "gap-1" : "gap-2")
-              : "flex-row items-center " + (tight ? "gap-1" : "gap-2")
+          "min-w-0 items-center gap-2 " +
+          (rtl ? "flex-row-reverse" : "flex-row")
         }
       >
-        <Ionicons
-          name="information-circle-outline"
-          size={compact ? 20 : 22}
-          color={props.iconColor}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-        <QuietDefaultNote label={props.label} compact={compact} rtl={rtl} />
-        {!compact ? (
-          <WhyLink label={whyLabel} onPress={onWhyPress} rtl={rtl} />
-        ) : null}
+        <View className="h-6 w-6 shrink-0 items-center justify-center">
+          <Ionicons
+            name="information-circle-outline"
+            size={20}
+            color={props.iconColor}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        </View>
+        <View
+          className={
+            "min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-0.5 " +
+            (rtl ? "flex-row-reverse" : "flex-row")
+          }
+        >
+          <QuietDefaultNote label={props.label} rtl={rtl} />
+          <WhyLink label={whyLabel} onPress={onWhyPress} />
+        </View>
       </View>
-      {compact ? (
-        <WhyLink label={whyLabel} onPress={onWhyPress} rtl={rtl} />
-      ) : null}
     </View>
   );
 }
 
 function QuietDefaultNote({
   label,
-  compact,
   rtl,
 }: {
   readonly label: string;
-  readonly compact: boolean;
   readonly rtl: boolean;
 }): React.JSX.Element {
   const writingDirection: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
   return (
     <Text
       style={{ writingDirection }}
-      className={`${rtl ? "text-right" : "text-left"} ${
-        compact
-          ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-          : "min-w-0 grow shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-      }`}
+      className={
+        (rtl ? "text-right " : "text-left ") +
+        "min-w-0 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+      }
     >
       {label}
     </Text>
   );
 }
-
 function WhyLink({
   label,
   onPress,
-  rtl,
 }: {
   readonly label: string;
   readonly onPress: () => void;
-  readonly rtl: boolean;
 }): React.JSX.Element {
   return (
     <TouchableOpacity
@@ -181,11 +159,7 @@ function WhyLink({
       accessibilityRole="button"
       accessibilityLabel={label}
       activeOpacity={0.75}
-      className={
-        rtl
-          ? "min-h-11 min-w-11 items-center justify-center self-end"
-          : "min-h-11 min-w-11 items-center justify-center self-start"
-      }
+      className="min-h-11 min-w-11 shrink-0 items-center justify-center"
     >
       <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
         {label}
@@ -323,7 +297,7 @@ function WhyCopy({
         {t("account_review_default_edit_reminder")}
       </Text>
       <Text
-        className={`${rtl ? "text-right" : "text-left"} mt-3 text-sm leading-5 text-text-muted dark:text-text-muted-dark`}
+        className={`${rtl ? "text-right" : "text-left"} mt-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark`}
         style={{ writingDirection }}
       >
         {t("account_review_default_why_boundary")}
@@ -375,7 +349,7 @@ function WhyHeading({
             : "flex-row items-center gap-3"
       }
     >
-      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-nileGreen-50 dark:bg-nileGreen-900">
+      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-nileGreen-50 dark:bg-transparent">
         <Ionicons
           name="business-outline"
           size={22}

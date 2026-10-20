@@ -217,6 +217,14 @@ For every review, answer explicitly — not as a checkbox, as prose with
 
 ### Silent-Failure Smells on Write Paths
 
+Follow current `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md` and business decisions. In new or changed UI, an
+error/warning/success toast is itself a policy violation: use a persistent
+dismissible page notice below the header outside scrolling, or a modal-top
+notice. The success-toast examples below are **legacy anti-patterns to reject**,
+not implementation recommendations; preserve actual guarded financial outcome
+semantics and avoid guessing Save causes.
+
 - `database.write(async () => { ... })` with an unhandled throw inside
 - `catch {}` or `catch (e) { log.error(e) }` on a write (UI proceeds as if it
   worked)
