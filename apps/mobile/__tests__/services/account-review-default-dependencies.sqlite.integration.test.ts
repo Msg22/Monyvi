@@ -17,6 +17,7 @@ import {
   hashFinancialActionEnvelope,
   parseFinancialActionEnvelopeJson,
   type FinancialActionEnvelopeV1,
+  type FinancialActionValidationInput,
   type Sha256Provider,
 } from "@monyvi/logic";
 import { validateAccountCreateDefaultPayload } from "../../../../packages/logic/src/financial-actions/account-create-default";
@@ -190,12 +191,14 @@ async function seedOwnedAccount(
 
 async function storeRoot(
   envelope: FinancialActionEnvelopeV1,
-  state = "local_complete"
+  state = "local_complete",
+  validationInput?: FinancialActionValidationInput
 ): Promise<FinancialActionGroup> {
   const signed = await hashFinancialActionEnvelope(
     envelope,
     hashProvider,
-    registry
+    registry,
+    validationInput
   );
   const db = ledger.database;
   const physicalId = testUuid(nextPhysicalRoot++);
@@ -487,5 +490,46 @@ describe("#395 T048 original owned Add predecessor evidence (real SQLite)", () =
     await seedOwnedAccount(ADD_DEFAULT_IDS.newAccount, OWNER, true);
     await storeRoot(addEnvelope(FOREIGN_OWNER));
     expect(await captureForExisting(ADD_DEFAULT_IDS.newAccount)).toEqual([]);
+  });
+  it("accepts a canonical pending Metals action with the required trusted calendar bound", async () => {
+    await seedOwnedAccount(REVIEW_ACCOUNT_ID, OWNER, true);
+    const validationInput = { latestAllowedCalendarDate: "2026-09-01" };
+    const envelope = canonicalizeFinancialActionEnvelope(
+      {
+        actionId: testUuid(8950),
+        accountGuards: [],
+        domain: "metals",
+        domainReferenceId: testUuid(8951),
+        envelopeVersion: "monyvi.financial-action/v1",
+        occurredAt: "2026-09-01T12:00:00.000Z",
+        kind: "dispose",
+        payloadVersion: "metals.dispose/v1",
+        userId: OWNER,
+        payload: {
+          holdingId: testUuid(8951),
+          expectedHoldingRevision: "7",
+          predecessorEventId: testUuid(8952),
+          reversesEventId: null,
+          disposalDate: "2026-08-31",
+          reason: "lost_or_stolen",
+          notes: null,
+          rateSnapshots: [],
+        },
+      },
+      registry,
+      validationInput
+    );
+    const root = await storeRoot(envelope, "local_complete", validationInput);
+    // Omitting caller-supplied date evidence rejects this valid Metals payload.
+    expect(() =>
+      parseFinancialActionEnvelopeJson(root.payloadJson, registry)
+    ).toThrow("financial_action_invalid_payload");
+    expect(await captureForExisting(REVIEW_ACCOUNT_ID)).toEqual([]);
+    await editRoot(root, (record) => {
+      record.payloadHash = "0".repeat(64);
+    });
+    await expect(captureForExisting(REVIEW_ACCOUNT_ID)).rejects.toThrow(
+      "invalid_prior_action_identity"
+    );
   });
 });

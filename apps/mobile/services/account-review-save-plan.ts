@@ -1,5 +1,6 @@
 /** #395 T048 complete review-only atomic linked plan and canonical envelope. */
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import { observeReviewSaveFailure } from "./account-review-save-failure-context";
 import type { Account, Category } from "@monyvi/db";
 import {
   canonicalizeFinancialActionEnvelope,
@@ -343,16 +344,19 @@ function privateSnapshotBuilder(
     if (evidence.userId !== frozen.intent.ownerId)
       reject("private_owner_changed");
     await dep.assertOwner();
-    const snapshot = await buildAccountReviewLocalSnapshot({
-      frozen,
-      payload,
-      sms: context.sms,
-      ownedAccounts: context.ownedAccounts,
-      database: dep.database,
-      scope: context.scope,
-      evidence,
-      hashProvider: dep.hashProvider,
-    });
+    const snapshot = await observeReviewSaveFailure(
+      "capture_recovery_snapshot",
+      buildAccountReviewLocalSnapshot({
+        frozen,
+        payload,
+        sms: context.sms,
+        ownedAccounts: context.ownedAccounts,
+        database: dep.database,
+        scope: context.scope,
+        evidence,
+        hashProvider: dep.hashProvider,
+      })
+    );
     await assertPostStageAuthority(frozen, dep);
     return snapshot;
   };

@@ -76,7 +76,22 @@ describe("#395 Save diagnostic privacy and stable boundaries", () => {
       if (typeof __DEV__ !== "undefined" && __DEV__) {
         expect(spy).toHaveBeenCalledWith(
           "[account-review-feedback]",
-          diagnostic
+          JSON.stringify({
+            ...diagnostic,
+            dev: {
+              chain: [
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "unclassified",
+                  evidence: "none",
+                  stack: "unmapped",
+                  locations: [],
+                  frames: ["runCommand"],
+                },
+              ],
+            },
+          })
         );
       } else {
         expect(spy).not.toHaveBeenCalled();
@@ -125,6 +140,324 @@ describe("#395 Save diagnostic privacy and stable boundaries", () => {
     expect(diagnostic.code).toBe(code);
     expect(JSON.stringify(diagnostic)).not.toContain("private raw message");
   });
+
+  it("recovers allowlisted Hermes, JSC and V8 locations without paths or private frame names", () => {
+    const secret = "SECRET_TOKEN_ACCOUNT_SMS_TRANSCRIPT";
+    const failure = new TypeError(
+      "undefined is not an object (evaluating '" + secret + ".payload')"
+    );
+    failure.stack = [
+      "TypeError: " + secret,
+      "    at privateNativeCall (address at http://localhost:8081/index.android.bundle?platform=android&token=" +
+        secret +
+        ":1:432197)",
+      "    at saveCapturedAccountReview (address at /Users/" +
+        secret +
+        "/apps/mobile/services/account-review-runtime-save.ts:193:7)",
+      "assertRuntimeOwner@file:///tmp/" + secret + "/voice-review.tsx:260:9",
+      "    at " + secret + " (/private/" + secret + ".js:8:1)",
+    ].join("\n");
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = logReviewFailure({
+        source: "VOICE",
+        stage: "save_invocation",
+        error: failure,
+      });
+      expect(result).toEqual({
+        source: "VOICE",
+        stage: "save_invocation",
+        code: "unexpected_error",
+        errorClass: "TypeError",
+        frames: ["saveCapturedAccountReview", "assertRuntimeOwner"],
+      });
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        expect(spy).toHaveBeenCalledWith(
+          "[account-review-feedback]",
+          JSON.stringify({
+            ...result,
+            dev: {
+              chain: [
+                {
+                  errorClass: "TypeError",
+                  code: null,
+                  reason: "nullish_property_access",
+                  evidence: "message_shape",
+                  stack: "located",
+                  locations: [
+                    "index.android.bundle:1:432197",
+                    "account-review-runtime-save.ts:193:7",
+                    "voice-review.tsx:260:9",
+                  ],
+                  frames: ["saveCapturedAccountReview", "assertRuntimeOwner"],
+                },
+              ],
+            },
+          })
+        );
+      }
+      const printed = JSON.stringify(spy.mock.calls);
+      expect(printed).not.toContain(secret);
+      expect(printed).not.toContain("http://");
+      expect(printed).not.toContain("file://");
+      expect(printed).not.toContain("/Users/");
+      expect(printed).not.toContain("/private/");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("traces bounded Error causes and classifies SQLite failure without leaking table names or SQL", () => {
+    const secret = "PRIVATE_ACCOUNTS_TABLE_TOKEN";
+    const sqlite = Object.assign(
+      new Error("SQLITE_ERROR: no such table: " + secret),
+      { code: "SQLITE_ERROR" }
+    );
+    sqlite.stack =
+      "Error: secret\n    at internalSql (address at /private/" +
+      secret +
+      "/watermelon-atomic-batch.ts:160:5)";
+    const outer = Object.assign(new Error("secret SQL text " + secret), {
+      cause: sqlite,
+    });
+    // A cyclic cause must not produce unbounded logging.
+    Object.assign(sqlite, { cause: outer });
+    outer.stack =
+      "Error: private hidden\n    at wrapper (/private/" +
+      secret +
+      "/unsafe-source.ts:2:1)";
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = logReviewFailure({
+        source: "VOICE",
+        stage: "save_invocation",
+        error: outer,
+      });
+      expect(result.code).toBe("unexpected_error");
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        expect(spy).toHaveBeenCalledWith(
+          "[account-review-feedback]",
+          JSON.stringify({
+            ...result,
+            dev: {
+              chain: [
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "unclassified",
+                  evidence: "none",
+                  stack: "unmapped",
+                  locations: [],
+                  frames: [],
+                },
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "sqlite_missing_table",
+                  evidence: "message_shape",
+                  stack: "located",
+                  locations: ["watermelon-atomic-batch.ts:160:5"],
+                  frames: [],
+                },
+              ],
+            },
+          })
+        );
+      }
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+      expect(JSON.stringify(spy.mock.calls)).not.toContain("SQLITE_ERROR:");
+      expect(JSON.stringify(spy.mock.calls)).not.toContain("/private/");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("uses only static native error categories and exposes no arbitrary codes or message prefixes", () => {
+    const secret = "SECRET_USER_ACCOUNT_ID_9988";
+    const native = Object.assign(new Error("sqlite disk is full"), {
+      code: "SQLITE_FULL",
+      cause: Object.assign(new Error("private " + secret), {
+        code: "SQLITE_FULL_" + secret,
+      }),
+    });
+    native.stack = "Error: secret\nunknownJS@" + secret + "/private.js:55:6";
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const diagnostic = logReviewFailure({
+        source: "SMS",
+        stage: "save_invocation",
+        error: native,
+      });
+      expect(diagnostic.code).toBe("unexpected_error");
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        expect(spy).toHaveBeenCalledWith(
+          "[account-review-feedback]",
+          JSON.stringify({
+            ...diagnostic,
+            dev: {
+              chain: [
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "storage_full",
+                  evidence: "static_code",
+                  stack: "unmapped",
+                  locations: [],
+                  frames: [],
+                },
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "unclassified",
+                  evidence: "none",
+                  stack: "unmapped",
+                  locations: [],
+                  frames: [],
+                },
+              ],
+            },
+          })
+        );
+      }
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("classifies quoted Hermes property failures but never prints the property name", () => {
+    const secret = "PRIVATE_PROPERTY_TOKEN";
+    const error = new TypeError(
+      "Cannot read property '" + secret + "' of undefined"
+    );
+    error.stack =
+      "TypeError: private\n    at unknown (/private/secret.js:10:4)";
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = logReviewFailure({
+        source: "VOICE",
+        stage: "save_invocation",
+        error,
+      });
+      expect(result.code).toBe("unexpected_error");
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        expect(spy).toHaveBeenCalledWith(
+          "[account-review-feedback]",
+          JSON.stringify({
+            ...result,
+            dev: {
+              chain: [
+                {
+                  errorClass: "TypeError",
+                  code: null,
+                  reason: "nullish_property_access",
+                  evidence: "message_shape",
+                  stack: "unmapped",
+                  locations: [],
+                  frames: [],
+                },
+              ],
+            },
+          })
+        );
+      }
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("reports missing technical evidence explicitly without inventing a diagnosis", () => {
+    const secret = "PRIVATE_UNRECOGNIZED_RUNTIME_MESSAGE";
+    const error = new Error(secret);
+    error.stack = "";
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = logReviewFailure({
+        source: "VOICE",
+        stage: "save_invocation",
+        error,
+      });
+      expect(result).toEqual({
+        source: "VOICE",
+        stage: "save_invocation",
+        code: "unexpected_error",
+        errorClass: "Error",
+        frames: [],
+      });
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        expect(spy).toHaveBeenCalledWith(
+          "[account-review-feedback]",
+          JSON.stringify({
+            ...result,
+            dev: {
+              chain: [
+                {
+                  errorClass: "Error",
+                  code: null,
+                  reason: "unclassified",
+                  evidence: "none",
+                  stack: "absent",
+                  locations: [],
+                  frames: [],
+                },
+              ],
+            },
+          })
+        );
+      }
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it.each([
+    "account-review-save-digest.ts",
+    "account-review-save-replay.ts",
+    "account-review-save-sms.ts",
+    "account-review-retention-lifecycle.ts",
+    "user-data-access.ts",
+    "account-review-save-ownership.ts",
+  ])(
+    "keeps exact Save source location %s readable through Metro string transport",
+    (file) => {
+      const secret = "PRIVATE_SQL_TOKEN_AND_USER_ACCOUNT";
+      const error = new Error(secret);
+      error.stack =
+        "Error: " +
+        secret +
+        "\n    at privateWriter (/private/" +
+        secret +
+        "/services/" +
+        file +
+        ":77:15)";
+      const spy = jest
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      try {
+        const result = logReviewFailure({
+          source: "VOICE",
+          stage: "save_invocation",
+          error,
+        });
+        expect(result.code).toBe("unexpected_error");
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          // A string bypasses React Native's maxDepth:3 object pretty-printer.
+          expect(spy).toHaveBeenCalledWith(
+            "[account-review-feedback]",
+            expect.stringContaining('"' + file + ':77:15"')
+          );
+        } else {
+          expect(spy).not.toHaveBeenCalled();
+        }
+        expect(JSON.stringify(spy.mock.calls)).not.toContain(secret);
+        expect(JSON.stringify(spy.mock.calls)).not.toContain("/private/");
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  );
 
   it("does not accept private suffixes masquerading as known SDK error codes", () => {
     const secret = "SECRET_TRANSCRIPT_ACCOUNT_ID_TOKEN";

@@ -1,4 +1,9 @@
 /** #395 T048 selected review Save — one immutable plan, one owned atomic writer. */
+import {
+  observeReviewSaveFailure,
+  rememberReviewSaveFailure,
+  type ReviewSaveFailurePhase,
+} from "./account-review-save-failure-context";
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type { FinancialActionGroup } from "@monyvi/db";
 import {
@@ -354,7 +359,10 @@ async function commitNewReviewAction(
     frozen,
     await dep.loadCurrentSession(frozen.intent.ownerId, frozen.intent.sessionId)
   );
-  const initial = await constructReviewSave(frozen, plan, scope);
+  const initial = await observeReviewSaveFailure(
+    "construct_plan",
+    constructReviewSave(frozen, plan, scope)
+  );
   if (initial.envelope === null) {
     return cleanupOnlySms(frozen, dep, initial.sms, assertOwner);
   }
@@ -381,13 +389,16 @@ async function commitNewReviewAction(
     envelope: initial.envelope,
     hashProvider: dep.hashProvider,
     prepareDomainOperationPlan: () =>
-      revalidateReviewPlanInsideWriter(
-        frozen,
-        dep,
-        plan,
-        assertOwner,
-        registry,
-        initialHashText
+      observeReviewSaveFailure(
+        "writer_revalidation",
+        revalidateReviewPlanInsideWriter(
+          frozen,
+          dep,
+          plan,
+          assertOwner,
+          registry,
+          initialHashText
+        )
       ),
   });
   return { kind: result.kind };
@@ -397,25 +408,37 @@ export function createAccountReviewSaveService(
 ): AccountReviewSaveService {
   return {
     saveSelectedAccountReview: async (input: ReviewSaveInput) => {
-      const frozen = freezeSelectedAccountReview(input);
-      const assertOwner = ownerGuard(frozen.intent.ownerId, dep);
-      await assertOwner();
-      // The pure digest authority validates the complete original plan on
-      // first write, historical replay and action-free all-dedup cleanup.
-      const scope = await currentOwnedScope(frozen, dep);
-      const root = await existingActionRoot(
-        dep.database,
-        scope,
-        frozen.intent.actionId
-      );
-      if (root) return replayExistingAction(frozen, dep, root, scope);
-      const plan: ReviewPlanDependencies = {
-        database: dep.database,
-        hashProvider: dep.hashProvider,
-        assertOwner,
-        loadCurrentSession: dep.loadCurrentSession,
-      };
-      return commitNewReviewAction(frozen, dep, plan, assertOwner);
+      let phase: ReviewSaveFailurePhase = "freeze_input";
+      try {
+        const frozen = freezeSelectedAccountReview(input);
+        const assertOwner = ownerGuard(frozen.intent.ownerId, dep);
+        phase = "read_owner_scope";
+        await assertOwner();
+        // The pure digest authority validates the complete original plan on
+        // first write, historical replay and action-free all-dedup cleanup.
+        const scope = await currentOwnedScope(frozen, dep);
+        phase = "lookup_action";
+        const root = await existingActionRoot(
+          dep.database,
+          scope,
+          frozen.intent.actionId
+        );
+        if (root) {
+          phase = "replay_action";
+          return await replayExistingAction(frozen, dep, root, scope);
+        }
+        const plan: ReviewPlanDependencies = {
+          database: dep.database,
+          hashProvider: dep.hashProvider,
+          assertOwner,
+          loadCurrentSession: dep.loadCurrentSession,
+        };
+        phase = "commit_action";
+        return await commitNewReviewAction(frozen, dep, plan, assertOwner);
+      } catch (error: unknown) {
+        rememberReviewSaveFailure(error, phase);
+        throw error;
+      }
     },
   };
 }

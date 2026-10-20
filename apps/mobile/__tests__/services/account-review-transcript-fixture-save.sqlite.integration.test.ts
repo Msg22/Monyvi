@@ -11,9 +11,12 @@ import type {
   AccountFinancialEffect,
   BankDetails,
   Category,
+  FinancialActionGroup,
   Transaction,
 } from "@monyvi/db";
 import {
+  canonicalizeFinancialActionEnvelope,
+  hashFinancialActionEnvelope,
   accountReviewCommandSchema,
   accountReviewRequestContextSchema,
   reduceAccountReviewCommand,
@@ -22,6 +25,8 @@ import {
   type AccountReviewSession,
 } from "@monyvi/logic";
 import type { AccountReviewAccountSnapshots } from "../../services/account-review-read-model-service";
+import { sanitizeReviewFailure } from "../../services/account-review-feedback-diagnostics";
+import { reviewSaveFailurePhases } from "../../services/account-review-save-failure-context";
 import { freezeSelectedAccountReview } from "../../services/account-review-save-preparation";
 import { loadReviewTranscriptFixturesContext } from "../../services/review-transcript-fixtures-context-service";
 import { buildReviewTranscriptFixtureLaunch } from "../../services/review-transcript-fixtures-launcher-service";
@@ -187,192 +192,360 @@ beforeEach(async (): Promise<void> => {
 });
 
 describe("#395 actual Voice TEST Game/CIB selected-only SQLite Save", () => {
-  it("creates only the confirmed CIB Bank/child and one Game financial effect; pending QNB survives replay", async () => {
-    const context = await loadReviewTranscriptFixturesContext();
-    expect(context.ownerId).toBe(OWNER);
-    expect(context.categoryIdsBySystemName.get("shopping")).toBe(
-      SHOPPING_CATEGORY
-    );
-    const launch = await buildReviewTranscriptFixtureLaunch({
-      scenarioId: "voice-shared-drafts-qnb-cib",
-      context,
-    });
-    expect(launch.status).toBe("launched");
-    const initial = launch.session;
-    if (!initial)
-      throw new Error("Fixture launcher did not return its canonical session");
-    expect(initial.rows).toHaveLength(6);
-    const game = initial.rows.find(
-      (row) => row.transaction.counterparty === "[TEST] Game"
-    );
-    const cib = initial.groups.find((group) => group.name === "TEST CIB");
-    const qnb = initial.groups.find((group) => group.name === "TEST NEW QNB");
-    if (!game || !cib || !qnb) throw new Error("Missing grounded Game/CIB/QNB");
-    expect(cib).toMatchObject({
-      status: "pending",
-      type: "BANK",
-      currency: "EGP",
-    });
-    expect(qnb).toMatchObject({
-      status: "pending",
-      type: "BANK",
-      currency: "EGP",
-    });
-    expect(game.assignment).toMatchObject({
-      state: "suggested",
-      groupId: cib.groupId,
-      confirmation: "pending",
-    });
-
-    const snapshots: AccountReviewOwnedContext = {
-      ownerId: context.ownerId,
-      preferredCurrency: context.preferredCurrency,
-      accounts: context.accounts,
-      providerContext: context.providerContext,
-    };
-    const confirmed = apply(
-      initial,
-      accountReviewCommandSchema.parse({
-        ...scope(initial),
-        kind: "confirm_group",
+  it.each([
+    {
+      hasExistingDefault: false,
+      hasInvalidPriorAction: false,
+      hasPendingMetals: false,
+    },
+    {
+      hasExistingDefault: true,
+      hasInvalidPriorAction: false,
+      hasPendingMetals: false,
+    },
+    {
+      hasExistingDefault: true,
+      hasInvalidPriorAction: false,
+      hasPendingMetals: true,
+    },
+    {
+      hasExistingDefault: true,
+      hasInvalidPriorAction: true,
+      hasPendingMetals: false,
+    },
+  ])(
+    "selected CIB/Game with default=$hasExistingDefault and invalid prior action=$hasInvalidPriorAction and pending Metals=$hasPendingMetals",
+    async ({ hasExistingDefault, hasInvalidPriorAction, hasPendingMetals }) => {
+      if (hasExistingDefault) {
+        await database.write(async () => {
+          const cash = database
+            .get<Account>("accounts")
+            .prepareCreate((account) => {
+              account._raw.id = testUuid(2301);
+              account.userId = OWNER;
+              account.name = "Existing cash";
+              account.type = "CASH";
+              account.currency = "EGP";
+              account.balance = 100;
+              account.financialRevision = "0";
+              account.isDefault = true;
+              account.deleted = false;
+            });
+          await database.batch(cash);
+        });
+      }
+      const context = await loadReviewTranscriptFixturesContext();
+      expect(context.ownerId).toBe(OWNER);
+      expect(context.categoryIdsBySystemName.get("shopping")).toBe(
+        SHOPPING_CATEGORY
+      );
+      const launch = await buildReviewTranscriptFixtureLaunch({
+        scenarioId: "voice-shared-drafts-qnb-cib",
+        context,
+      });
+      expect(launch.status).toBe("launched");
+      const initial = launch.session;
+      if (!initial)
+        throw new Error(
+          "Fixture launcher did not return its canonical session"
+        );
+      expect(initial.rows).toHaveLength(6);
+      const game = initial.rows.find(
+        (row) => row.transaction.counterparty === "[TEST] Game"
+      );
+      const cib = initial.groups.find((group) => group.name === "TEST CIB");
+      const qnb = initial.groups.find((group) => group.name === "TEST NEW QNB");
+      if (!game || !cib || !qnb)
+        throw new Error("Missing grounded Game/CIB/QNB");
+      expect(cib).toMatchObject({
+        status: "pending",
+        type: "BANK",
+        currency: "EGP",
+      });
+      expect(qnb).toMatchObject({
+        status: "pending",
+        type: "BANK",
+        currency: "EGP",
+      });
+      expect(game.assignment).toMatchObject({
+        state: "suggested",
         groupId: cib.groupId,
-        expectedGroupRevision: cib.revision,
-      }),
-      snapshots
-    );
-    const confirmedGame = confirmed.rows.find(
-      (row) => row.rowId === game.rowId
-    );
-    if (!confirmedGame) throw new Error("Confirmed Game row disappeared");
-    const selected = apply(
-      confirmed,
-      accountReviewCommandSchema.parse({
-        ...scope(confirmed),
-        kind: "select_row",
-        rowId: game.rowId,
-        expectedRowRevision: confirmedGame.revision,
-        groupId: null,
-        expectedGroupRevision: null,
-        hasSharedConfirmationDisclosure: false,
-      }),
-      snapshots
-    );
-    expect(
-      selected.rows.filter((row) => row.selected).map((row) => row.rowId)
-    ).toEqual([game.rowId]);
-    const pendingQnb = selected.groups.find(
-      (group) => group.groupId === qnb.groupId
-    );
-    expect(pendingQnb).toEqual(qnb);
-    const untouchedQnbRows = selected.rows.filter(
-      (row) =>
-        row.assignment.state === "suggested" &&
-        row.assignment.groupId === qnb.groupId
-    );
-    expect(untouchedQnbRows).toHaveLength(3);
-    expect(untouchedQnbRows.every((row) => !row.selected)).toBe(true);
-    expect(
-      untouchedQnbRows.every(
+        confirmation: "pending",
+      });
+
+      const snapshots: AccountReviewOwnedContext = {
+        ownerId: context.ownerId,
+        preferredCurrency: context.preferredCurrency,
+        accounts: context.accounts,
+        providerContext: context.providerContext,
+      };
+      const confirmed = apply(
+        initial,
+        accountReviewCommandSchema.parse({
+          ...scope(initial),
+          kind: "confirm_group",
+          groupId: cib.groupId,
+          expectedGroupRevision: cib.revision,
+        }),
+        snapshots
+      );
+      const confirmedGame = confirmed.rows.find(
+        (row) => row.rowId === game.rowId
+      );
+      if (!confirmedGame) throw new Error("Confirmed Game row disappeared");
+      const selected = apply(
+        confirmed,
+        accountReviewCommandSchema.parse({
+          ...scope(confirmed),
+          kind: "select_row",
+          rowId: game.rowId,
+          expectedRowRevision: confirmedGame.revision,
+          groupId: null,
+          expectedGroupRevision: null,
+          hasSharedConfirmationDisclosure: false,
+        }),
+        snapshots
+      );
+      expect(
+        selected.rows.filter((row) => row.selected).map((row) => row.rowId)
+      ).toEqual([game.rowId]);
+      const pendingQnb = selected.groups.find(
+        (group) => group.groupId === qnb.groupId
+      );
+      expect(pendingQnb).toEqual(qnb);
+      const untouchedQnbRows = selected.rows.filter(
         (row) =>
           row.assignment.state === "suggested" &&
-          row.assignment.confirmation === "pending"
-      )
-    ).toBe(true);
+          row.assignment.groupId === qnb.groupId
+      );
+      expect(untouchedQnbRows).toHaveLength(3);
+      expect(untouchedQnbRows.every((row) => !row.selected)).toBe(true);
+      expect(
+        untouchedQnbRows.every(
+          (row) =>
+            row.assignment.state === "suggested" &&
+            row.assignment.confirmation === "pending"
+        )
+      ).toBe(true);
 
-    const sourceBeforeSave = JSON.stringify(selected);
-    const capture = captureAccountReviewRuntimeSave(selected, null);
-    const prepared = await capture.prepared;
-    const frozen = freezeSelectedAccountReview(prepared);
-    expect(frozen.selectedRows.map((row) => row.rowId)).toEqual([game.rowId]);
-    expect(frozen.neededGroups.map((group) => group.groupId)).toEqual([
-      cib.groupId,
-    ]);
-    expect(
-      prepared.intent.plannedEntityIds.map((entity) => entity.entity).sort()
-    ).toEqual(["account", "bank_details", "transaction"]);
-    const createdId = prepared.intent.plannedEntityIds.find(
-      (entity) => entity.entity === "account" && entity.localRef === cib.groupId
-    )?.id;
-    if (!createdId)
-      throw new Error("CIB was not frozen into its selected Save");
-    expect(
-      prepared.intent.plannedEntityIds.some(
-        (entity) => entity.localRef === qnb.groupId
-      )
-    ).toBe(false);
-    expect((await ledgerState(database)).counts).toMatchObject({
-      accounts: 0,
-      bankDetails: 0,
-      transactions: 0,
-      effects: 0,
-      actions: 0,
-    });
+      const sourceBeforeSave = JSON.stringify(selected);
+      const capture = captureAccountReviewRuntimeSave(selected, null);
+      const prepared = await capture.prepared;
+      const frozen = freezeSelectedAccountReview(prepared);
+      expect(frozen.selectedRows.map((row) => row.rowId)).toEqual([game.rowId]);
+      expect(frozen.neededGroups.map((group) => group.groupId)).toEqual([
+        cib.groupId,
+      ]);
+      expect(
+        prepared.intent.plannedEntityIds.map((entity) => entity.entity).sort()
+      ).toEqual(["account", "bank_details", "transaction"]);
+      const createdId = prepared.intent.plannedEntityIds.find(
+        (entity) =>
+          entity.entity === "account" && entity.localRef === cib.groupId
+      )?.id;
+      if (!createdId)
+        throw new Error("CIB was not frozen into its selected Save");
+      expect(
+        prepared.intent.plannedEntityIds.some(
+          (entity) => entity.localRef === qnb.groupId
+        )
+      ).toBe(false);
+      expect((await ledgerState(database)).counts).toMatchObject({
+        accounts: hasExistingDefault ? 1 : 0,
+        bankDetails: 0,
+        transactions: 0,
+        effects: 0,
+        actions: 0,
+      });
 
-    const readCurrent = (
-      ownerId: string,
-      sessionId: string
-    ): Promise<AccountReviewSession> => {
-      expect(ownerId).toBe(OWNER);
-      expect(sessionId).toBe(selected.sessionId);
-      return Promise.resolve(selected);
-    };
-    await expect(
-      saveCapturedAccountReview(capture, readCurrent)
-    ).resolves.toMatchObject({ kind: "committed" });
-    const persisted = await reopenSqliteLedger(ledger);
-    const state = await ledgerState(persisted);
-    expect(state.counts).toMatchObject({
-      accounts: 1,
-      bankDetails: 1,
-      senders: 0,
-      transactions: 1,
-      transfers: 0,
-      effects: 1,
-      actions: 1,
-    });
-    const savedAccount = await persisted
-      .get<Account>("accounts")
-      .find(createdId);
-    expect(savedAccount.name).toBe("TEST CIB");
-    expect(savedAccount.type).toBe("BANK");
-    expect(savedAccount.currency).toBe("EGP");
-    expect(savedAccount.balance).toBe(-50);
-    expect(savedAccount.financialRevision).toBe("1");
-    const bankChildren = await persisted
-      .get<BankDetails>("bank_details")
-      .query()
-      .fetch();
-    expect(bankChildren.map((child) => child.accountId)).toEqual([createdId]);
-    const transactions = await persisted
-      .get<Transaction>("transactions")
-      .query()
-      .fetch();
-    expect(transactions).toHaveLength(1);
-    expect(transactions[0]?.accountId).toBe(createdId);
-    expect(transactions[0]?.amount).toBe(50);
-    expect(transactions[0]?.currency).toBe("EGP");
-    expect(transactions[0]?.categoryId).toBe(SHOPPING_CATEGORY);
-    const effects = await persisted
-      .get<AccountFinancialEffect>("account_financial_effects")
-      .query()
-      .fetch();
-    expect(effects).toHaveLength(1);
-    expect(effects[0]?.accountId).toBe(createdId);
-    expect(effects[0]?.amountMinorUnits).toBe("-5000");
+      const readCurrent = (
+        ownerId: string,
+        sessionId: string
+      ): Promise<AccountReviewSession> => {
+        expect(ownerId).toBe(OWNER);
+        expect(sessionId).toBe(selected.sessionId);
+        return Promise.resolve(selected);
+      };
+      if (hasPendingMetals) {
+        const { createHash } =
+          jest.requireActual<typeof import("node:crypto")>("node:crypto");
+        const registry = (
+          await import("../../services/account-review-financial-command-service")
+        ).createAccountReviewFinancialRegistry();
+        const validationInput = { latestAllowedCalendarDate: "2026-09-01" };
+        const envelope = canonicalizeFinancialActionEnvelope(
+          {
+            actionId: testUuid(2450),
+            accountGuards: [],
+            domain: "metals",
+            domainReferenceId: testUuid(2451),
+            envelopeVersion: "monyvi.financial-action/v1",
+            occurredAt: "2026-09-01T12:00:00.000Z",
+            kind: "dispose",
+            payloadVersion: "metals.dispose/v1",
+            userId: OWNER,
+            payload: {
+              holdingId: testUuid(2451),
+              expectedHoldingRevision: "7",
+              predecessorEventId: testUuid(2452),
+              reversesEventId: null,
+              disposalDate: "2026-08-31",
+              reason: "lost_or_stolen",
+              notes: null,
+              rateSnapshots: [],
+            },
+          },
+          registry,
+          validationInput
+        );
+        const signed = await hashFinancialActionEnvelope(
+          envelope,
+          {
+            digestUtf8: (text: string) =>
+              Promise.resolve(
+                createHash("sha256").update(text, "utf8").digest("hex")
+              ),
+          },
+          registry,
+          validationInput
+        );
+        await database.write(async () => {
+          const prior = database
+            .get<FinancialActionGroup>("financial_action_groups")
+            .prepareCreate((record) => {
+              record._raw.id = testUuid(2453);
+              record.actionId = envelope.actionId;
+              record.userId = OWNER;
+              record.domain = envelope.domain;
+              record.kind = envelope.kind;
+              record.domainReferenceId = envelope.domainReferenceId;
+              record.payloadJson = signed.canonicalText;
+              record.payloadHash = signed.payloadHash;
+              record.accountGuardsJson = "[]";
+              record.state = "local_complete";
+              record.serverOutcome = null;
+              record.outcomeJson = null;
+              record.rejectionCode = null;
+              record.deleted = false;
+              record.updatedAt = new Date();
+            });
+          await database.batch(prior);
+        });
+      }
+      if (hasInvalidPriorAction) {
+        await database.write(async () => {
+          const previous = database
+            .get<FinancialActionGroup>("financial_action_groups")
+            .prepareCreate((record) => {
+              record._raw.id = testUuid(2401);
+              record.actionId = testUuid(2402);
+              record.userId = OWNER;
+              record.domain = "transactions";
+              record.kind = "review_batch_save";
+              record.domainReferenceId = testUuid(2403);
+              record.payloadJson = "{}";
+              record.payloadHash = "0".repeat(64);
+              record.accountGuardsJson = "[]";
+              record.state = "local_complete";
+              record.serverOutcome = null;
+              record.outcomeJson = null;
+              record.rejectionCode = null;
+              record.deleted = false;
+              record.updatedAt = new Date();
+            });
+          await database.batch(previous);
+        });
+        const beforeAttempt = await physicalSaveLedgerSnapshot(database);
+        let failure: unknown;
+        try {
+          await saveCapturedAccountReview(capture, readCurrent);
+        } catch (error: unknown) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(Error);
+        expect(
+          sanitizeReviewFailure({
+            source: "VOICE",
+            stage: "save_invocation",
+            error: failure,
+          }).code
+        ).toBe("account_review_local_default_invalid_prior_action_identity");
+        expect(reviewSaveFailurePhases(failure)).toContain(
+          "capture_recovery_snapshot"
+        );
+        expect(
+          await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
+        ).toEqual(beforeAttempt);
+        expect(JSON.stringify(selected)).toBe(sourceBeforeSave);
+        return;
+      }
+      await expect(
+        saveCapturedAccountReview(capture, readCurrent)
+      ).resolves.toMatchObject({ kind: "committed" });
+      const persisted = await reopenSqliteLedger(ledger);
+      const state = await ledgerState(persisted);
+      expect(state.counts).toMatchObject({
+        accounts: hasExistingDefault ? 2 : 1,
+        bankDetails: 1,
+        senders: 0,
+        transactions: 1,
+        transfers: 0,
+        effects: 1,
+        actions: hasPendingMetals ? 2 : 1,
+      });
+      const savedAccount = await persisted
+        .get<Account>("accounts")
+        .find(createdId);
+      expect(savedAccount.name).toBe("TEST CIB");
+      expect(savedAccount.type).toBe("BANK");
+      expect(savedAccount.currency).toBe("EGP");
+      expect(savedAccount.balance).toBe(-50);
+      expect(savedAccount.financialRevision).toBe("1");
+      expect(savedAccount.isDefault).toBe(!hasExistingDefault);
+      if (hasExistingDefault) {
+        const prior = await persisted
+          .get<Account>("accounts")
+          .find(testUuid(2301));
+        expect(prior.balance).toBe(100);
+        expect(prior.financialRevision).toBe("0");
+        expect(prior.isDefault).toBe(true);
+      }
+      const bankChildren = await persisted
+        .get<BankDetails>("bank_details")
+        .query()
+        .fetch();
+      expect(bankChildren.map((child) => child.accountId)).toEqual([createdId]);
+      const transactions = await persisted
+        .get<Transaction>("transactions")
+        .query()
+        .fetch();
+      expect(transactions).toHaveLength(1);
+      expect(transactions[0]?.accountId).toBe(createdId);
+      expect(transactions[0]?.amount).toBe(50);
+      expect(transactions[0]?.currency).toBe("EGP");
+      expect(transactions[0]?.categoryId).toBe(SHOPPING_CATEGORY);
+      const effects = await persisted
+        .get<AccountFinancialEffect>("account_financial_effects")
+        .query()
+        .fetch();
+      expect(effects).toHaveLength(1);
+      expect(effects[0]?.accountId).toBe(createdId);
+      expect(effects[0]?.amountMinorUnits).toBe("-5000");
 
-    const firstPhysical = await physicalSaveLedgerSnapshot(persisted);
-    await expect(
-      saveCapturedAccountReview(capture, readCurrent)
-    ).resolves.toMatchObject({ kind: "replay" });
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(firstPhysical);
-    expect(JSON.stringify(selected)).toBe(sourceBeforeSave);
-    expect(
-      selected.groups.find((group) => group.groupId === qnb.groupId)
-    ).toEqual(pendingQnb);
-    expect(
-      selected.rows.filter((row) => row.selected).map((row) => row.rowId)
-    ).toEqual([game.rowId]);
-  });
+      const firstPhysical = await physicalSaveLedgerSnapshot(persisted);
+      await expect(
+        saveCapturedAccountReview(capture, readCurrent)
+      ).resolves.toMatchObject({ kind: "replay" });
+      expect(
+        await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
+      ).toEqual(firstPhysical);
+      expect(JSON.stringify(selected)).toBe(sourceBeforeSave);
+      expect(
+        selected.groups.find((group) => group.groupId === qnb.groupId)
+      ).toEqual(pendingQnb);
+      expect(
+        selected.rows.filter((row) => row.selected).map((row) => row.rowId)
+      ).toEqual([game.rowId]);
+    }
+  );
 });

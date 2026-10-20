@@ -16,6 +16,7 @@ import {
 } from "./account-review-save-preparation";
 import type { AccountReviewSaveResult } from "./account-review-save-service";
 import { getCurrentUserId } from "./supabase";
+import { observeReviewSaveFailure } from "./account-review-save-failure-context";
 
 type Plan = AccountReviewSaveIntent["plannedEntityIds"][number];
 const hashProvider: Sha256Provider = {
@@ -190,32 +191,46 @@ export function saveCapturedAccountReview(
   const save = async (
     input: ReviewSaveInput
   ): Promise<AccountReviewSaveResult> => {
-    await assertRuntimeOwner(capture.ownerId);
+    await observeReviewSaveFailure(
+      "owner_before_load",
+      assertRuntimeOwner(capture.ownerId)
+    );
     // Keep service/database loading at Save invocation, not module evaluation.
     // Loading is outside the SQLite writer and never resamples frozen IDs.
     const [{ database }, { createAccountReviewSaveService }] =
       await Promise.all([
-        import("@monyvi/db"),
-        import("./account-review-save-service"),
+        observeReviewSaveFailure("load_database", import("@monyvi/db")),
+        observeReviewSaveFailure(
+          "load_save_service",
+          import("./account-review-save-service")
+        ),
       ]);
-    await assertRuntimeOwner(capture.ownerId);
-    return createAccountReviewSaveService({
-      database,
-      hashProvider,
-      getCurrentOwnerId: () => assertRuntimeOwner(capture.ownerId),
-      loadCurrentSession: async (ownerId, sessionId) => {
-        await assertRuntimeOwner(capture.ownerId);
-        if (ownerId !== capture.ownerId || sessionId !== capture.sessionId)
-          throw new Error("account_review_runtime_session_scope_changed");
-        const current = await loadCurrent(ownerId, sessionId);
-        await assertRuntimeOwner(capture.ownerId);
-        return attachOwnedRuntimeIntent(current, input);
-      },
-    }).saveSelectedAccountReview(input);
+    await observeReviewSaveFailure(
+      "owner_after_load",
+      assertRuntimeOwner(capture.ownerId)
+    );
+    return observeReviewSaveFailure(
+      "invoke_save_service",
+      createAccountReviewSaveService({
+        database,
+        hashProvider,
+        getCurrentOwnerId: () => assertRuntimeOwner(capture.ownerId),
+        loadCurrentSession: async (ownerId, sessionId) => {
+          await assertRuntimeOwner(capture.ownerId);
+          if (ownerId !== capture.ownerId || sessionId !== capture.sessionId)
+            throw new Error("account_review_runtime_session_scope_changed");
+          const current = await loadCurrent(ownerId, sessionId);
+          await assertRuntimeOwner(capture.ownerId);
+          return attachOwnedRuntimeIntent(current, input);
+        },
+      }).saveSelectedAccountReview(input)
+    );
   };
   // Both paths reuse the already frozen input. Deferred module loading adds
   // no intent allocation, and current owner/session CAS still gates the writer.
   return capture.immediate
     ? save(capture.immediate)
-    : capture.prepared.then(save);
+    : observeReviewSaveFailure("capture_preparation", capture.prepared).then(
+        save
+      );
 }

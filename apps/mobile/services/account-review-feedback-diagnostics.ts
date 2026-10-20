@@ -2,6 +2,7 @@
  * #395 Review feedback diagnostics. Never emit raw errors, messages, stacks,
  * account/source IDs or financial/voice/SMS payloads to Metro or telemetry.
  */
+import { reviewSaveFailurePhases } from "./account-review-save-failure-context";
 import { FINANCIAL_ACTION_FOUNDATION_ERROR_CODES } from "./financial-action-foundation-contracts";
 import { FINANCIAL_ACTION_INVALID_REVISION_CODE } from "../../../packages/logic/src/financial-actions/canonical-unsigned-revision";
 
@@ -68,6 +69,69 @@ const SAFE_CODES = new Set([
   "financial_action_payload_too_large",
   "financial_action_duplicate_definition",
   "financial_action_unknown_definition",
+  "account_review_prior_canonical_text_mismatch",
+  "account_review_prior_payload_hash_mismatch",
+  "account_review_prior_account_guards_mismatch",
+  "account_review_prior_root_identity_mismatch",
+  // Exact device-local recovery/provenance guards used by the Save writer.
+  // Their static codes identify a rejected invariant without exposing rows.
+  "account_review_local_default_duplicate_account_preimage",
+  "account_review_local_default_duplicate_account_postimage",
+  "account_review_local_default_changed_owned_default_snapshot",
+  "account_review_local_default_active_account_membership_changed",
+  "account_review_local_default_frozen_default_changed",
+  "account_review_local_default_predecessor_root_changed",
+  "account_review_local_default_foreign_predecessor_root",
+  "account_review_local_default_invalid_prior_action_identity",
+  "account_review_local_default_unprovable_account_predecessor",
+  "account_review_local_default_default_dependency_owner_changed",
+  "account_review_local_default_duplicate_predecessor_action",
+  "account_review_local_snapshot_unsupported_physical_field",
+  "account_review_local_snapshot_missing_physical_field",
+  "account_review_local_snapshot_invalid_physical_text",
+  "account_review_local_snapshot_invalid_physical_boolean",
+  "account_review_local_snapshot_invalid_physical_timestamp",
+  "account_review_local_snapshot_unsafe_physical_unsigned",
+  "account_review_local_snapshot_missing_or_duplicate_prepared_postimage",
+  "account_review_local_snapshot_domain_not_created",
+  "account_review_local_snapshot_effect_membership_mismatch",
+  "account_review_local_snapshot_effect_postimage_mismatch",
+  "account_review_local_sms_invalid_original_selection",
+  "account_review_local_sms_queue_session_or_ownership_changed",
+  "account_review_local_sms_unexpected_prepared_sms_draft",
+  "account_review_local_sms_missing_original_sms_draft",
+  "account_review_local_sms_incorrect_sms_postimage_operation",
+  "account_review_local_sms_reparented_original_sms_draft",
+  "account_review_local_sms_original_bookkeeping_membership",
+  "account_review_local_sms_original_selected_cleanup_missing",
+  "account_review_local_sms_original_bookkeeping_ownership",
+  "account_review_local_sms_original_bookkeeping_source_invalid",
+  "account_review_local_sms_original_bookkeeping_revision",
+  "account_review_local_sms_original_bookkeeping_snapshot_hash",
+  "account_review_local_sms_queue_root_or_source_mismatch",
+  "account_review_local_sms_queue_current_owned_draft_membership",
+  "account_review_local_sms_queue_prepared_membership",
+  "account_review_local_sms_queue_destructive_proof_missing",
+  "account_review_local_sms_queue_not_pruned_but_prepared",
+  "account_review_local_sms_queue_original_header_rebound",
+  "account_review_local_sms_queue_unconsumed_draft_or_rebind",
+  "account_review_local_sms_voice_contains_sms_evidence",
+  "account_review_local_sms_sms_draft_coverage_mismatch",
+  "account_review_local_snapshot_scope_mismatch",
+  "account_review_private_lifecycle_root_owner_or_deleted_changed",
+  "account_review_private_lifecycle_immutable_registered_root_changed",
+  "account_review_private_lifecycle_invalid_owned_add_private_root",
+  "account_review_private_lifecycle_invalid_add_private_evidence",
+  "account_review_private_lifecycle_missing_or_wrong_review_private_root",
+  "account_review_private_lifecycle_unexpected_legacy_private_evidence",
+  "account_review_private_lifecycle_missing_review_private_evidence",
+  "account_review_private_lifecycle_terminal_missing_original_authority",
+  "account_review_private_lifecycle_multiple_current_owned_queues",
+  "account_review_private_lifecycle_prune_current_writer_preimage_changed",
+  "account_review_private_lifecycle_prune_missing_owned_root_or_queue",
+  "account_review_private_lifecycle_missing_pretransition_private_evidence",
+  "account_review_private_lifecycle_redaction_leaves_physical_original",
+  "account_review_private_lifecycle_queue_removal_leaves_unproven_original",
   // Exact review-writer guard/sentinel codes (not arbitrary account_review_*).
   "account_review_financial_wrong_tuple",
   "account_review_save_replay_unexpected_prepare",
@@ -201,6 +265,8 @@ const SAFE_CLASSES = new Set([
   "TypeError",
   "RangeError",
   "SyntaxError",
+  "ReferenceError",
+  "InvariantViolation",
   "ZodError",
   "AbortError",
   "SmsReviewDraftSaveValidationError",
@@ -243,19 +309,214 @@ function safeClass(error: unknown): string {
     : "UnknownError";
 }
 
-function safeFrames(error: unknown): readonly string[] {
-  if (!plainObject(error) || typeof error.stack !== "string") return [];
-  const result: string[] = [];
-  // Never retain the raw frame, path, error message or function arguments.
-  for (const rawFrame of error.stack.split("\n").slice(1, 12)) {
-    const match = /^\s*at (?:async )?([\w$.]+)(?:\s|\()/u.exec(rawFrame);
-    const symbol = match?.[1]?.split(".").pop();
-    if (!symbol || !SAFE_FRAMES.has(symbol) || result.includes(symbol))
-      continue;
-    result.push(symbol);
-    if (result.length === 3) break;
+/**
+ * Source filenames are repo-owned static names; arbitrary basenames/paths,
+ * Metro query strings and JS function names never appear in the log.
+ * Metro bundles are useful with source maps even when a symbol is minified.
+ */
+const SAFE_SOURCE_FILES = new Set([
+  "voice-review.tsx",
+  "sms-review.tsx",
+  "account-review-runtime-save.ts",
+  "account-review-save-service.ts",
+  "account-review-save-preparation.ts",
+  "account-review-save-plan.ts",
+  "account-review-save-financial.ts",
+  "account-review-save-accounts.ts",
+  "account-review-save-digest.ts",
+  "account-review-save-replay.ts",
+  "account-review-save-sms.ts",
+  "account-review-retention-lifecycle.ts",
+  "user-data-access.ts",
+  "account-review-save-ownership.ts",
+  "account-review-financial-command-service.ts",
+  "financial-action-foundation-repository.ts",
+  "core-account-financial-action-service.ts",
+  "watermelon-atomic-batch.ts",
+  // Expo dev clients request this virtual entry before Metro rewrites it.
+  ".virtual-metro-entry.bundle",
+  "index.bundle",
+  "entry.bundle",
+  "index.android.bundle",
+  "index.ios.bundle",
+  "main.jsbundle",
+  "index.jsbundle",
+]);
+
+interface SafeStackEvidence {
+  readonly frames: readonly string[];
+  readonly locations: readonly string[];
+  readonly status: "absent" | "unmapped" | "located";
+}
+
+function readErrorField(error: unknown, key: string): unknown {
+  if (!plainObject(error)) return undefined;
+  try {
+    return error[key];
+  } catch {
+    return undefined;
   }
-  return result;
+}
+
+function safeSourceLocation(
+  rawPath: string | undefined,
+  rawLine: string | undefined,
+  rawColumn: string | undefined
+): string | null {
+  if (!rawPath || !rawLine || !rawColumn) return null;
+  // Never retain path, hostname, query parameters or Metro source text.
+  const path = rawPath.split(/[?#]/u)[0]?.replace(/\\/gu, "/");
+  const basename = path?.split("/").pop();
+  const line = Number(rawLine);
+  const column = Number(rawColumn);
+  return basename &&
+    SAFE_SOURCE_FILES.has(basename) &&
+    Number.isSafeInteger(line) &&
+    Number.isSafeInteger(column) &&
+    line > 0 &&
+    column > 0 &&
+    line <= 9999999 &&
+    column <= 9999999
+    ? basename + ":" + line + ":" + column
+    : null;
+}
+
+/** Hermes/V8 "at fn (address at file:line:column)", JSC "fn@file:line:column". */
+function safeStack(error: unknown): SafeStackEvidence {
+  const stack = readErrorField(error, "stack");
+  if (typeof stack !== "string" || stack.length === 0)
+    return { frames: [], locations: [], status: "absent" };
+  const frames: string[] = [];
+  const locations: string[] = [];
+  for (const raw of stack.slice(0, 12000).split("\n").slice(0, 15)) {
+    const v8 =
+      /^\s*at (.*?) \((?:address at )?(.+):(\d{1,7}):(\d{1,7})\)\s*$/u.exec(
+        raw
+      );
+    const direct = /^\s*at (?:address at )?(.+):(\d{1,7}):(\d{1,7})\s*$/u.exec(
+      raw
+    );
+    const jsc = /^([^@]*)@(.+):(\d{1,7}):(\d{1,7})\s*$/u.exec(raw);
+    const name =
+      v8?.[1] ??
+      jsc?.[1] ??
+      /^\s*at (?:async )?([\w$.]+) \((?:native)\)\s*$/u.exec(raw)?.[1];
+    const symbol = name
+      ?.replace(/^async /u, "")
+      .split(".")
+      .pop();
+    if (
+      symbol &&
+      SAFE_FRAMES.has(symbol) &&
+      !frames.includes(symbol) &&
+      frames.length < 3
+    )
+      frames.push(symbol);
+    const location = v8
+      ? safeSourceLocation(v8[2], v8[3], v8[4])
+      : direct
+        ? safeSourceLocation(direct[1], direct[2], direct[3])
+        : jsc
+          ? safeSourceLocation(jsc[2], jsc[3], jsc[4])
+          : null;
+    if (location && !locations.includes(location) && locations.length < 3)
+      locations.push(location);
+  }
+  return {
+    frames,
+    locations,
+    status: locations.length ? "located" : "unmapped",
+  };
+}
+
+/** Fixed diagnostic categories, never extracted text or SQL/JS expressions. */
+function safeTechnicalReason(error: unknown): {
+  readonly kind: string;
+  readonly evidence: "static_code" | "message_shape" | "none";
+} {
+  const code = readErrorField(error, "code");
+  if (code === "SQLITE_FULL")
+    return { kind: "storage_full", evidence: "static_code" };
+  if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED")
+    return { kind: "storage_busy", evidence: "static_code" };
+  if (code === "SQLITE_CANTOPEN")
+    return { kind: "sqlite_cannot_open", evidence: "static_code" };
+  const rawMessage = readErrorField(error, "message");
+  if (typeof rawMessage !== "string" || rawMessage.length > 2000)
+    return { kind: "unclassified", evidence: "none" };
+  // Native bridge prefixes wrap SQLite errors on devices but not in Node.
+  const message = rawMessage
+    .replace(/^Exception in HostFunction: /u, "")
+    .replace(/^\[WatermelonDB\] /u, "");
+  if (/^(?:SQLITE_ERROR: )?no such table:/iu.test(message))
+    return { kind: "sqlite_missing_table", evidence: "message_shape" };
+  if (/^(?:SQLITE_ERROR: )?no such column:/iu.test(message))
+    return { kind: "sqlite_missing_column", evidence: "message_shape" };
+  if (
+    /^(?:SQLITE_FULL: |sqlite )?(?:database or disk is full|disk is full)$/iu.test(
+      message
+    )
+  )
+    return { kind: "storage_full", evidence: "message_shape" };
+  if (/^(?:SQLITE_BUSY: )?database is (?:locked|busy)$/iu.test(message))
+    return { kind: "storage_busy", evidence: "message_shape" };
+  if (
+    /^Cannot read propert(?:y|ies) (?:['"][^'"]{0,160}['"] )?of (?:null|undefined)\b/iu.test(
+      message
+    ) ||
+    /^(?:null|undefined) is not an object \(evaluating /iu.test(message)
+  )
+    return { kind: "nullish_property_access", evidence: "message_shape" };
+  if (
+    /^(?:undefined is not a function|.+ is not a function \(evaluating )/iu.test(
+      message
+    )
+  )
+    return { kind: "not_callable", evidence: "message_shape" };
+  if (/^(?:Cannot find module|Requiring unknown module)\b/iu.test(message))
+    return { kind: "module_unavailable", evidence: "message_shape" };
+  if (code === "SQLITE_ERROR")
+    return { kind: "sqlite_error", evidence: "static_code" };
+  return { kind: "unclassified", evidence: "none" };
+}
+
+interface SafeDevCause {
+  readonly errorClass: string;
+  readonly code: string | null;
+  readonly reason: string;
+  readonly evidence: "static_code" | "message_shape" | "none";
+  readonly stack: SafeStackEvidence["status"];
+  readonly locations: readonly string[];
+  readonly frames: readonly string[];
+}
+
+function safeDevTrace(error: unknown): readonly SafeDevCause[] {
+  const seen = new Set<unknown>();
+  const chain: SafeDevCause[] = [];
+  let current = error;
+  for (
+    let depth = 0;
+    depth < 3 && plainObject(current) && !seen.has(current);
+    depth++
+  ) {
+    seen.add(current);
+    const code =
+      safeCode(readErrorField(current, "code")) ??
+      safeCode(readErrorField(current, "message"));
+    const reason = safeTechnicalReason(current);
+    const stack = safeStack(current);
+    chain.push({
+      errorClass: safeClass(current),
+      code,
+      reason: reason.kind,
+      evidence: reason.evidence,
+      stack: stack.status,
+      locations: stack.locations,
+      frames: stack.frames,
+    });
+    current = readErrorField(current, "cause");
+  }
+  return chain;
 }
 
 export function sanitizeReviewFailure(
@@ -271,7 +532,7 @@ export function sanitizeReviewFailure(
     stage: input.stage,
     code: knownReason ?? errorCode ?? errorMessage ?? "unexpected_error",
     errorClass: safeClass(error),
-    frames: safeFrames(error),
+    frames: safeStack(error).frames,
   };
 }
 
@@ -281,7 +542,22 @@ export function logReviewFailure(
 ): SafeReviewFailureDiagnostic {
   const diagnostic = sanitizeReviewFailure(input);
   if (typeof __DEV__ !== "undefined" && __DEV__) {
-    console.warn("[account-review-feedback]", diagnostic);
+    // Only this local Metro record gains technical evidence; the returned
+    // diagnostic and all user-facing notices retain their strict safe contract.
+    // React Native Metro prettyFormat truncates nested object arguments;
+    // strings survive unchanged. Serialize ONLY the sanitized record.
+    console.warn(
+      "[account-review-feedback]",
+      JSON.stringify({
+        ...diagnostic,
+        dev: {
+          chain: safeDevTrace(input.error),
+          ...(reviewSaveFailurePhases(input.error).length > 0
+            ? { phases: reviewSaveFailurePhases(input.error) }
+            : {}),
+        },
+      })
+    );
   }
   return diagnostic;
 }

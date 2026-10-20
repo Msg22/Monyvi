@@ -1,5 +1,10 @@
 /** Frozen local default provenance and unresolved producer dependencies. */
 import { Q, type Database } from "@nozbe/watermelondb";
+import { formatFinancialActionLocalDate } from "./transaction-financial-action-service";
+import {
+  rememberReviewSaveFailure,
+  type ReviewSaveFailurePhase,
+} from "./account-review-save-failure-context";
 import type { Account, FinancialActionGroup } from "@monyvi/db";
 import {
   hashFinancialActionEnvelope,
@@ -7,6 +12,7 @@ import {
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
 } from "@monyvi/logic";
+import { MAX_CANONICAL_ACTION_UTF8_BYTES } from "../../../packages/logic/src/financial-actions/action-registry";
 import { validateAccountCreateDefaultPayload } from "../../../packages/logic/src/financial-actions/account-create-default";
 import type { AccountReviewLocalSaveSnapshot } from "../../../packages/logic/src/financial-actions/review-local-recovery";
 import {
@@ -186,6 +192,48 @@ function assertPredecessorRootUnchanged(
     fail("predecessor_root_changed");
 }
 
+/** Fixed technical profiles only; no stored payload text escapes this module. */
+function priorActionProfile(payloadJson: string): ReviewSaveFailurePhase {
+  if (payloadJson.length > MAX_CANONICAL_ACTION_UTF8_BYTES)
+    return "prior_other_action";
+  try {
+    const value: unknown = JSON.parse(payloadJson);
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("payloadVersion" in value)
+    )
+      return "prior_other_action";
+    switch (value.payloadVersion) {
+      case "metals.sell/v1":
+        return "prior_metals_sell_v1";
+      case "metals.sell/v2":
+        return "prior_metals_sell_v2";
+      case "account.create-default/v1":
+        return "prior_account_create_default";
+      case "review.batch-save/v1":
+        return "prior_review_batch_save";
+      default:
+        return "prior_other_action";
+    }
+  } catch {
+    return "prior_other_action";
+  }
+}
+function rejectPriorIdentity(
+  stored: StoredPredecessorRoot,
+  phase: ReviewSaveFailurePhase,
+  cause: unknown
+): never {
+  const error = new Error(
+    "account_review_local_default_invalid_prior_action_identity"
+  );
+  Object.defineProperty(error, "cause", { value: cause, configurable: true });
+  rememberReviewSaveFailure(error, priorActionProfile(stored.payloadJson));
+  rememberReviewSaveFailure(error, phase);
+  throw error;
+}
+
 /**
  * Verify the complete registered root BEFORE consulting stored domain/kind.
  * Otherwise a malformed Add creator disguised as edit_balance/transactions
@@ -203,25 +251,47 @@ async function verifiedPriorEnvelope(
   let envelope: FinancialActionEnvelopeV1;
   let canonicalText: string;
   let payloadHash: string;
+  let phase: ReviewSaveFailurePhase = "prior_parse_envelope";
+  const validationInput = {
+    latestAllowedCalendarDate: formatFinancialActionLocalDate(new Date()),
+  };
   try {
-    envelope = parseFinancialActionEnvelopeJson(stored.payloadJson, registry);
+    envelope = parseFinancialActionEnvelopeJson(
+      stored.payloadJson,
+      registry,
+      validationInput
+    );
+    phase = "prior_hash_envelope";
     const digest = await hashFinancialActionEnvelope(
       envelope,
       hashProvider,
-      registry
+      registry,
+      validationInput
     );
     canonicalText = digest.canonicalText;
     payloadHash = digest.payloadHash;
-  } catch {
-    fail("invalid_prior_action_identity");
+  } catch (error: unknown) {
+    rejectPriorIdentity(stored, phase, error);
   }
   assertPredecessorRootUnchanged(stored, root);
-  if (
-    canonicalText !== stored.payloadJson ||
-    payloadHash !== stored.payloadHash ||
-    stored.accountGuardsJson !== JSON.stringify(envelope.accountGuards)
-  )
-    fail("invalid_prior_action_identity");
+  if (canonicalText !== stored.payloadJson)
+    rejectPriorIdentity(
+      stored,
+      "prior_canonical_identity",
+      new Error("account_review_prior_canonical_text_mismatch")
+    );
+  if (payloadHash !== stored.payloadHash)
+    rejectPriorIdentity(
+      stored,
+      "prior_canonical_identity",
+      new Error("account_review_prior_payload_hash_mismatch")
+    );
+  if (stored.accountGuardsJson !== JSON.stringify(envelope.accountGuards))
+    rejectPriorIdentity(
+      stored,
+      "prior_canonical_identity",
+      new Error("account_review_prior_account_guards_mismatch")
+    );
   if (
     envelope.actionId !== stored.actionId ||
     envelope.userId !== stored.userId ||
@@ -237,7 +307,11 @@ async function verifiedPriorEnvelope(
       stored.kind !== "edit_balance"
     )
       fail("unprovable_account_predecessor");
-    fail("invalid_prior_action_identity");
+    rejectPriorIdentity(
+      stored,
+      "prior_root_identity",
+      new Error("account_review_prior_root_identity_mismatch")
+    );
   }
   return envelope;
 }

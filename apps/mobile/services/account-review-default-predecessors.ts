@@ -4,6 +4,7 @@
  * account-create/default payload membership, never a UI-only dependency DAG.
  */
 import { Q, type Database } from "@nozbe/watermelondb";
+import { formatFinancialActionLocalDate } from "./transaction-financial-action-service";
 import type { Account, FinancialActionGroup } from "@monyvi/db";
 import {
   hashFinancialActionEnvelope,
@@ -76,11 +77,19 @@ async function inspectImmutableRoot(
   let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
   try {
     const registry = createAccountReviewFinancialRegistry();
-    envelope = parseFinancialActionEnvelopeJson(root.payloadJson, registry);
+    const validationInput = {
+      latestAllowedCalendarDate: formatFinancialActionLocalDate(new Date()),
+    };
+    envelope = parseFinancialActionEnvelopeJson(
+      root.payloadJson,
+      registry,
+      validationInput
+    );
     const digest = await hashFinancialActionEnvelope(
       envelope,
       hashProvider,
-      registry
+      registry,
+      validationInput
     );
     if (
       digest.canonicalText !== root.payloadJson ||
