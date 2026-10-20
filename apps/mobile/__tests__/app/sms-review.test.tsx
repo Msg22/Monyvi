@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react-native";
 import type { AccountReviewSession, ParsedSmsTransaction } from "@monyvi/logic";
 import type { AccountReviewRuntimeSaveCapture } from "@/services/account-review-runtime-save";
+import type { TransactionReviewProps } from "@/components/transaction-review/TransactionReview";
 import {
   T025_IDS,
   makeT025ConfirmedSession,
@@ -12,6 +13,7 @@ import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator
 
 interface MockTransactionReviewProps {
   readonly transactions: readonly ParsedSmsTransaction[];
+  readonly reviewFeedback?: TransactionReviewProps["reviewFeedback"];
   readonly subtitle: string;
   readonly selectionOverrides?: ReadonlyMap<number, boolean | null>;
   readonly accountReview?: {
@@ -118,6 +120,15 @@ function requireCanonicalRouteReview(): NonNullable<
   if (!props?.accountReview)
     throw new Error("missing_owned_canonical_review_route");
   return props.accountReview;
+}
+
+function requireActivePageNotice(): NonNullable<
+  NonNullable<TransactionReviewProps["reviewFeedback"]>["pageNotice"]
+> {
+  const notice =
+    mockTransactionReview.mock.calls.at(-1)?.[0]?.reviewFeedback?.pageNotice;
+  if (!notice) throw new Error("missing_active_inline_review_page_notice");
+  return notice;
 }
 
 function prepareReadyCanonicalQueue(): void {
@@ -344,6 +355,9 @@ jest.mock("@/components/ui/Toast", () => ({
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
+}));
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({ language: "en", isRTL: false }),
 }));
 
 jest.mock("@/hooks/useSmsSync", () => ({
@@ -681,11 +695,13 @@ describe("SMS review route", () => {
     expect(mockSaveCapturedReview).not.toHaveBeenCalled();
     expect(mockBootstrapCanonical).not.toHaveBeenCalled();
     expect(mockSaveSelectedDrafts).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "save_error",
-      message: "sms_review_save_failed_message",
+    expect(requireActivePageNotice()).toMatchObject({
+      tone: "warning",
+      title: "review_notice_scope_title",
+      message: "review_notice_scope_message",
     });
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("revokes an already rendered canonical Save callback after an actor change", async () => {
@@ -704,11 +720,13 @@ describe("SMS review route", () => {
     expect(mockAssertRuntimeOwner).toHaveBeenCalledWith(T025_IDS.owner);
     expect(mockSaveCapturedReview).not.toHaveBeenCalled();
     expect(mockBootstrapCanonical).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "save_error",
-      message: "sms_review_save_failed_message",
-    });
+    // The old callback is refused; a different actor cannot see the old queue.
+    expect(screen.queryByTestId("transaction-review")).toBeNull();
+    expect(screen.getAllByTestId("sms-review-loading-row")).toHaveLength(3);
+    expect(mockSaveSelectedDrafts).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockClearTransactions).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("refuses a canonical session with an unowned SMS fingerprint before runtime capture", async () => {
@@ -739,11 +757,14 @@ describe("SMS review route", () => {
     expect(mockCaptureCanonicalSave).not.toHaveBeenCalled();
     expect(mockSaveCapturedReview).not.toHaveBeenCalled();
     expect(mockBootstrapCanonical).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "save_error",
-      message: "sms_review_save_failed_message",
+    expect(requireActivePageNotice()).toMatchObject({
+      tone: "warning",
+      title: "review_notice_scope_title",
+      message: "review_notice_scope_message",
     });
+    expect(mockSaveSelectedDrafts).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("does not expose technical financial Save errors in canonical feedback", async () => {
@@ -764,11 +785,15 @@ describe("SMS review route", () => {
     expect(mockSaveSelectedDrafts).not.toHaveBeenCalled();
     expect(mockBootstrapCanonical).not.toHaveBeenCalled();
     expect(mockRouterReplace).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "save_error",
-      message: "sms_review_save_failed_message",
+    const pageNotice = requireActivePageNotice();
+    expect(pageNotice).toMatchObject({
+      tone: "error",
+      title: "review_notice_save_title",
+      message: "review_notice_save_message",
     });
+    expect(JSON.stringify(pageNotice)).not.toContain("sqlite disk is full");
+    expect(screen.queryByText("sqlite disk is full")).toBeNull();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("shows partial-result guidance when no draft was accepted", () => {
@@ -819,11 +844,11 @@ describe("SMS review route", () => {
     expect(undo).toHaveBeenCalledTimes(1);
     expect(mockSaveSelectedDrafts).not.toHaveBeenCalled();
     expect(mockBootstrapCanonical).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "sms_review_undo_failed",
-      message: "sms_review_undo_failed_message",
-    });
+    expect(screen.getByTestId("review-inline-notice-page")).toBeTruthy();
+    expect(screen.getByText("review_notice_action_title")).toBeTruthy();
+    expect(screen.getByText("review_notice_action_message")).toBeTruthy();
+    expect(screen.queryByText("adapter failed")).toBeNull();
+    expect(mockShowToast).not.toHaveBeenCalled();
     expect(mockUndoState.undoItem).not.toBeNull();
   });
 

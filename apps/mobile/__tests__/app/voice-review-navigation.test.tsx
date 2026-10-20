@@ -42,6 +42,11 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+// The real inline review notice reads LocaleContext on the navigation route.
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({ language: "en", isRTL: false }),
+}));
+
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({
     children,
