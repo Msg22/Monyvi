@@ -1,5 +1,106 @@
 # Manual test plan and automation mapping
 
+## ACTIVE handoff — owner-approved compact interactive review, 2026-10-20
+
+This section **supersedes conflicting instructions in the historical M01–M20
+matrix and older Maestro mapping below**, without deleting or changing that
+history, its scenario IDs, files, receipts or results. Read
+[compact manual validation note](validation/compact-review-2026-10-20.md) for
+practical expected outcomes, scope and honest evidence statuses, and
+[quickstart](quickstart.md) for the active entry. The **primary design** is the
+approved runnable
+[mockups/interactive/compact-review-2026-10-20/index.html](mockups/interactive/compact-review-2026-10-20/index.html)
+with its
+[short README](mockups/interactive/compact-review-2026-10-20/README.md). The
+fragment alone is not runnable; preview CSS pixels do not prove native
+dimensions. No new binding sidecar, approval or hash ceremony.
+
+**Active delivery:** D is implementing compact RN presentation/routes/locales; B
+separately owns authoritative selection and Undo lease behavior. Neither code
+authorship nor browser interaction establishes native-device fidelity.
+Root-reported 11 Save files: **7 affected suites / 97 tests, TypeScript and lint
+PASS**. Owner-reported **one real TEST Save success on 2026-10-20**: selected
+`[TEST] Game` / CIB fixture committed and its transaction appeared in
+Transactions after the trusted-calendar-bound prior-action repair. This is **one
+manual scenario**, not broad feature/visual acceptance. Native rendered
+comparisons, accessibility and the comprehensive owner manual matrix are **NOT
+RUN** at this handoff. #405 logos / PR #406 is a separate **draft stacked on
+#396** and is not integrated into #396.
+
+### Three distinct manual scopes
+
+**1 — Voice transcript fixtures on the CURRENT real review page (M01, M04–M11,
+M13–M14, M17):** Use **Settings → Development tools → Voice transcript
+fixtures** (`/review-transcript-fixtures`) in an eligible nonproduction build.
+Launch a catalog scenario there; it forwards `reviewSession`, `transcript` and
+`detectedLanguage` to ordinary `/voice-review`. Use synthetic clearly labelled
+TEST data. This exercises real UI/reducer/financial writer when Save is tapped
+but **never invokes a microphone, speech transcription, Gemini or an SMS
+provider**. Confirm current page, selected-only CIB/Game with QNB pending,
+collapsed account summary, two-line expandable transcript, pending versus
+`Accounts reviewed`, and source-order Account needed/linked temporary filters
+with `Show all`. Groups expose independent **explicit Confirm** and inline
+three-dot actions—no `View all`, nested action menu or row-selection implicit
+group confirmation. One active overlay at a time. Test amount-preserving
+`Use account — EGP/USD` with candidate account/type/ currency preselection and
+**no second Confirm Currency modal**. Draft name/type/currency belong to one
+form and create nothing until actual final selected Save. Remove leaves ghost
+Undo/Discard, where Discard must **revoke the real session Undo lease**, not
+only hide its button. Initially/newly ready rows auto-select; manual deselection
+persists, while `Select ready` expressly reselects eligible rows within the
+active filter. Check native 44/48dp hit targets distinct from small painted
+account/category icons, measured available-width text/reflow, long
+account/category names, dot only inline with status+count, and no final orphan
+divider. Light/dark readable information, EN/AR RTL, fixed safe footer/keyboard,
+sticky dismissible feedback below header/outside scroll and modal-only inline
+notices require actual native evidence. **TEST Save is REAL local financial
+Save**: after one tap, inspect Transactions and accounts before retrying an
+uncertain outcome; never save blindly twice.
+
+**2 — Real Voice capture, separately (M03, M16–M17):** A real recording is
+needed to assess app permission/recovery, recording/cancel/interruption,
+temporary audio cleanup, speech transcription/Gemini, exact spoken-currency
+extraction, provider errors/usage and navigation back to review. The fixture
+does **not** prove these paths. No new Voice transfer support.
+
+**3 — Targeted SMS regression (M02–M03, M08–M09, M12–M15, M19–M20):** Because
+shared account/default/Undo/Save/sync paths changed, verify ordinary SMS
+excludes Cash as **source**, true SMS ATM Bank/Cash endpoints remain distinct,
+amount and currency remain faithful, pending group and row choices stay scoped,
+Review later/restart retains source-specific durable choices, Discard revokes
+the right lease, final Save is selected-only/idempotent and sync/pull/ACK
+preserves ownership/fingerprint/private evidence. A complete SMS
+parsing/provider retest is **not** required for unchanged provider paths.
+
+### Supersessions of historical M01–M20 descriptions
+
+| Historical entry below | Active compact interpretation                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M04                    | Explicit group Confirm can make rows **newly ready and auto-selected** unless manually unchecked; confirmation alone does not create accounts. CIB remains independent.                                |
+| M05                    | Selecting a pending-group row **must not implicitly confirm** the group.                                                                                                                               |
+| M08                    | Removed ghost offers Undo and final Discard **revokes session lease**; transactions remain intact.                                                                                                     |
+| M09                    | Account chooser confirms account **and authoritative currency once** without changing numeric amount. Separate existing currency-only picker is not another confirmation modal for account selection.  |
+| M10                    | Collapsed Review details expands **all groups inline**, not `View all` or a second list modal; `Accounts reviewed` is conditional and not global Save-ready.                                           |
+| M11                    | Initial/newly-ready auto-select, manual opt-out and active-filter `Select ready`; Clear affects active-filter selected rows.                                                                           |
+| M13–M14                | Real clearly marked TEST Save is permitted in the controlled Voice fixture; never imply dry-run or successful transaction from a button click. Check Transactions before a retry if outcome uncertain. |
+| M17                    | Browser preview 320 CSS px is **not** an RN device measurement. Native layout, safe areas, keyboard and screen-reader checks remain open.                                                              |
+
+**Entry distinction:** `voice-shared-drafts-qnb-cib` is a manual transcript
+catalog scenario. The old `reviewFixtureSceneId` query recorded below is a
+separate historical scene/Maestro harness, not the current Settings entry; its
+scene IDs are not interchangeable.
+
+**Legacy automation caution:** The four Voice Maestro YAML journeys previously
+authored under `apps/mobile/e2e/maestro/account-review/` and Add form YAML were
+**NOT RUN** as recorded below. They are **not verified compatible** with the new
+compact UI; selectors and interactions must be reconciled first. Authored files
+are not passing E2E or device visual evidence. Keep current direct
+implementation/batched checks rather than reviving old mandatory Red/TDD.
+
+## HISTORICAL 2026-10-14–17 scenario matrix and authored automation inventory
+
+### Preserved original handoff (not current compact UI instructions)
+
 This is the scenario source for future implementation, not executed test
 evidence. No app code, test files, E2E run, device or emulator validation was
 performed in this planning PR. Test authors must establish Red before production

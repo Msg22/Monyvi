@@ -58,14 +58,17 @@ conventions
 - Every Speckit output must reference the current constitution and verify its
   constraints before proposing work. Record finalized business rules in
   `docs/business/business-decisions.md` before implementation.
-- For approved-mockup UI work, record the declared binding viewport or component
-  context and every known spacing, sizing, color, typography, state,
-  interaction, and transition fact. Bind explicit sidecar approval to an
-  immutable content revision and reset changed binding facts to `PENDING` until
-  renewed approval. Treat presentation-only frames, outer canvas, browser
-  chrome, and export padding as non-binding; do not invent missing metadata.
-  Require rendered comparison evidence and every in-scope responsive, dark, RTL,
-  and enlarged-text variant before declaring visual completion.
+- For future meaningful UI work, plan a runnable interactive design in the
+  feature's `mockups/` as the prospective reference, with a documented entry,
+  scoped states/interactions/responsive controls and **one owner approval of the
+  exact reviewed runnable design**. The artifact itself owns layout, styling and
+  responsive rules; the short README records only version/run, scenarios and
+  native-only limits. Do not generate prospective binding sidecars, redundant
+  normative layout facts, hash tuples or duplicate approvals. See
+  `docs/design/interactive-design-workflow.md`; preserve frozen historical
+  image-sidecar rules and the narrow micro-UI exception. For governed UI,
+  require **actual native rendered** comparison and relevant in-scope variants
+  before declaring visual completion.
 - For multi-owner delivery, assign exclusive file ownership, document dependency
   bases and no-overlap controls, and keep Red tests separate from their Green
   implementation window.

@@ -627,3 +627,91 @@ sender replacement before root ACK alongside corrupt-effect, unproved revision,
 missing/foreign child and actor/raw-equality refusals. A remaining
 created-account field-ACK gap blocks full readiness even if the historical root
 becomes clean.
+
+## 2026-10-20 — compact interactive review implementation reconciliation
+
+**Current design authority:** the owner-approved runnable
+`mockups/interactive/compact-review-2026-10-20/index.html` at Git blob
+`e410f2a5495ff4f9f2106e1881d540564ee7c65b`, SHA-256
+`64748fe7945926d4f9e94d2e4095cbddb9dfd95a52f693d4878f0e590d68d38f`. Its exact
+source fragment, controls and `reference.json` are frozen. The short companion
+`README.md` records entry, version, run instructions and native adaptations; it
+is documentation, not a replacement design or an approval receipt. This
+interactive design is the PRIMARY current compact layout/style/responsive
+reference. Preserve earlier B1/R1–R3 image bindings and historical task evidence
+outside the changed compact scope.
+
+**Removed obsolete gate:** the previous `compact-review.binding.md` was an
+unapproved author draft, withdrawn from active use. Root removes that file from
+the integrated feature tree; do not adopt/verify/approve its fingerprint or
+impose another design-review stage. Root has completed scoped analysis and
+activated/integrated the authorized frontend and domain sources. No additional
+design approval was required. Exact native geometry/screenshots, inset/render
+and accessibility evidence are owner manual-validation gaps after
+implementation, not arbitrary HTML pixel-to-dp rules.
+
+**Cohesive direct implementation — authored and locally integrated (final
+validation pending):**
+
+- Canonical `TransactionReview` → `CanonicalTransactionReview` →
+  `AccountReviewPanel` / `SharedAccountSuggestions` / `SharedAccountGroupRow`:
+  default-collapsed summary, transactions early, inline complete group
+  actions/linked drilldown, no View all or secondary menu modal; keep
+  source-ordered Account needed and canonical scoped filter/toolbar. Group
+  status plus linked count wrap from actual available size, no global viewport
+  toggle.
+- `TransactionItem` / `account-review-row-presentation`: full signed
+  amount/currency and identity visible; small pencil-square account/category
+  icons with separate 44/48dp hit areas; long text and native font scaling
+  reflow. Existing bank/wallet/cash identity slots remain for sibling #405,
+  whose code cannot be imported into #396.
+- `AccountChoiceSheet` / `account-review-choice-presentation` /
+  `EditSuggestedAccountSheet`: one active account/category/draft overlay,
+  currency per candidate and explicit `Use account — CODE`, same numeric amount;
+  draft name/type/currency in the same form with no early persistence. Distinct
+  currency-only picker remains an independent existing control. Canonical sheet
+  orchestration must not stack modals.
+- Voice transcript starts at two lines, expandable in EN/AR. Keep page notice
+  under PageHeader/outside scroll, modal notices inside sheet,
+  keyboard/scroll/safe-inset/footer/last-divider fixes; no toast. No Voice
+  transfer support and no SMS ATM/Cash financial change.
+
+**Implemented domain/facade boundary (NormalB, locally integrated):** canonical
+`session.rows[].selected` and `readModel` supply initial/newly-ready selection
+while preserving manual opt-out. The compact checkbox intercepts pending groups
+for explicit inline confirmation; protected legacy `confirmForClick` remains
+intact for older callers, not removed from the domain.
+`discardRemovedSuggestion(groupId: string): Promise<void>` and
+`discardedGroupIds` revoke the actual current-review Undo lease and hide the
+removed ghost while retaining the canonical group and transactions. Guarded
+`edit_group.identity.currency?` now supports the same-sheet currency edit
+alongside name/type with `reconfirm: true`, existing CAS, no amount conversion
+and domain rejection for incompatible precision/ATM endpoints. The frontend
+never fabricates a Save or reducer result. See
+[compact-review-ui-contract.md](contracts/compact-review-ui-contract.md) for the
+actual integration.
+
+**Source provenance and bounded extraction:** The protected owner-edited
+originals were
+`EditSuggestedAccountSheet.tsx@4ea2c12c75e686d58bb635c973999cc08899d151`,
+`SharedAccountSuggestions.tsx@7f8195bff5b8f239015ef011ee7547e673549099` and
+`account-review-row-presentation.tsx@3961babdcd1a507ff324d1380603dce6d9aebfa8`.
+These are historical author preimages, not the integrated current state. Root
+integrated currency-editor blob `f0e8545b37702b9ca2605b44b3f4be266e189a44` and
+canonical blob `87622d01ca24d399d1135c887448351c584e1f17`, then formatted both
+(762/898 lines, respectively). Cohesive extracted components include
+`CompactReviewSummary`, `CompactReviewTranscript`, `CanonicalReviewRow`,
+`CanonicalTransactionEditOverlay` and `compact-review-checkbox-action`. Root
+retains Save/diagnostics/service/runtime ownership; #405/PR406 logos remain
+separate.
+
+**Current delivery status:** direct frontend and NormalB domain implementation
+has been authored and locally integrated; Root reports formatting completed and
+is running consolidated TypeScript, lint, 23 mobile suites and
+logic/account-review checks. Results are **pending**, not marked PASS. C owns
+manual-test-plan, quickstart and validation documents and will coordinate
+assertions/manual QA. Owner native responsive, dark, RTL, safe-area, keyboard,
+overlay and Undo/Discard review is **not yet executed**. After intake, remaining
+regressions and financial safety validation must complete before a
+commit/merge/deployment or owner acceptance may be claimed. The interactive
+browser preview is not RN rendered or accessibility proof.

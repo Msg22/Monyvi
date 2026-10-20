@@ -1,4 +1,22 @@
 <!--
+Sync Impact Report — 2026-10-20 (later owner simplification)
+- Version 2.2.0 -> 3.0.0: future interactive reference is the sole visual/
+  responsive authority, with short README and one owner approval only.
+- Retired prospective sidecars, Binding Facts duplicates, hash/combined-revision
+  approvals and mandatory verifier checks for new HTML designs.
+- Historical approved image/sidecar/approval bytes, original verifier contract,
+  financial/product/privacy rules and native rendered evidence preserved.
+-->
+<!--
+Sync Impact Report — 2026-10-20
+- Version 2.1.0 -> 2.2.0: add prospective interactive-first design policy
+  within V, with one approval for the exact runnable reference and binding.
+- Canonical docs/design/interactive-design-workflow.md and linked project
+  instructions, design, delivery, review and Speckit guidance updated.
+- Existing verifier/schema and historical image, sidecar, approval evidence,
+  product behavior, financial data and native/device execution untouched.
+-->
+<!--
 Sync Impact Report — 2026-10-18
 - Version 2.0.0 -> 2.1.0: narrowly expand VII for versioned device-only
   WatermelonDB storage without a dummy Supabase field.
@@ -193,17 +211,29 @@ The app MUST deliver a premium, polished visual experience using NativeWind
   database schema (`@monyvi/db` models). Do NOT invent, rename, remove, or infer
   fields. Labels, data types, and required/optional states MUST reflect the
   schema exactly.
-- **Approved mockup binding**: Once Mohamed approves a scoped mockup, product UI
-  MUST match the approved composition pixel-perfect at the mockup's declared UI
-  viewport or component context. Presentation-only phone hardware, device frame,
-  outer canvas, browser chrome, export padding, and background outside the UI
-  surface are non-binding unless the handoff explicitly says otherwise. Handoff
-  documentation MUST record exact screen-specific spacing, sizing, color,
-  typography, state, interaction, transition, and viewport facts that are known.
-  Do not invent missing values; flag missing metadata before implementation when
-  it affects fidelity. Binding-metadata approval MUST identify an immutable
-  content revision. Any later binding-fact change invalidates that approval
-  until the changed revision receives renewed explicit approval.
+- **Interactive-first design authority (prospective, 2026-10-20):** Any model or
+  worker proposing meaningful new UI MUST provide a runnable, versioned
+  interactive artifact under the feature's `mockups/`, normally portable
+  HTML/CSS/JS, and a **short README** for version/traceability, entry/run steps,
+  relevant scenarios and necessary native-only adaptations/known limits. The
+  **runnable design itself** is authoritative for visual structure, styling,
+  interaction and responsive behavior. Do not duplicate those facts into a
+  binding sidecar, long textual handoff or hash manifest. Mohamed approves the
+  **exact reviewed design once**; materially revised designs receive a new
+  version and one new design approval. No separate metadata, digest,
+  combined-revision or sidecar approval is required. Follow
+  `docs/design/interactive-design-workflow.md` and the sprint UI gate.
+- **Historical approved image bindings only:** Previously approved image
+  references, matching sidecars, original Binding Facts, byte hashes,
+  combined-approval revisions and evidence remain authoritative **only for their
+  original governed surfaces**. Preserve them byte-for-byte and apply the
+  existing verifier/migration workflow when consuming those historical
+  references. They are not a prerequisite for prospective interactive HTML. For
+  any approved design, product UI must preserve its composition and semantics at
+  the reviewed context, excluding non-product device framing, browser chrome and
+  preview controls unless those are intentionally approved UI. Native-specific
+  adaptations must be documented briefly in the README rather than duplicating
+  every CSS size in normative text.
 - **Responsive visual fidelity**: Compact-phone, ordinary-phone, tablet,
   landscape, dark mode, RTL/Arabic, accessibility labels, and enlarged-text
   variants MUST preserve the approved composition, hierarchy, semantics, and
@@ -500,4 +530,4 @@ execution evidence and immutable approvals remain intact.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 2.1.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-18
+**Version**: 3.0.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-10-20

@@ -311,6 +311,17 @@ the true domain model.
 
 ## Styling Rules
 
+- **Interactive-first UI designs (approved 2026-10-20):** Every future
+  meaningful UI proposal from any model/worker must use a runnable interactive
+  artifact stored under its feature `mockups/` folder, not an image-only or
+  tool-only proposal. Follow
+  [the interactive design workflow](docs/design/interactive-design-workflow.md)
+  for a runnable design owning its layout/styling, short README with
+  version/run/scenarios/native-only limits, and **one** owner approval of the
+  reviewed revision. No binding sidecar, metadata/hash tuple or second approval
+  for future interactive designs. Historical image bindings stay frozen; the
+  sprint-issue micro-UI exception remains.
+
 - For GitHub sprint issues that meaningfully affect visible UI or design, follow
   the visual mockup approval gate in `.agent/workflows/sprint-issue.md` before
   coding. The workflow's narrowly defined micro-UI exception may be used for
@@ -321,9 +332,10 @@ the true domain model.
   pattern, icon, placement, size, and accessibility behavior unless the approved
   mockup explicitly calls for a difference. Check both visible and empty states.
 
-- **Responsive mockup implementation**: Preserve the approved mockup at its
-  declared binding context and its semantic hierarchy everywhere else. Size
-  layouts from the **actual available component/container space**, not a blanket
+- **Responsive mockup implementation**: Preserve the approved runnable design at
+  its reviewed comparison context and its semantic hierarchy everywhere else (or
+  the original binding context for a historical approved image). Size layouts
+  from the **actual available component/container space**, not a blanket
   viewport-width cutoff; centralized `apps/mobile/constants/ui.ts` breakpoints
   are hints, not mandatory wrap decisions or permission to add device lists.
   Reserve stable 44/48 dp action **hit areas** first, then give identity/labels

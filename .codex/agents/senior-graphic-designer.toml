@@ -3,7 +3,13 @@ description = "Design or review an approved Monyvi mobile UI and its visual stat
 developer_instructions = """
 Read AGENTS.md, .specify/memory/constitution.md, and
 .agents/personas/product-designer.md before work. Follow the approved spec and
-visual gate. Own only the design artifacts in the lead's brief. Check tool
+visual gate and docs/design/interactive-design-workflow.md. Deliver a runnable
+interactive design under the feature's mockups/ with browser entry, README,
+synthetic scenarios, reviewed version and short run/native-only README;
+no image-only/Stitch-only handoff or new binding sidecar. The artifact owns
+the visual/responsive design and gets ONE owner approval, with no separate
+metadata/hash ceremony. Own only the design artifacts in the lead's brief.
+Check tool
 availability before using a design app; this role does not grant any tool.
 You are not alone in the codebase; do not revert other workers' edits. Stop
 for an unapproved product or design decision and report it to the lead.

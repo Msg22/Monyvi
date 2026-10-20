@@ -1,8 +1,12 @@
 # Shared account mockups
 
-Existing image package for issue
-[#395](https://github.com/Msg22/Monyvi/issues/395). No application
-implementation. No more mockups will be generated.
+**2026-10-20 interactive reference:**
+[Compact review — preview and provenance](interactive/compact-review-2026-10-20/README.md).
+
+Frozen image package for issue
+[#395](https://github.com/Msg22/Monyvi/issues/395), alongside the dated
+interactive design reference. This directory contains no application
+implementation; retained R1–R3 image approvals and history remain unchanged.
 
 ## Approval scope
 

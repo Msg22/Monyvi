@@ -54,6 +54,14 @@ Compose relevant workflows:
   explicit authorization before any branch or commit hook, even when enabled or
   auto-executed by configuration. After `specify`, do not run downstream command
   until intended feature directory is active.
+- For prospective UI design work, follow
+  `docs/design/interactive-design-workflow.md`: a designer's delivered mockup is
+  a runnable, versioned interactive feature artifact; its actual visual and
+  responsive behavior is authoritative. A **short README** covers run, version,
+  scenarios and native-only limits. Static concepts or tool descriptions alone
+  do not pass the UI gate. The owner approves the **reviewed design revision
+  once**—no new binding sidecar or second metadata approval. Existing historical
+  image/sidecar approvals remain frozen.
 - In team-led mode, lead remains sole orchestrator. It maps Speckit task IDs
   into team DAG and dispatches agents. Do not run bundled Speckit full-cycle or
   monolithic `speckit-implement`; either would create second orchestrator.
@@ -189,18 +197,18 @@ Choose roles from task graph, not fixed headcount. "Full team" means complete
 logical coverage, not spawning every persona. One worker may cover compatible
 roles; independent high-risk reviewer must differ from implementer.
 
-| Role                              | Owns                                                |
-| --------------------------------- | --------------------------------------------------- |
-| Product/spec owner                | V1/backlog, journeys, requirements, traceability    |
-| Architecture specialist           | Boundaries, contracts, dependency and risk map      |
-| Product/graphic designer          | Concepts, interactions, responsive state set        |
-| Content/i18n/accessibility writer | EN/AR copy, semantics, recovery/destructive wording |
-| Data/sync/security specialist     | Schema, ownership, offline and sync integrity       |
-| Logic/service engineer            | Pure rules, services, read models, commands         |
-| Frontend engineer                 | Screens, components, hooks, navigation              |
-| QA/regression/E2E specialist      | Test plan, automation, coverage and device evidence |
-| Documentation specialist          | Business decisions, README, codemaps                |
-| Independent reviewers             | TypeScript, logic, style, DB/security, QA, visual   |
+| Role                              | Owns                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| Product/spec owner                | V1/backlog, journeys, requirements, traceability                             |
+| Architecture specialist           | Boundaries, contracts, dependency and risk map                               |
+| Product/graphic designer          | Interactive runnable reference, scoped interactions and responsive state set |
+| Content/i18n/accessibility writer | EN/AR copy, semantics, recovery/destructive wording                          |
+| Data/sync/security specialist     | Schema, ownership, offline and sync integrity                                |
+| Logic/service engineer            | Pure rules, services, read models, commands                                  |
+| Frontend engineer                 | Screens, components, hooks, navigation                                       |
+| QA/regression/E2E specialist      | Test plan, automation, coverage and device evidence                          |
+| Documentation specialist          | Business decisions, README, codemaps                                         |
+| Independent reviewers             | TypeScript, logic, style, DB/security, QA, visual                            |
 
 Add role only for distinct deliverable, bounded ownership, worthwhile work, and
 clear integration point. Use existing persona/skill when suitable; create
@@ -929,29 +937,29 @@ documentation owner records finalized rules in
 ### Visual Gate
 
 Meaningful UI follows [`sprint-issue.md`](./sprint-issue.md) mockup approval.
-Cover loading, empty, populated, error, offline/stale, destructive actions,
-responsive sizes, light/dark, EN/AR, RTL, and accessibility. Mockups work with
-spec, design system, domain constraints, responsive rules, and accessibility;
-none overrides constitution. Material coding drift returns to approval. Preserve
-existing visual-gate ownership, but do not mark visual completion without
-side-by-side or overlay rendered screenshot evidence against the approved
-reference. Report functional readiness and visual fidelity as separate statuses.
+Cover task-relevant loading, empty, populated, error, offline/stale, destructive
+actions, responsive sizes, light/dark, EN/AR, RTL and accessibility. Mockups
+work with spec, design system, domain constraints, responsive rules, and
+accessibility; none overrides constitution. Material coding drift returns to
+approval. Preserve existing visual-gate ownership, but do not mark visual
+completion without side-by-side or overlay rendered screenshot evidence against
+the approved reference. Report functional readiness and visual fidelity as
+separate statuses.
 
-For mockup-backed UI, every dispatch brief must identify the approved references
-and the required state/shared-component/icon fidelity obligations. When the
-approved feature handoff defines a canonical manifest or state-to-surface map,
-the brief MUST reference and consume it with the verified sidecars; otherwise no
-new manifest artifact is required. Any manifest or derived map is an
-implementation/index aid and MUST NOT override approved Binding Facts, replace
-the binding verifier, or create a second approval gate. Before assigning
-governed work, inventory/read the active approved references, verify their
-bindings, and route missing or ambiguous fidelity facts through the normal
-binding clarification/approval workflow. Worker reports the exact references,
-mapping source, and comparison context at plan checkpoint. Passing source/tests
-cannot satisfy rendered proof. When owner explicitly defers
-device/render/accessibility execution, author the authorized coverage and hand
-complete manual plan to owner; mark those checks NOT RUN and retain separate
-fidelity/accessibility/readiness gaps.
+For future interactive UI, the dispatch brief names the **once-approved runnable
+design revision** and short README, relevant states/interactions and necessary
+native-only adaptations. The artifact itself is the visual and responsive
+authority—do not create a binding sidecar, duplicate layout facts, hash tuple,
+manifest or separate metadata approval. If a feature already has a lightweight
+mapping/index, it can aid traceability but cannot override the approved runnable
+design or add a new gate.
+
+For historical approved image-backed UI only, reference original image/ sidecar
+revisions, existing state/icon mappings and unchanged verifier results for that
+surface. Report comparison context, actual native rendered evidence and
+remaining native-only checks. Passing source/tests or browser prototypes alone
+cannot satisfy native visual proof; authorized deferrals remain NOT RUN with an
+owner manual QA plan and separate readiness/fidelity/ accessibility statuses.
 
 ### Implementation Gate
 

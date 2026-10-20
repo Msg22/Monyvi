@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-09-04
+**Status:** Active product source of truth **Last updated:** 2026-10-20
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -57,6 +57,19 @@ forget. Egyptian users also need support for:
   soft deletes, and background sync.
 
 ## 2. Product Principles
+
+### Interactive design handoff (owner-approved 2026-10-20)
+
+New meaningful Monyvi UI designs from **any** model or worker are interactive
+first, stored in the feature's `mockups/` with a runnable browser entry, a short
+README for version, run/scenarios and native-only adaptations. The runnable
+artifact itself owns visual, layout and responsive decisions. The owner approves
+the exact reviewed design **once** before native implementation; no new binding
+sidecar, hash/metadata tuple or separate approval is required. See
+`docs/design/interactive-design-workflow.md` and the existing micro-UI
+exception. All prior approved image/sidecar artifacts, decisions and evidence
+remain unchanged; this policy does not itself approve any new feature design or
+change any financial/business behavior.
 
 ### Offline-First Trust
 

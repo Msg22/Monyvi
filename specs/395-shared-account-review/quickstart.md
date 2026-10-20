@@ -1,5 +1,112 @@
 # Quickstart and implementation boundary
 
+## ACTIVE manual QA entry — compact interactive #395, 2026-10-20
+
+This active handoff supersedes the **historical planning commands and TDD/
+image-binding prerequisites retained below**. Current delivery is direct
+implementation, batched existing checks, owner manual feedback, meaningful
+post-feedback regressions, and final affected checks. Financial/owner/sync
+protection tests remain mandatory before merge where relevant. This document
+does **not** authorize code writes, device access, account seeding, hosted
+operations or new agents.
+
+**Primary compact reference:**
+[runnable interactive v1](mockups/interactive/compact-review-2026-10-20/index.html)
+with [short README](mockups/interactive/compact-review-2026-10-20/README.md).
+Open `index.html`, not `source.fragment.html` by itself. Browser controls cover
+320–430 **CSS px**, font 1.00–1.25 and long-account names; they are design
+exploration, **not** proven native dp/RTL/safe-area geometry. No new interactive
+binding sidecar, separate metadata approval or second owner design approval.
+Historical B1/R1–R3 images/sidecars/receipts remain unchanged and governed only
+in their earlier scope. See
+[compact contract](contracts/compact-review-ui-contract.md),
+[active manual-plan scenarios](manual-test-plan.md) and
+[compact validation/evidence register](validation/compact-review-2026-10-20.md).
+
+### Three non-interchangeable QA paths
+
+1. **Controlled Voice transcript fixture, real review page.** Use the existing
+   nonproduction **Settings → Development tools → Voice transcript fixtures**
+   (`/review-transcript-fixtures`) catalog. Launch the transcript fixture; it
+   passes `reviewSession`, `transcript` and `detectedLanguage` to the normal
+   `/voice-review` route. The `reviewFixtureSceneId` query is a separate old
+   Maestro scene harness and is **not** the manual catalog. For selected CIB /
+   `[TEST] Game` and unselected QNB, synthetic text drives the _real current_
+   account-review controls and **real clearly marked TEST Save**. It does
+   **not** call the microphone, Gemini, transcription or SMS provider. Open
+   collapsed account review/two-line transcript, discontiguous Account
+   needed/Show all, linked rows, explicit Confirm, compact inline ellipsis, one
+   chooser/overlay, ready auto-selection with manual opt-out, Undo/Discard
+   lease, footer/insets and responsive conditions. A TEST Save can persist local
+   account/financial records—**not a dry run**. **Before retrying an uncertain
+   Save, check Transactions and the account list**; a successful Save must not
+   be mistaken for a failure and repeated.
+2. **Actual Voice capture is different evidence.** Only real owner-authorized
+   recording can cover permission rationale/grant/denial,
+   recording/interruption, temporary file cleanup, transcription/Gemini, spoken
+   currency extraction, provider/usage failures and recorder lifecycle. Voice
+   transfers remain **out of scope**.
+3. **Targeted SMS shared-path regression.** Recheck account/default choice,
+   ordinary SMS Cash-source exclusion, genuine ATM Cash destination,
+   session/recovery/Undo/Discard semantics, selected-only Save/replay, SMS
+   fingerprint and safe sync/pull/ACK. Reuse controlled scenarios and existing
+   deterministic SQLite coverage. Do **not** turn this into a full
+   provider/parser retest for untouched SMS behavior or invent an SMS Maestro
+   journey.
+
+The catalog scenario `voice-shared-drafts-qnb-cib` is a transcript fixture ID,
+not a Maestro scene identifier; do not interchange them.
+
+### Current compact acceptance orientation
+
+- Review details starts collapsed and shows groups **inline** when expanded;
+  `Accounts reviewed` is conditional. Transactions appear early; the transcript
+  starts at **two lines** and expands. No `View all` and no implicit
+  confirmation by clicking a pending-group transaction.
+- Account needed/linked-row views are **temporary** source-ordered filters with
+  `Show all`; selected/Save scope stays canonical. Ready rows auto-select
+  initially/when newly ready, explicit manual uncheck stays honored, and
+  `Select ready` reselects eligible rows **in the active filter**.
+- One account chooser shows current choice/type/currency and affected rows.
+  `Use account — EGP/USD` applies authoritative account+currency together,
+  **without FX conversion or a second Confirm Currency modal**. Separate
+  currency-only picker may still be used independently. Draft name/type/
+  currency stay in one form and persist only on final selected Save.
+- Remove shows a ghost with Undo and final Discard; Discard must revoke the
+  **actual current-review Undo lease**, not just hide a control. No deletion of
+  transactions or accounts. Only one overlay is active.
+- Native review needs small _painted_ account/category pencil-square controls
+  with **44/48dp effective targets**, actual container-fit reflow for long
+  names/category/font scale, inline status/count dot only when truly on one
+  line, readable dark information and final divider correctness. Page notices
+  remain sticky/dismissible below PageHeader/outside scroll, never new toasts;
+  keyboard/safe-area/footer and EN/AR RTL require **native evidence**, not web
+  screenshots.
+
+### Evidence status; no inferred acceptance
+
+**Owner-reported 2026-10-20:** one selected CIB / `[TEST] Game` fixture Save
+succeeded after Root's trusted calendar-bound predecessor repair, with the
+record observed in Transactions. **Root-reported Save cohort:** 7 affected
+suites / 97 tests PASS, TypeScript PASS, lint PASS across 11 Save files. Neither
+report establishes a broad compact UI pass or native visual/device/
+accessibility acceptance; those checks remain **NOT RUN** in this handoff. The
+original Voice/Add Maestro YAMLs are authored historical `NOT RUN` artifacts,
+**not verified compatible** with the current compact controls. #405 institution
+logos / PR #406 is a **separate draft stacked on #396**, not integrated into the
+current #396 compact manual baseline.
+
+For future evidence, log _which_ fixture, real Voice or SMS path was actually
+performed; observed versus expected behavior and scoped native build/width/
+font/theme/locale/inset/screen-reader status. No completion checkbox is inferred
+from this quickstart.
+
+---
+
+## HISTORICAL planning quickstart, 2026-10-14–17 (preserved verbatim)
+
+### Superseded for active compact review testing
+
 All commands run from `E:/Work/My Projects/Monyvi` on
 `codex/395-shared-account-review`. Use lean-ctx tools for shell/read/search.
 Planning has no dependencies to install, provider calls, emulator or data

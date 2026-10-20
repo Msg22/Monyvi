@@ -5,6 +5,17 @@ including #395. Replaces mandatory TDD sequencing in older project guidance.
 Product approval, approved mockups, Speckit analysis, architecture, financial
 invariants, privacy, sync protection and worker authorization still apply.
 
+**Prospective UI design policy (approved 2026-10-20):** Before implementing
+meaningful visible changes, present a runnable, revisioned interactive design
+under the feature's `mockups/`, with a short README for version, run steps,
+scenarios and native-only differences. Approve the **reviewed runnable design
+once**; it is the layout/visual authority and requires no new binding sidecar,
+metadata/hash tuple or duplicate approval. See
+[interactive design workflow](design/interactive-design-workflow.md) and the
+sprint-issue micro-UI exception. Browser behavior is simulated; actual native
+render/device acceptance remains separate. Historical approved images, sidecars
+and evidence are untouched.
+
 ## Delivery sequence
 
 1. **Direct implementation.** Implement the approved behavior with existing app
@@ -89,9 +100,10 @@ batch.
 
 ## Planning, workers and evidence
 
-- Keep approved spec, contracts, design bindings and existing task IDs.
-  Reconcile unfinished task dependencies with this sequence rather than
-  regenerating plans or discarding completed work.
+- Keep approved spec, contracts, historical image bindings, reviewed interactive
+  design versions and existing task IDs. Reconcile unfinished task dependencies
+  with this sequence rather than regenerating plans or discarding completed
+  work.
 - Plan explicit implementation, batched verification, owner manual feedback,
   regression coverage and final validation stages. Coverage tasks remain
   required where the spec or safety boundary requires them; they need not

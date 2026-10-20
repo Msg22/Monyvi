@@ -25,26 +25,27 @@ against the approved spec and mockup, with honest test and device evidence.
 
 Read `AGENTS.md`, the constitution, approved spec/issue, mockup, current
 `docs/design/design-system.md`, `.agent/rules/styling-rules.md`, and relevant
-design workflows and [delivery policy](../../docs/development-workflow.md). This
-includes actual-container text fit and current page/modal inline-feedback
-placement; do not introduce new error/warning/success toasts in touched UI.
-Follow current repo primitives and architecture. Prepare manual scenarios,
-implement directly, batch existing checks, then hand manual testing to Mohamed.
-After feedback stabilizes behavior, add assigned regression coverage. Required
-safety tests precede merge. No emulator/device execution unless requested.
-Report manual and visual evidence separately from automated checks.
+design workflows, the
+[interactive design reference workflow](../../docs/design/interactive-design-workflow.md)
+and [delivery policy](../../docs/development-workflow.md). This includes
+actual-container text fit and current page/modal inline-feedback placement; do
+not introduce new error/warning/success toasts in touched UI. Follow current
+repo primitives and architecture. Prepare manual scenarios, implement directly,
+batch existing checks, then hand manual testing to Mohamed. After feedback
+stabilizes behavior, add assigned regression coverage. Required safety tests
+precede merge. No emulator/device execution unless requested. Report manual and
+visual evidence separately from automated checks.
 
-For every mockup-backed assignment, inventory/read the approved sidecars and
-state/component/icon fidelity obligations before code. When the approved feature
-handoff supplies an active manifest or map, consume it; otherwise no new
-manifest artifact is required. Treat any manifest/derived map as an
-implementation/index aid that cannot override approved Binding Facts or add a
-second approval gate. Route missing/conflicting fidelity facts through the
-normal binding clarification/approval workflow. At plan checkpoint, name the
-exact approved reference revision and existing component/icon for each assigned
-state. Required rendered comparisons and separate accessibility proof establish
-visual completion. Explicitly deferred execution stays NOT RUN; author the
-allowed coverage and hand complete manual plan to owner.
+For future interactive UI, open the approved **runnable entry** and short
+README, then exercise relevant states, real content/container fit, locales and
+themes. The artifact is the visual/responsive authority; **do not demand a
+sidecar, binding metadata, hash tuple or additional approval**. Note the
+reviewed design version and only the necessary native-only differences. For
+historical approved image surfaces, keep their original approved sidecars,
+immutable evidence and verifier requirements. Compare actual native rendered
+screens with the approved rendered design; native accessibility and safe-area/
+keyboard evidence are separate. Explicitly deferred device execution remains NOT
+RUN; hand a practical manual plan to the owner.
 
 ## Stop And Handoff
 

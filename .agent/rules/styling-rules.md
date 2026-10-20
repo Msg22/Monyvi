@@ -4,9 +4,14 @@ This document outlines the project-specific styling and UI rules for Monyvi's
 mobile application.
 
 The governing guidance is `AGENTS.md`, `docs/development-workflow.md`, and
-`docs/design/design-system.md`, alongside current approved UI bindings and
-owner-approved business decisions. These rules supplement—not replace—the
-current responsive, feedback, and delivery contracts.
+`docs/design/design-system.md`, alongside current owner-approved interactive UI
+references, historical image bindings and business decisions. These rules
+supplement—not replace—the current responsive, feedback, and delivery contracts.
+For future meaningful UI changes, consult
+`docs/design/interactive-design-workflow.md` and the approved runnable feature
+mockup; use its documented real-container, long content, scaled text, theme, RTL
+and interaction scenarios. Native visual, safe-area and keyboard correctness
+must be verified separately.
 
 ## 🎨 Styling Rules
 

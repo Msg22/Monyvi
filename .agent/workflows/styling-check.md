@@ -8,7 +8,14 @@ This workflow helps ensure that building components follow the established
 styling rules. Apply `AGENTS.md`, `docs/development-workflow.md`,
 `docs/design/design-system.md`, and `.agent/rules/styling-rules.md` before
 making UI changes. Current owner-approved UI/feedback decisions take precedence
-over generic checklist examples; this is not another approval gate.
+over generic checklist examples; this is not another approval gate. For
+prospective mockup-backed UI, follow
+`docs/design/interactive-design-workflow.md` and the approved runnable reference
+itself (or historical approved image Binding Facts when applicable); check its
+relevant fit/interactions before implementation. A new interactive reference
+needs no sidecar or separately approved layout metadata. A working browser
+design or source/style audit does not prove native rendering, keyboard, inset or
+screen-reader fidelity.
 
 The basic checks are:
 

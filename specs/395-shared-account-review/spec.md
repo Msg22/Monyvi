@@ -399,3 +399,71 @@ verify account/transaction counts.
 - Exact response and SMS persistence contracts are technical planning work. Any
   necessary schema/backfill or new financial policy returns to owner approval
   before execution.
+
+## 2026-10-20 — owner-approved compact interactive Voice-first review
+
+The owner approved and tested the compact, default-collapsed **interactive**
+Voice-review direction (including the 320 CSS px preview and long-name/font
+controls) and explicitly authorized implementation. The **primary
+design/layout/style/responsive authority** for this latest presentation slice is
+`mockups/interactive/compact-review-2026-10-20/index.html` (immutable Git blob
+`e410f2a5495ff4f9f2106e1881d540564ee7c65b`, 130827 UTF-8 bytes, SHA-256
+`64748fe7945926d4f9e94d2e4095cbddb9dfd95a52f693d4878f0e590d68d38f`).
+`source.fragment.html` (blob `d07aae0eb285bcbd6e53988692cc1cef3e443572`) and
+`reference.json` (blob `0d7bd8e349694047ec343edf664b19f50c8f7e9d`) preserve its
+exact source and export provenance; the fragment alone lacks the runnable
+wrapper/theme context. The short directory `README.md` records
+entry/version/run/native adaptations. All reference bytes remain unchanged.
+
+**No separate metadata sidecar or second design-approval gate** is required for
+this already-approved interactive concept. The earlier worker-authored
+`compact-review.binding.md` was an unapproved, now-withdrawn draft: remove it
+from the **active** feature tree/handoff; do not mark its SHA/metadata approved.
+Historical B1/R1–R3 image bindings and approvals are preserved untouched for
+their own earlier scopes. The current owner instruction controls conflicting
+compact UI layout/interaction; existing financial, ownership, Save, SMS/Voice
+and account-form rules remain authoritative.
+
+**Supplemental user journey:** transactions appear early; the transcript is
+collapsed to two lines but expandable; Review details starts collapsed, expands
+suggested groups inline with explicit independent Confirm and contextual
+three-dot actions (not View all or nested modals). Account needed gathers
+unresolved rows wherever they occur in source order; linked-group drilldown and
+chooser disclose exactly affected rows and have Show all. Keep compact editable
+account/category pencil-square icons with accessible 44/48dp hits,
+real-container/font-scaled reflow, full names/amounts/currency and native
+EN/AR/dark/safe-inset patterns. One account chooser shows candidate currency and
+an explicit `Use account — EGP/USD` confirmation with no numeric conversion;
+draft name/type/currency stay in the same form, materialized only upon selected
+final Save. A removed suggestion leaves session-local Undo/Discard ghost;
+Discard actually revokes Undo without deleting transactions. Initial and newly
+ready rows automatically select unless manually unselected; Select ready
+deliberately reselects. In the compact UI, tapping a pending-group checkbox
+**does not implicitly confirm** the group: it reveals the inline confirmation
+route. The guarded legacy `confirmForClick` API remains protected for older
+callers and is not a requirement to remove. Page feedback stays sticky below
+header, no new toast.
+
+**Supersession for this compact surface:** original US4/FR-014 View all is
+replaced by inline expansion; US2/FR-007's selection-unchanged statement is
+superseded only by approved newly-ready auto-selection; US2/FR-008's disclosed
+row-click implicit group confirmation is replaced by explicit group
+confirmation; FR-011's separate currency picker remains only for independent
+currency-only correction, not a second account-selection confirmation; FR-024's
+historical image-binding gate does not create a new sidecar gate here. See
+[compact-review-ui-contract.md](contracts/compact-review-ui-contract.md) for
+precise frontend/domain owner separation and existing-path mapping. **Local
+implementation status (2026-10-20):** Root completed scoped analysis, activated
+frontend/domain ownership, and integrated the authored compact UI and NormalB's
+guarded domain/facade work locally. The existing `edit_group` command now
+accepts optional `identity.currency` with `reconfirm: true` and the original
+owner/session/review/group CAS checks; the one-sheet group editor sends name,
+type and currency in one final command, preserving numeric amounts. The facade
+owns ready-row selection/manual opt-out and current-review Undo-lease revocation
+after Discard. The prior owner-edited preimages are historical provenance, not
+pending frontend ownership. `CanonicalTransactionReview.tsx` formatted at 898
+lines and `EditSuggestedAccountSheet.tsx` at 762 lines per Root. This is
+**authored and integrated locally, not committed, deployed or native/manual
+accepted**: the consolidated TypeScript/lint/mobile/logic checks are running;
+device/rendered/accessibility and owner manual evidence are NOT RUN. No extra
+binding/approval gate is introduced.

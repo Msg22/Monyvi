@@ -1,11 +1,23 @@
 # Monyvi Design System
 
-**Last updated:** 2026-05-10  
+**Last updated:** 2026-10-20  
 **Status:** Implementation-aligned UI and theme guide
 
 This document describes the UI conventions currently implemented in
 `apps/mobile`. It also marks known inconsistencies so future work can improve
 the system without guessing.
+
+For future design proposals, follow
+[interactive design workflow](interactive-design-workflow.md): the primary
+mockup is a portable runnable browser design with scoped width, text, locale,
+theme, state and interaction scenarios, stored under the feature's `mockups/`.
+Use established tokens and components as design inputs; the approved runnable
+artifact **itself** is the visual/responsive reference for **native React
+Native** implementation. A short README documents version, run instructions,
+scenarios and native-only differences; new interactive designs require **no
+binding sidecar or second metadata approval**. Browser previews/screenshots do
+not prove native fidelity, safe-area or keyboard correctness. Historical
+approved image bindings remain valid for their original surfaces.
 
 ## 1. Design Direction
 

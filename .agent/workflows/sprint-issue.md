@@ -11,15 +11,19 @@ This workflow applies when working GitHub sprint issues for Monyvi. GitHub
 issues may be AI-generated and not yet reviewed by Mohamed, so issue text is an
 input to verify, not an automatic product decision.
 
-## Approved Mockup Binding Gate
+## Prospective interactive design and historical image gate
 
-When this workflow consumes an approved mockup or sidecar, run
-`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
-binding facts, rendered evidence, or approval status. Require exit status zero:
-current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
-revisions, and approval evidence for the approved combined
-`Binding approval revision` must all verify. A failed verifier blocks governed
-UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+For future meaningful UI, follow `docs/design/interactive-design-workflow.md`:
+one explicit owner approval of the **exact runnable design revision**. Its
+actual visuals/responsive behavior are authoritative; a short README supplies
+entry, version, scenarios and native-only notes. Do **not** create or verify a
+sidecar, Binding Facts, hash/combined revision or separate metadata approval for
+interactive HTML.
+
+For an original historically approved **image** surface only, retain the
+existing `<mockup-basename>.binding.md` requirements and run the unchanged
+`scripts/verify-mockup-binding.js`; invalid historical sidecars remain
+non-authoritative on their original surfaces. Preserve historical evidence.
 
 ## 1. Pick And Verify The Issue
 
@@ -57,8 +61,10 @@ cause is verified.
 
 ## 3. UI And Design Mockups
 
-Before coding, create a scoped visual mockup and get Mohamed's approval when the
-issue or feature meaningfully changes the UI by doing any of the following:
+Before coding, create a scoped **runnable interactive design** under the
+feature's `mockups/` and obtain Mohamed's **one approval of the exact reviewed
+design** following `docs/design/interactive-design-workflow.md` when the issue
+or feature meaningfully changes the UI by doing any of the following:
 
 - adds a new page or screen,
 - adds a new visible UI item to an existing page, except for the micro-UI
@@ -68,9 +74,13 @@ issue or feature meaningfully changes the UI by doing any of the following:
 - changes a user-facing flow where the screen structure or component behavior
   will visibly change.
 
-Mock only the affected UI area, not the whole page, unless the whole page is
-changing. A mockup is not required for backend-only, logic-only, copy-only,
-configuration-only, or non-visual bug fixes.
+Design only the affected UI area, not the whole page unless the whole page is
+changing. Use a portable browser entry and documented relevant scenarios so the
+owner can try interactions, container widths, font scaling, long content,
+light/dark and EN/AR RTL before implementation. One design direction can be
+enough; four static images and Stitch are not mandatory. A mockup is not
+required for backend-only, logic-only, copy-only, configuration-only, or
+non-visual bug fixes.
 
 ### Micro-UI Exception
 
@@ -96,30 +106,26 @@ beyond these boundaries, has multiple credible designs, or creates uncertainty
 about hierarchy or interaction, stop and use the mockup approval gate. A direct
 request from Mohamed for a mockup always overrides this exception.
 
-After mockup approval, require the matching `<mockup-basename>.binding.md`
-handoff from `.agent/workflows/mockup-implementation.md` before implementation
-begins. The sidecar must record `Binding metadata approval: APPROVED` plus the
-explicit approval evidence/reference. Recompute its current fingerprint and
-verify that `Approved binding metadata revision` equals
-`Binding metadata revision`, that `Approved binding approval revision` equals
-`Binding approval revision`, and that the approval evidence/reference identifies
-the approved combined `Approved binding approval revision`. For an approved
-legacy mockup without a sidecar, complete that workflow's legacy metadata
-migration and explicit sidecar approval first. A fidelity-affecting `UNKNOWN`,
-failed revision check, missing approval record, pending sidecar, or materially
-changed/unapproved binding fact blocks implementation rather than being
-inferred.
+For prospective interactive designs, present the **working entry** and short
+README with traceable version, run steps, scenarios and necessary native-only
+differences. The artifact itself determines spacing, style and responsive
+behavior. Approval of that reviewed design occurs **once**; no second
+binding/metadata/README approval is required. A changed design needs one new
+approval of the changed revision.
+
+For historical approved image references only, require the original approved
+sidecar and unchanged verifier/legacy migration procedure. Neither those legacy
+fields nor their hash ceremony apply to new HTML.
 
 Implement the approved direction through `.agent/workflows/applying-mockups.md`.
-If coding reveals a meaningful design change, stop and ask for approval again
-before continuing. The approved mockup handoff is binding under the
-constitution's Premium UI principle: match the declared UI viewport or component
-context, ignore presentation-only hardware/frame/canvas unless explicitly marked
-binding, preserve composition across responsive, RTL, dark, and enlarged-text
-variants, and report functional status separately from visual fidelity. Visual
-completion requires rendered side-by-side or overlay screenshot evidence against
-the approved reference at the declared UI context, plus rendered evidence for
-every in-scope responsive, RTL, dark, and enlarged-text variant.
+If coding requires a materially different design, seek one owner approval of the
+**revised interactive artifact** before implementing that redesign. Respect its
+reviewed UI context, excluding non-product preview chrome/frames, preserve the
+intent across actual container sizes, RTL, themes and enlarged text, and report
+functional readiness separately from visual fidelity. Visual completion requires
+**native rendered** screenshot comparisons with the approved rendered design at
+the reviewed context plus evidence for relevant in-scope variants; browser
+previews alone are not native visual proof.
 
 When the governed mockup or story requires accessibility labels or semantics,
 completion also requires separate accessibility-tree, screen-reader, or

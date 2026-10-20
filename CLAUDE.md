@@ -140,6 +140,15 @@ the true domain model.
 
 ## Styling Rules
 
+- **Prospective design handoff:** For meaningfully changed UI, follow
+  `docs/design/interactive-design-workflow.md` and the existing sprint visual
+  gate. Produce a runnable, versioned interactive design under the feature's
+  `mockups/` with a short README. The interactive artifact owns the layout; one
+  approval of its reviewed revision suffices—no sidecar/hash metadata or second
+  approval for future interactive designs. Static images or Stitch-only
+  descriptions cannot replace it. Keep historical image approvals intact;
+  browser prototypes are not React Native implementation or native visual QA.
+
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).

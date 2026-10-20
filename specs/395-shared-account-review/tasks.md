@@ -976,3 +976,46 @@ account financial fields, and corrupt original effects or
 missing/foreign/reparented original members cannot authorize root ACK. Record
 current root/field liveness separately; no completion follows from authored
 source or tests alone.
+
+## 2026-10-20 — approved compact interactive review: supplemental task mapping
+
+This short overlay **preserves all original 80 T IDs, existing checkboxes,
+evidence and B1/R1–R3 image approvals**. The owner-approved latest runnable
+design entry is `mockups/interactive/compact-review-2026-10-20/index.html` (blob
+`e410f2a5495ff4f9f2106e1881d540564ee7c65b`). `source.fragment.html` (blob
+`d07aae0eb285bcbd6e53988692cc1cef3e443572`) is provenance, while
+`reference.json` (blob `0d7bd8e349694047ec343edf664b19f50c8f7e9d`) records
+browser test provenance without pretending to be a native QA receipt. Short
+`README.md` provides version/run/native adaptation notes. **No new sidecar
+approval gate:** the worker's prior PENDING `compact-review.binding.md` is
+withdrawn from the active handoff and must be removed by Root, not converted
+into an approved historical image binding.
+
+| Existing task mapping                           | Locally authored/integrated scope; acceptance still pending                                                                                                                                                                                                                         |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T020/T021/T031/T060/T072                        | Collapsed expandable summary, early transactions and two-line expandable transcript; all groups inline, explicit Confirm, accurate account-reviewed status; no View all/nested menu modal.                                                                                          |
+| T039/T060/T061                                  | Account-needed and linked-group source-order temporary filters, Show all, linked transaction scope before group-wide account choice; no Save-scope mutation.                                                                                                                        |
+| T021/T039/T060/T072                             | Account/category pencil-square edit, actual-container/font-scale responsive reflow, legible native EN/AR/dark, 44/48dp touch targets, sticky page notices, existing keyboard/inset/footer/divider, #405 identity slots preserved.                                                   |
+| T031/T038/T039/T072                             | One active chooser showing account currency and explicit Use account — CODE without conversion, one unsaved draft form including currency; distinct currency-only picker without modal stacking.                                                                                    |
+| T029/T030/T059/T061 — **separate domain owner** | Initial/newly-ready auto-selection with manual opt-out, pending-group select never confirms, scoped Select ready; session-local Discard revokes Undo lease while preserving transactions; guarded group/draft currency transitions. Frontend consumes authoritative callbacks only. |
+| T022/T032/T040/T062/T063/T073/T078/T079         | Root scoped Speckit analysis and exact file ownership, consolidated source intake/checks, then owner manual width/font/name/RTL/dark/inset/overlay/removal/selection review; native/visual/accessibility evidence still NOT RUN.                                                    |
+| T074/T076/T077/T078                             | Post-feedback deterministic/E2E coverage and final affected validation; preserve required financial/retry/owner/sync safety checks before merge. No TDD Red prerequisite for this new work.                                                                                         |
+
+**Implementation reconciliation (2026-10-20):** Root activated the frontend
+lease, integrated the authored compact UI and NormalB's guarded
+selection/Undo/currency source, then released the source ownership. Group edit
+uses optional `edit_group.identity.currency`, the same form as name/type and a
+single guarded submit; actual ready selection and session-local Discard/Undo
+authority remain in the facade. New compact checkbox taps on pending groups
+expose explicit inline Confirm, rather than invoking the protected legacy
+`confirmForClick` route. `CanonicalTransactionReview.tsx` is 898 formatted
+lines; `EditSuggestedAccountSheet.tsx` is 762. See
+[compact-review-ui-contract.md](contracts/compact-review-ui-contract.md) for the
+implemented source/callback mapping and evidence boundary. **No original T task
+ID, checkbox or test history is asserted complete by this overlay.** Root's
+consolidated TypeScript/lint/23 mobile suites/logic-account-review batch is
+**RUNNING**; results and final commit/deployment remain pending. C owns
+manual-test-plan, quickstart and validation documents plus related test
+coordination; the **owner** conducts manual/native QA, still **NOT RUN**.
+Financial Save/service/logging, #405/PR406 logos, global workflow and frozen
+design/image reference bytes remain excluded.

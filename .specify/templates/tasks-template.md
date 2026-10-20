@@ -22,6 +22,14 @@ financial/sync/data-safety coverage precedes merge and may follow
 implementation. TDD only by explicit scoped owner request. Preserve task
 IDs/completed evidence in existing plans.
 
+**UI design dependency (when applicable):** Reference the single owner-approved
+**runnable design revision** and short README in this feature's `mockups/`. The
+artifact owns layout/styling/responsive behavior; no new binding sidecar, hash
+tuple, duplicate design approval or verbose metadata tasks. Follow
+`docs/design/interactive-design-workflow.md`; cover task-relevant scenarios and
+separate native rendered/owner manual acceptance. Preserve original historical
+image-sidecar gates and the micro-UI exception.
+
 **Organization**: Tasks are grouped by user story to enable independent
 implementation and testing of each story.
 
