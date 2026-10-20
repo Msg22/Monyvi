@@ -529,7 +529,7 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     expect(screen.getByTestId("canonical-account-choice")).toBeTruthy();
   });
 
-  it("account issue drills into original-order missing rows and Show all restores the list", () => {
+  it("account issue drills into original-order missing rows and All tab restores the list", () => {
     const two = makeT025ReviewSession(
       T025_IDS.queue,
       [makeT025SmsOriginal(0), makeT025SmsOriginal(1)],
@@ -588,26 +588,50 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     ).toHaveTextContent("1");
     expect(screen.queryByTestId("canonical-discard-all")).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByTestId("pr-show-all"));
+    fireEvent.press(screen.getByTestId("pr-filter-all"));
     expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
     expect(
       screen.getByTestId("pr-global-save-selected-count")
     ).toHaveTextContent("1");
     expect(mockDispatch).not.toHaveBeenCalled();
   });
-  it("linked group temporary scope preserves original row identity and returns to full list", () => {
+  it("linked disclosure preserves main-list rows, account identity and global selection", () => {
     const linked = twoGroupSession();
     mockHook.mockImplementation(() => fakeHook(linked));
     const screen = render(review());
     expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
-    fireEvent.press(screen.getByTestId("pr-linked-" + SECOND_GROUP_ID));
-    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(1);
-    expect(screen.getByTestId("pr-source-account-0")).toHaveTextContent(
+    fireEvent.press(
+      screen.getByTestId("account-review-compact-summary-toggle")
+    );
+    const button = screen.getByTestId(
+      "account-review-group-linked-" + SECOND_GROUP_ID
+    );
+    fireEvent.press(button);
+    expect(
+      screen.getByTestId("account-review-group-linked-row-" + T025_IDS.rowTwo)
+    ).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-group-linked-row-" + T025_IDS.rowOne)
+    ).toBeNull();
+    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
+    expect(screen.getByTestId("pr-source-account-1")).toHaveTextContent(
       "QNB Two"
     );
-    expect(screen.queryByTestId("canonical-discard-all")).toBeNull();
-    expect(mockDispatch).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByTestId("pr-show-all"));
+    expect(screen.getByTestId("canonical-discard-all")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-linked-transactions-only")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("pr-global-save-selected-count")
+    ).toHaveTextContent(
+      String(linked.rows.filter((row) => row.selected).length)
+    );
+    fireEvent.press(button);
+    expect(
+      screen.queryByTestId(
+        "account-review-group-linked-list-" + SECOND_GROUP_ID
+      )
+    ).toBeNull();
     expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
     expect(mockDispatch).not.toHaveBeenCalled();
   });

@@ -14,6 +14,7 @@ import {
 } from "./shared-account-presentation";
 import { View } from "react-native";
 import type { AccountChoiceLinkedRow } from "./AccountChoiceSheet";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface CanonicalReviewRowProps {
   readonly row: AccountReviewRow;
@@ -160,4 +161,49 @@ export function presentLinkedChoiceRows(
         " " +
         (row.currency.state === "known" ? row.currency.code : group.currency),
     }));
+}
+
+/** Read-only inline group preview. Preserve the full session's original row order. */
+export function presentInlineGroupLinkedRows(
+  session: AccountReviewSession | null,
+  group: AccountReviewSession["groups"][number],
+  summaries: ReadonlyArray<{
+    readonly groupId: string;
+    readonly liveLinkedRowIds: readonly string[];
+  }>,
+  language: ReviewDisplayLanguage
+): readonly AccountChoiceLinkedRow[] {
+  if (!session) return [];
+  const live = new Set(
+    summaries.find((summary) => summary.groupId === group.groupId)
+      ?.liveLinkedRowIds ?? []
+  );
+  return session.rows
+    .filter((row) => live.has(row.rowId))
+    .map((row) => {
+      const tx = row.transaction;
+      const note =
+        "note" in tx && typeof tx.note === "string" ? tx.note.trim() : "";
+      const currency =
+        row.currency.state === "known" ? row.currency.code : group.currency;
+      const isExpense = tx.type === "EXPENSE";
+      const amountLabel =
+        language === "ar"
+          ? formatLocalizedMoneyAmount({
+              amount: isExpense ? `-${row.amountDecimal}` : row.amountDecimal,
+              currency,
+              language,
+              signDisplay: "always",
+            })
+          : `${isExpense ? "-" : "+"}${formatLocalizedMoneyAmount({
+              amount: row.amountDecimal,
+              currency,
+              language,
+            })}`;
+      return {
+        rowId: row.rowId,
+        title: note || tx.counterparty?.trim() || tx.originLabel,
+        amountLabel,
+      };
+    });
 }

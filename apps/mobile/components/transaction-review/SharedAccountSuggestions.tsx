@@ -24,6 +24,12 @@ export interface SharedSuggestedGroupView {
   readonly currencyLabel: string;
   readonly typeIconName: string;
   readonly linkedCount: number;
+  /** Live linked transactions from the full canonical source-order review. */
+  readonly linkedTransactions?: ReadonlyArray<{
+    readonly rowId: string;
+    readonly title: string;
+    readonly amountLabel: string;
+  }>;
   readonly statusLabel: string;
   readonly disclosureText: string;
   readonly isConfirmed: boolean;
@@ -57,7 +63,6 @@ export interface SharedAccountSuggestionsProps {
   readonly onRemove: (groupId: string) => void;
   readonly onUndo: (groupId: string) => void;
   readonly onDiscardRemoved?: (groupId: string) => void;
-  readonly onViewLinked?: (groupId: string) => void;
   readonly revealGroupsKey?: number;
   readonly defaultAccountName?: string | null;
   readonly onDefaultWhyPress?: () => void;
@@ -82,7 +87,7 @@ function InlineReviewIssues({
         <View
           key={issue.key}
           className={
-            "min-h-11 min-w-0 flex-wrap items-center gap-2 border-t border-border py-2 dark:border-border-dark " +
+            "min-h-11 min-w-0 flex-wrap items-center gap-2 py-2 " +
             (language === "ar" ? "flex-row-reverse" : "flex-row")
           }
         >
@@ -129,6 +134,7 @@ export function SharedAccountSuggestions(
   const { colorScheme } = useColorScheme();
   const [expanded, setExpanded] = useState(false);
   const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
+  const [linkedGroupId, setLinkedGroupId] = useState<string | null>(null);
   useEffect(() => {
     if (props.revealGroupsKey && props.revealGroupsKey > 0) {
       setExpanded(true);
@@ -152,6 +158,14 @@ export function SharedAccountSuggestions(
       issue.key !== "account_review_issue_account" &&
       issue.key !== "account_review_issue_currency"
   );
+  const showDefaultNote =
+    Boolean(props.defaultAccountName) &&
+    props.summary.defaultAssignmentCount > 0 &&
+    Boolean(props.onDefaultWhyPress) &&
+    (props.groups.length > 0 || issues.length > 0);
+  const showSaveExplanation = props.groups.some((group) => !group.isRemoved);
+  const hasHelperContent =
+    issues.length > 0 || showDefaultNote || showSaveExplanation;
   return (
     <View
       testID="account-review-details-panel"
@@ -165,6 +179,7 @@ export function SharedAccountSuggestions(
         onToggle={() => {
           setExpanded((current) => !current);
           setMenuGroupId(null);
+          setLinkedGroupId(null);
         }}
       />
       {expanded ? (
@@ -177,6 +192,9 @@ export function SharedAccountSuggestions(
               showDivider={index < props.groups.length - 1}
               disabled={props.isBusy || group.isBusy}
               isMenuOpen={menuGroupId === group.groupId}
+              linkedExpanded={
+                linkedGroupId === group.groupId && !group.isRemoved
+              }
               onMenu={() =>
                 setMenuGroupId((current) =>
                   current === group.groupId ? null : group.groupId
@@ -193,6 +211,9 @@ export function SharedAccountSuggestions(
               }}
               onRemove={() => {
                 setMenuGroupId(null);
+                setLinkedGroupId((current) =>
+                  current === group.groupId ? null : current
+                );
                 props.onRemove(group.groupId);
               }}
               onUndo={() => props.onUndo(group.groupId)}
@@ -201,57 +222,69 @@ export function SharedAccountSuggestions(
                   ? () => props.onDiscardRemoved?.(group.groupId)
                   : undefined
               }
-              onViewLinked={
-                props.onViewLinked
-                  ? () => props.onViewLinked?.(group.groupId)
-                  : undefined
-              }
+              onViewLinked={() => {
+                setMenuGroupId(null);
+                setLinkedGroupId((current) =>
+                  current === group.groupId ? null : group.groupId
+                );
+              }}
             />
           ))}
-          <InlineReviewIssues
-            issues={issues}
-            disabled={props.isBusy}
-            onIssuePress={props.onIssuePress}
-          />
-          {props.defaultAccountName &&
-          props.summary.defaultAssignmentCount > 0 &&
-          props.onDefaultWhyPress &&
-          (props.groups.length > 0 || issues.length > 0) ? (
-            <DefaultAccountInfo
-              defaultAccountName={props.defaultAccountName}
-              assignmentCount={props.summary.defaultAssignmentCount}
-              onWhyPress={props.onDefaultWhyPress}
-            />
-          ) : null}
-          {props.groups.some((group) => !group.isRemoved) ? (
+          {hasHelperContent ? (
             <View
-              testID="account-review-compact-save-explanation"
+              testID="account-review-compact-helper-notices"
               className={
-                "w-full max-w-[350px] self-center items-center gap-2 py-1 " +
-                (language === "ar" ? "flex-row-reverse" : "flex-row")
+                "gap-1 " +
+                (props.groups.length > 0
+                  ? "mt-1 border-t border-border pt-2 dark:border-border-dark"
+                  : "")
               }
             >
-              <View className="h-6 w-6 shrink-0 items-center justify-center">
-                <Ionicons
-                  name="information-circle-outline"
-                  size={20}
-                  color={
-                    colorScheme === "dark"
-                      ? palette.slate[400]
-                      : palette.slate[500]
-                  }
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
+              <InlineReviewIssues
+                issues={issues}
+                disabled={props.isBusy}
+                onIssuePress={props.onIssuePress}
+              />
+              {showDefaultNote &&
+              props.defaultAccountName &&
+              props.onDefaultWhyPress ? (
+                <DefaultAccountInfo
+                  defaultAccountName={props.defaultAccountName}
+                  assignmentCount={props.summary.defaultAssignmentCount}
+                  onWhyPress={props.onDefaultWhyPress}
                 />
-              </View>
-              <Text
-                className={
-                  "min-w-0 flex-1 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-                  (language === "ar" ? "text-right" : "text-left")
-                }
-              >
-                {t("compact_review_creation_explanation")}
-              </Text>
+              ) : null}
+              {showSaveExplanation ? (
+                <View
+                  testID="account-review-compact-save-explanation"
+                  className={
+                    "w-full max-w-[350px] self-center items-center gap-2 py-1 " +
+                    (language === "ar" ? "flex-row-reverse" : "flex-row")
+                  }
+                >
+                  <View className="h-6 w-6 shrink-0 items-center justify-center">
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color={
+                        colorScheme === "dark"
+                          ? palette.slate[400]
+                          : palette.slate[500]
+                      }
+                      accessibilityElementsHidden
+                      importantForAccessibility="no"
+                    />
+                  </View>
+                  <Text
+                    className={
+                      "min-w-0 flex-1 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+                      (language === "ar" ? "text-right" : "text-left")
+                    }
+                  >
+                    {t("compact_review_creation_explanation")}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>

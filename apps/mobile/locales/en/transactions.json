@@ -697,6 +697,7 @@
   "compact_review_discard_suggestion": "Discard this suggestion",
   "compact_review_group_actions": "Actions for {{name}}",
   "compact_review_view_linked": "View linked transactions",
+  "compact_review_hide_linked": "Hide linked transactions",
   "compact_review_linked_scope_one": "Showing {{count}} transaction linked to {{name}}",
   "compact_review_linked_scope_other": "Showing {{count}} transactions linked to {{name}}",
   "compact_review_show_all": "Show all",

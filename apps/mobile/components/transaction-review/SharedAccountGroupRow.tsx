@@ -25,6 +25,8 @@ interface SharedAccountGroupRowProps {
   readonly onReplace: () => void;
   readonly onRemove: () => void;
   readonly onUndo: () => void;
+  /** Local inline-only disclosure; never filters the canonical transaction list. */
+  readonly linkedExpanded?: boolean;
   readonly onViewLinked?: () => void;
   readonly onDiscard?: () => void;
 }
@@ -212,9 +214,19 @@ export function SharedAccountGroupRow(
   const { t } = useTranslation("transactions");
   const { colorScheme } = useColorScheme();
   const rtl = language === "ar";
+  const ordering = rtl ? "flex-row-reverse" : "flex-row";
   const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
   const iconInk =
     colorScheme === "dark" ? palette.slate[300] : palette.slate[600];
+  const linkedRows = group.linkedTransactions ?? [];
+  const hasLinked =
+    !group.isRemoved && group.linkedCount > 0 && props.onViewLinked;
+  const linkedLabel = t(
+    props.linkedExpanded
+      ? "compact_review_hide_linked"
+      : "compact_review_view_linked"
+  );
+
   return (
     <View
       testID={"account-review-group-card-" + group.groupId}
@@ -225,12 +237,7 @@ export function SharedAccountGroupRow(
           : "")
       }
     >
-      <View
-        className={
-          "min-w-0 flex-row flex-wrap items-start gap-x-2 gap-y-1 " +
-          (rtl ? "flex-row-reverse" : "")
-        }
-      >
+      <View className={"min-w-0 items-start gap-2 " + ordering}>
         <View className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
           <Ionicons
             name={groupIcon(group.typeIconName)}
@@ -240,155 +247,194 @@ export function SharedAccountGroupRow(
             importantForAccessibility="no"
           />
         </View>
-        <View className="min-w-0 flex-1 gap-0.5">
-          <Text
-            testID={"account-review-group-name-" + group.groupId}
-            style={{ writingDirection: direction }}
+        <View
+          testID={"account-review-group-content-" + group.groupId}
+          className="min-w-0 flex-1 gap-0.5"
+        >
+          <View
             className={
-              "text-sm font-semibold leading-5 " +
-              (group.isRemoved
-                ? "text-text-secondary line-through dark:text-text-secondary-dark"
-                : "text-text-primary dark:text-text-primary-dark") +
-              (rtl ? " text-right" : " text-left")
+              "min-w-0 flex-wrap items-start gap-x-2 gap-y-1 " + ordering
             }
           >
-            {displayIdentity(group.displayName, language)} {"·"}{" "}
-            {displayIdentity(group.currencyLabel, language)}
-          </Text>
-          <GroupStatusCount group={group} language={language} />
-          {group.identitySummary.trim() ? (
-            <Text
-              style={{ writingDirection: direction }}
+            <View className="min-w-0 flex-1 gap-0.5">
+              <Text
+                testID={"account-review-group-name-" + group.groupId}
+                style={{ writingDirection: direction }}
+                className={
+                  "text-sm font-semibold leading-5 " +
+                  (group.isRemoved
+                    ? "text-text-secondary line-through dark:text-text-secondary-dark"
+                    : "text-text-primary dark:text-text-primary-dark") +
+                  (rtl ? " text-right" : " text-left")
+                }
+              >
+                {displayIdentity(group.displayName, language)} {"·"}{" "}
+                {displayIdentity(group.currencyLabel, language)}
+              </Text>
+              <GroupStatusCount group={group} language={language} />
+              {group.identitySummary.trim() ? (
+                <Text
+                  style={{ writingDirection: direction }}
+                  className={
+                    "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+                    (rtl ? "text-right" : "text-left")
+                  }
+                >
+                  {displayIdentity(group.identitySummary, language)}
+                </Text>
+              ) : null}
+            </View>
+            <View
               className={
-                "text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
-                (rtl ? "text-right" : "text-left")
+                "max-w-full shrink-0 flex-row flex-wrap items-center " +
+                (rtl ? "flex-row-reverse" : "")
               }
             >
-              {displayIdentity(group.identitySummary, language)}
-            </Text>
-          ) : null}
-        </View>
-        <View
-          className={
-            "max-w-full shrink-0 flex-row flex-wrap items-center " +
-            (rtl ? "flex-row-reverse" : "")
-          }
-        >
-          {!group.isRemoved && group.canConfirm && !group.isConfirmed ? (
-            <CompactGroupAction
-              testID={"account-review-group-confirm-" + group.groupId}
-              label={reviewCopy("account_review_group_confirm", language)}
-              onPress={props.onConfirm}
-              disabled={props.disabled}
-              iconName="checkmark-circle-outline"
-            />
-          ) : null}
-          {!group.isRemoved && group.isConfirmed && group.canReplace ? (
-            <CompactGroupAction
-              testID={"account-review-group-change-" + group.groupId}
-              label={reviewCopy("account_review_group_change", language)}
-              iconName="create-outline"
-              onPress={props.onReplace}
-              disabled={props.disabled}
-            />
-          ) : null}
-          {group.isRemoved ? (
-            <>
-              {group.canUndo ? (
+              {!group.isRemoved && group.canConfirm && !group.isConfirmed ? (
                 <CompactGroupAction
-                  testID="account-review-group-undo"
-                  label={reviewCopy("account_review_group_undo", language)}
-                  onPress={props.onUndo}
+                  testID={"account-review-group-confirm-" + group.groupId}
+                  label={reviewCopy("account_review_group_confirm", language)}
+                  onPress={props.onConfirm}
                   disabled={props.disabled}
-                  iconName="arrow-undo-outline"
+                  iconName="checkmark-circle-outline"
                 />
               ) : null}
-              {props.onDiscard ? (
-                <TouchableOpacity
-                  testID={"account-review-group-discard-" + group.groupId}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("compact_review_discard_suggestion")}
-                  accessibilityState={{ disabled: props.disabled }}
+              {!group.isRemoved && group.isConfirmed && group.canReplace ? (
+                <CompactGroupAction
+                  testID={"account-review-group-change-" + group.groupId}
+                  label={reviewCopy("account_review_group_change", language)}
+                  iconName="create-outline"
+                  onPress={props.onReplace}
                   disabled={props.disabled}
-                  onPress={props.onDiscard}
+                />
+              ) : null}
+              {group.isRemoved ? (
+                <>
+                  {group.canUndo ? (
+                    <CompactGroupAction
+                      testID="account-review-group-undo"
+                      label={reviewCopy("account_review_group_undo", language)}
+                      onPress={props.onUndo}
+                      disabled={props.disabled}
+                      iconName="arrow-undo-outline"
+                    />
+                  ) : null}
+                  {props.onDiscard ? (
+                    <TouchableOpacity
+                      testID={"account-review-group-discard-" + group.groupId}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(
+                        "compact_review_discard_suggestion"
+                      )}
+                      accessibilityState={{ disabled: props.disabled }}
+                      disabled={props.disabled}
+                      onPress={props.onDiscard}
+                      className="min-h-11 min-w-11 items-center justify-center"
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color={palette.red[600]}
+                        accessibilityElementsHidden
+                        importantForAccessibility="no"
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              ) : (
+                <TouchableOpacity
+                  testID={"account-review-group-actions-" + group.groupId}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("compact_review_group_actions", {
+                    name: group.displayName,
+                  })}
+                  accessibilityState={{
+                    expanded: props.isMenuOpen,
+                    disabled: props.disabled,
+                  }}
+                  disabled={props.disabled}
+                  onPress={props.onMenu}
                   className="min-h-11 min-w-11 items-center justify-center"
                 >
                   <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color={palette.red[600]}
+                    name="ellipsis-vertical"
+                    size={20}
+                    color={iconInk}
                     accessibilityElementsHidden
                     importantForAccessibility="no"
                   />
                 </TouchableOpacity>
-              ) : null}
-            </>
-          ) : (
+              )}
+            </View>
+          </View>
+          {hasLinked ? (
             <TouchableOpacity
-              testID={"account-review-group-actions-" + group.groupId}
+              testID={"account-review-group-linked-" + group.groupId}
+              accessible
               accessibilityRole="button"
-              accessibilityLabel={t("compact_review_group_actions", {
-                name: group.displayName,
-              })}
+              accessibilityLabel={linkedLabel}
               accessibilityState={{
-                expanded: props.isMenuOpen,
+                expanded: Boolean(props.linkedExpanded),
                 disabled: props.disabled,
               }}
               disabled={props.disabled}
-              onPress={props.onMenu}
-              className="min-h-11 min-w-11 items-center justify-center"
+              onPress={props.onViewLinked}
+              className={
+                "min-h-11 min-w-11 items-center gap-1 " +
+                (rtl ? "self-end flex-row-reverse" : "self-start flex-row")
+              }
             >
+              <Text className="text-xs font-semibold leading-5 text-nileGreen-700 dark:text-nileGreen-400">
+                {linkedLabel}
+              </Text>
               <Ionicons
-                name="ellipsis-vertical"
-                size={20}
-                color={iconInk}
+                name={
+                  props.linkedExpanded
+                    ? "chevron-up-outline"
+                    : "chevron-down-outline"
+                }
+                size={16}
+                color={
+                  colorScheme === "dark"
+                    ? palette.nileGreen[400]
+                    : palette.nileGreen[700]
+                }
                 accessibilityElementsHidden
                 importantForAccessibility="no"
               />
             </TouchableOpacity>
-          )}
+          ) : null}
+          {hasLinked && props.linkedExpanded ? (
+            <View
+              testID={"account-review-group-linked-list-" + group.groupId}
+              className="min-w-0 gap-1 pb-1"
+            >
+              {linkedRows.map((row) => (
+                <View
+                  key={row.rowId}
+                  testID={"account-review-group-linked-row-" + row.rowId}
+                  className={
+                    "min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-1 py-0.5 " +
+                    ordering
+                  }
+                >
+                  <Text
+                    className={
+                      "min-w-0 flex-1 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+                      (rtl ? "text-right" : "text-left")
+                    }
+                  >
+                    {displayIdentity(row.title, language)}
+                  </Text>
+                  <Text className="shrink-0 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark">
+                    {displayIdentity(row.amountLabel, language)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
-      {!group.isRemoved && props.onViewLinked && group.linkedCount > 0 ? (
-        <View
-          testID={"account-review-group-linked-wrap-" + group.groupId}
-          className={
-            rtl
-              ? "ps-10 flex-row-reverse justify-start"
-              : "ps-10 flex-row justify-start"
-          }
-        >
-          <TouchableOpacity
-            testID={"account-review-group-linked-" + group.groupId}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={t("compact_review_view_linked")}
-            accessibilityState={{ disabled: props.disabled }}
-            disabled={props.disabled}
-            onPress={props.onViewLinked}
-            className={
-              rtl
-                ? "min-h-11 min-w-11 flex-row-reverse items-center gap-1"
-                : "min-h-11 min-w-11 flex-row items-center gap-1"
-            }
-          >
-            <Text className="text-xs font-semibold leading-5 text-nileGreen-700 dark:text-nileGreen-400">
-              {t("compact_review_view_linked")}
-            </Text>
-            <Ionicons
-              name={rtl ? "chevron-back-outline" : "chevron-forward-outline"}
-              size={16}
-              color={
-                colorScheme === "dark"
-                  ? palette.nileGreen[400]
-                  : palette.nileGreen[700]
-              }
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-          </TouchableOpacity>
-        </View>
-      ) : null}
       <InlineGroupMenu {...props} />
     </View>
   );

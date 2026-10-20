@@ -149,10 +149,8 @@ function callbacks(): Pick<
   | "onRemove"
   | "onUndo"
   | "onDiscardRemoved"
-  | "onViewLinked"
   | "onIssuePress"
   | "onAccountNeededPress"
-  | "onShowAll"
   | "onFilterChange"
   | "onSelectReady"
   | "onClearSelection"
@@ -166,10 +164,8 @@ function callbacks(): Pick<
     onRemove: jest.fn<void, [groupId: string]>(),
     onUndo: jest.fn<void, [groupId: string]>(),
     onDiscardRemoved: jest.fn<void, [groupId: string]>(),
-    onViewLinked: jest.fn<void, [groupId: string]>(),
     onIssuePress: jest.fn(),
     onAccountNeededPress: jest.fn<void, []>(),
-    onShowAll: jest.fn<void, []>(),
     onFilterChange: jest.fn<void, [filter: ReviewFilter]>(),
     onSelectReady: jest.fn<void, []>(),
     onClearSelection: jest.fn<void, []>(),
@@ -197,8 +193,6 @@ function propsFor(id: string, overrides: Partial<PanelProps> = {}): PanelProps {
       )?.count ?? 0,
     accountNeededActive: false,
     temporaryScopeActive: false,
-    linkedGroupName: null,
-    temporaryRowCount: 0,
     defaultAccountName: view.summary.defaultAssignmentCount > 0 ? "Cash" : null,
     isWhySheetOpen: false,
     isBusy: false,
@@ -449,7 +443,6 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       accountNeededActive: true,
       temporaryScopeActive: true,
       accountNeededCount: 2,
-      temporaryRowCount: 2,
       selectedVisibleCount: 0,
       summary: {
         ...original.summary,
@@ -499,7 +492,6 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       accountNeededActive: true,
       temporaryScopeActive: true,
       accountNeededCount: 0,
-      temporaryRowCount: 0,
     });
     assertFourTabs("account_needed", true);
     expect(
@@ -512,25 +504,43 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onSelectReady).not.toHaveBeenCalled();
   });
 
-  it("linked-group temporary scope discloses its own count and Show all restores via parent", () => {
+  it("linked previews expand inline while All tab and selection toolbar remain unchanged", () => {
+    const base = propsFor("r3-combined-en");
+    const target = base.groups[0];
+    if (!target) throw new Error("Missing linked group");
     const props = show("r3-combined-en", {
-      temporaryScopeActive: true,
-      accountNeededActive: false,
-      linkedGroupName: "QNB",
-      temporaryRowCount: 3,
+      groups: base.groups.map((group) =>
+        group.groupId === target.groupId
+          ? {
+              ...group,
+              linkedTransactions: [
+                {
+                  rowId: "preview-panel",
+                  title: "Coffee",
+                  amountLabel: "-20 EGP",
+                },
+              ],
+            }
+          : group
+      ),
     });
-    assertFourTabs(null, true);
-    const header = screen.getByTestId(
-      "account-review-linked-transactions-only"
+    openDetails();
+    const button = screen.getByTestId(
+      "account-review-group-linked-" + target.groupId
     );
+    fireEvent.press(button);
     expect(
-      within(header).getByText("Showing 3 transactions linked to QNB")
-    ).toBeTruthy();
-    expect(screen.queryByTestId("account-review-selection-toolbar")).toBeNull();
-    fireEvent.press(
-      within(header).getByTestId("account-review-account-needed-show-all")
-    );
-    expect(props.onShowAll).toHaveBeenCalledTimes(1);
+      screen.getByTestId("account-review-group-linked-row-preview-panel")
+    ).toHaveTextContent(/Coffee/);
+    assertFourTabs("all");
+    expect(screen.getByTestId("account-review-selection-toolbar")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-linked-transactions-only")
+    ).toBeNull();
+    fireEvent.press(button);
+    expect(
+      screen.queryByTestId("account-review-group-linked-list-" + target.groupId)
+    ).toBeNull();
     expect(props.onFilterChange).not.toHaveBeenCalled();
     expect(props.onSelectReady).not.toHaveBeenCalled();
     expect(props.onClearSelection).not.toHaveBeenCalled();

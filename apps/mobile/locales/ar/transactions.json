@@ -752,6 +752,7 @@
   "compact_review_discard_suggestion": "تجاهل هذا الاقتراح",
   "compact_review_group_actions": "إجراءات الحساب {{name}}",
   "compact_review_view_linked": "عرض المعاملات المرتبطة",
+  "compact_review_hide_linked": "إخفاء المعاملات المرتبطة",
   "compact_review_linked_scope_zero": "لا توجد معاملات مرتبطة بـ{{name}}",
   "compact_review_linked_scope_one": "عرض معاملة مرتبطة بـ{{name}}",
   "compact_review_linked_scope_two": "عرض معاملتين مرتبطتين بـ{{name}}",

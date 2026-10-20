@@ -1,13 +1,12 @@
 # Compact Review — interactive v1 (2026-10-20)
 
-**Status:** Owner-approved interactive Voice-first layout/style/responsiveness
-and simplified workflow; the corresponding compact React Native frontend and
-guarded domain source are **authored and integrated locally by Root**.
-Consolidated checks are running; native/manual acceptance, final commit and
-deployment are **pending**, not passed or shipped. This runnable interactive
-design remains the primary compact UI reference. Earlier R1–R3 image bindings
-remain intact. The unapproved compact binding draft is withdrawn; **no second
-design approval or sidecar is required**.
+**Status:** Owner-approved interactive Voice-first layout, styling and
+responsiveness. Implementation is tracked in
+[PR #396](https://github.com/Msg22/Monyvi/pull/396). Native/manual acceptance
+remains pending; automated checks do not establish rendered fidelity. This
+runnable design is the primary compact UI reference. Earlier R1–R3 image
+bindings remain intact. The unapproved compact binding draft is withdrawn; **no
+second design approval or sidecar is required**.
 
 ## Open and try
 
@@ -48,3 +47,11 @@ UI. Icons/tooltips use CDN assets, so the preview is **not guaranteed offline**.
 Native device, screenshot fidelity and accessibility checks remain owner-manual
 evidence gaps, not new design-approval gates. Voice transfers remain out of
 scope; existing SMS ATM/Cash behavior and financial Save logic are unchanged.
+
+## Inline linked transactions
+
+The View/Hide linked-transactions control and read-only preview share the
+account title column. Expanding preserves the active tab, main transaction list
+and selected rows. One divider separates suggested accounts from their shared
+helper notices. Account and category icons, labels and edit controls share a
+centered first row; optional account status occupies a separate row.

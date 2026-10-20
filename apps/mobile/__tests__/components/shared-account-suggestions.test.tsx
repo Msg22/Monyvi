@@ -63,7 +63,6 @@ type GroupActions = Pick<
   | "onRemove"
   | "onUndo"
   | "onDiscardRemoved"
-  | "onViewLinked"
 >;
 function makeActions(): GroupActions {
   return {
@@ -73,7 +72,6 @@ function makeActions(): GroupActions {
     onRemove: jest.fn<void, [string]>(),
     onUndo: jest.fn<void, [string]>(),
     onDiscardRemoved: jest.fn<void, [string]>(),
-    onViewLinked: jest.fn<void, [string]>(),
   };
 }
 function renderGroups(
@@ -527,19 +525,58 @@ describe("#395 compact inline account groups — parent callbacks only", () => {
     // Native clipping/geometry/font scaling cannot be asserted from Jest.
   });
 
-  it("linked-row action is scoped to its group without changing selection", () => {
+  it("linked rows expand locally within one group and collapse without invoking account commands", () => {
     const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
     const cib = requireGroup(view, "CIB");
-    const actions = renderGroups(view);
-    openDetails();
-    fireEvent.press(
-      screen.getByTestId("account-review-group-linked-" + qnb.groupId)
+    const previews = [
+      { rowId: "preview-coffee", title: "Coffee", amountLabel: "-20 EGP" },
+      { rowId: "preview-tea", title: "Tea", amountLabel: "-30 EGP" },
+    ];
+    const actions = makeActions();
+    render(
+      <SharedAccountSuggestions
+        groups={view.groups.map((group) =>
+          group.groupId === qnb.groupId
+            ? { ...group, linkedTransactions: previews }
+            : group
+        )}
+        summary={view.summary}
+        isBusy={false}
+        {...actions}
+      />
     );
-    expect(actions.onViewLinked).toHaveBeenCalledTimes(1);
-    expect(actions.onViewLinked).toHaveBeenCalledWith(qnb.groupId);
-    expect(actions.onViewLinked).not.toHaveBeenCalledWith(cib.groupId);
+    openDetails();
+    const button = screen.getByTestId(
+      "account-review-group-linked-" + qnb.groupId
+    );
+    expect(
+      screen.queryByTestId("account-review-group-linked-list-" + qnb.groupId)
+    ).toBeNull();
+    fireEvent.press(button);
+    expect(button).toHaveProp("accessibilityState", {
+      expanded: true,
+      disabled: false,
+    });
+    const list = within(
+      screen.getByTestId("account-review-group-linked-list-" + qnb.groupId)
+    );
+    const names = list.getAllByText(/^(Coffee|Tea)$/);
+    expect(names).toHaveLength(2);
+    expect(names[0]).toHaveTextContent("Coffee");
+    expect(names[1]).toHaveTextContent("Tea");
+    expect(list.getByText("Coffee")).toBeTruthy();
+    expect(list.getByText("-30 EGP")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-group-linked-list-" + cib.groupId)
+    ).toBeNull();
+    fireEvent.press(button);
+    expect(
+      screen.queryByTestId("account-review-group-linked-list-" + qnb.groupId)
+    ).toBeNull();
     expect(actions.onConfirm).not.toHaveBeenCalled();
+    expect(actions.onReplace).not.toHaveBeenCalled();
+    expect(actions.onRemove).not.toHaveBeenCalled();
   });
 
   it("Arabic compact summary and group actions retain localized labels and group identity", async () => {

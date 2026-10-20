@@ -306,6 +306,9 @@ export function renderCanonicalAccountReviewPanel(
 ): React.JSX.Element {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   const RN = jest.requireActual<typeof import("react-native")>("react-native");
+  const { SharedAccountSuggestions } = jest.requireActual<
+    typeof import("@/components/transaction-review/SharedAccountSuggestions")
+  >("@/components/transaction-review/SharedAccountSuggestions");
   const touch = (
     testID: string,
     label: string,
@@ -325,6 +328,7 @@ export function renderCanonicalAccountReviewPanel(
   return ReactActual.createElement(
     RN.View,
     { testID: "canonical-review-panel" },
+    ReactActual.createElement(SharedAccountSuggestions, props),
     // The real compact card omits account/currency action rows: those belong
     // to the dedicated Account needed tab. Only other issue labels remain.
     ...(props.summary.issues ?? [])
@@ -351,9 +355,7 @@ export function renderCanonicalAccountReviewPanel(
       props.onAccountNeededPress,
       props.accountNeededActive
     ),
-    ...(props.temporaryScopeActive
-      ? [touch("pr-show-all", "Show all", props.onShowAll)]
-      : []),
+    touch("pr-filter-all", "All", () => props.onFilterChange("all")),
     ...props.groups.flatMap((group) => [
       group.canRemove
         ? touch("pr-remove-" + group.groupId, "Remove", () =>
@@ -368,11 +370,6 @@ export function renderCanonicalAccountReviewPanel(
       group.isRemoved && props.onDiscardRemoved
         ? touch("pr-discard-" + group.groupId, "Discard", () =>
             props.onDiscardRemoved?.(group.groupId)
-          )
-        : null,
-      group.linkedCount > 0 && props.onViewLinked
-        ? touch("pr-linked-" + group.groupId, "View linked", () =>
-            props.onViewLinked?.(group.groupId)
           )
         : null,
     ])

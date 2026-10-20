@@ -45,6 +45,7 @@ import {
 } from "./CanonicalTransactionEditOverlay";
 import {
   CanonicalReviewRow,
+  presentInlineGroupLinkedRows,
   presentLinkedChoiceRows,
 } from "./CanonicalReviewRow";
 import { CompactReviewTranscript } from "./CompactReviewTranscript";
@@ -541,8 +542,8 @@ export function CanonicalAccountReview(
   };
   const presentGroup = (
     group: AccountReviewSession["groups"][number]
-  ): ReturnType<typeof presentReviewGroup> =>
-    presentReviewGroup(
+  ): ReturnType<typeof presentReviewGroup> => ({
+    ...presentReviewGroup(
       group,
       model?.groupSummaries.find((item) => item.groupId === group.groupId)
         ?.liveLinkedRowIds.length ?? 0,
@@ -551,7 +552,14 @@ export function CanonicalAccountReview(
         view.undoGroupId === group.groupId &&
         !view.discardedGroupIds.includes(group.groupId),
       language
-    );
+    ),
+    linkedTransactions: presentInlineGroupLinkedRows(
+      session,
+      group,
+      model?.groupSummaries ?? [],
+      language
+    ),
+  });
 
   if (!session || !model || scope === null) {
     return (
@@ -686,10 +694,7 @@ export function CanonicalAccountReview(
               accountNeededActive={accountNeededFilter.isAccountNeeded}
               accountNeededCount={accountNeededReviewRows(session).length}
               temporaryScopeActive={accountNeededFilter.active}
-              linkedGroupName={accountNeededFilter.linkedGroupName}
-              temporaryRowCount={visibleRows.length}
               onAccountNeededPress={accountNeededFilter.showAccountNeeded}
-              onShowAll={() => showCanonicalFilter("all")}
               visibleRowIds={model.visibleRowIds}
               readyVisibleRowIds={model.readyVisibleRowIds}
               selectedVisibleCount={
@@ -751,15 +756,6 @@ export function CanonicalAccountReview(
                       error,
                     });
                 });
-              }}
-              onViewLinked={(groupId) => {
-                if (busy) return;
-                setChoice(null);
-                categoryShortcut.close();
-                setShowDefaultWhy(false);
-                accountNeededFilter.showLinkedGroup(groupId);
-                if (session.filter !== "all")
-                  send({ ...scope, kind: "set_filter", filter: "all" });
               }}
               onDiscardRemoved={(groupId) => {
                 const group = groups.get(groupId);

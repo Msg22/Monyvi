@@ -15,7 +15,6 @@ import {
   DefaultAccountInfo,
   DefaultAccountWhySheet,
 } from "./DefaultAccountInfo";
-import { AccountNeededTemporaryHeader } from "./account-review-filter-header";
 import {
   SharedAccountSuggestions,
   type SharedAccountSuggestionsProps,
@@ -38,9 +37,6 @@ export interface AccountReviewPanelProps extends SharedAccountSuggestionsProps {
   readonly accountNeededCount: number;
   readonly accountNeededActive: boolean;
   readonly temporaryScopeActive: boolean;
-  readonly linkedGroupName: string | null;
-  readonly temporaryRowCount: number;
-  readonly onShowAll: () => void;
   readonly onSelectReady: () => void;
   readonly onClearSelection: () => void;
   readonly onDefaultWhyPress: () => void;
@@ -393,7 +389,6 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
         onReplace={props.onReplace}
         onRemove={props.onRemove}
         onUndo={props.onUndo}
-        onViewLinked={props.onViewLinked}
         onDiscardRemoved={props.onDiscardRemoved}
         revealGroupsKey={props.revealGroupsKey}
         defaultAccountName={props.defaultAccountName}
@@ -435,14 +430,6 @@ export function AccountReviewPanel(
         onAccountNeededPress={props.onAccountNeededPress}
         onFilterChange={props.onFilterChange}
       />
-      {props.linkedGroupName !== null ? (
-        <AccountNeededTemporaryHeader
-          count={props.temporaryRowCount}
-          linkedGroupName={props.linkedGroupName}
-          disabled={props.isBusy}
-          onShowAll={props.onShowAll}
-        />
-      ) : null}
       {!props.temporaryScopeActive ? (
         <ReviewSelectionToolbar
           visibleRowCount={props.visibleRowIds.length}

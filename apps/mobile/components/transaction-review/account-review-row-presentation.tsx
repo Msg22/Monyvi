@@ -104,65 +104,46 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
   const action = source.accountActionLabel;
   const title = name ?? action;
   const status = source.accountStatusLabel;
+  const hasIcon = title !== null || Boolean(source.accountType);
 
   return (
     <View
       testID="account-review-row-account"
-      className={"min-w-0 max-w-full shrink items-start gap-1 " + ordering}
+      className="min-w-0 max-w-full shrink gap-0.5"
     >
-      {title !== null || source.accountType ? (
-        <View className="h-8 w-7 shrink-0 items-center justify-center">
-          <Ionicons
-            testID="account-review-account-type-icon"
-            name={accountTypeIcon(source.accountType)}
-            color={palette.slate[500]}
-            size={20}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          />
-        </View>
-      ) : null}
       <View
         testID="account-review-account-name-and-pencil"
-        className={
-          "min-h-12 min-w-0 max-w-full shrink items-start gap-x-1 " + ordering
-        }
+        className={"min-w-0 max-w-full items-center gap-x-1.5 " + ordering}
       >
-        <View className="min-w-0 max-w-full shrink gap-0.5">
-          {title !== null ? (
-            <View className="min-h-8 min-w-0 max-w-full shrink justify-center">
-              <Text
-                testID={
-                  name !== null
-                    ? "transaction-account-match"
-                    : "account-review-account-label"
-                }
-                className={
-                  "min-w-0 max-w-full shrink text-sm font-semibold leading-5 " +
-                  "text-text-primary dark:text-text-primary-dark " +
-                  textAlign
-                }
-                style={direction}
-              >
-                {title}
-              </Text>
-            </View>
-          ) : null}
-          {status !== null ? (
-            <Text
-              testID="account-review-row-status"
-              className={
-                "text-xs leading-5 " +
-                statusToneColor(source.accountStatusTone) +
-                " " +
-                textAlign
-              }
-              style={direction}
-            >
-              {status}
-            </Text>
-          ) : null}
-        </View>
+        {hasIcon ? (
+          <View className="h-8 w-7 shrink-0 items-center justify-center">
+            <Ionicons
+              testID="account-review-account-type-icon"
+              name={accountTypeIcon(source.accountType)}
+              color={palette.slate[500]}
+              size={20}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          </View>
+        ) : null}
+        {title !== null ? (
+          <Text
+            testID={
+              name !== null
+                ? "transaction-account-match"
+                : "account-review-account-label"
+            }
+            className={
+              "min-w-0 max-w-full shrink text-sm font-semibold leading-5 " +
+              "text-text-primary dark:text-text-primary-dark " +
+              textAlign
+            }
+            style={direction}
+          >
+            {title}
+          </Text>
+        ) : null}
         {action !== null ? (
           <TouchableOpacity
             testID="account-review-row-account-action"
@@ -177,7 +158,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
               event.stopPropagation();
               source.onChooseAccount(source.rowId);
             }}
-            className="h-[48px] w-[48px] shrink-0 items-center justify-start"
+            className="h-[48px] w-[48px] shrink-0 items-center justify-center"
           >
             <View
               pointerEvents="none"
@@ -194,6 +175,23 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
           </TouchableOpacity>
         ) : null}
       </View>
+      {status !== null ? (
+        <View className={"min-w-0 items-center gap-x-1 " + ordering}>
+          {hasIcon ? <View className="w-7 shrink-0" /> : null}
+          <Text
+            testID="account-review-row-status"
+            className={
+              "min-w-0 shrink text-xs leading-5 " +
+              statusToneColor(source.accountStatusTone) +
+              " " +
+              textAlign
+            }
+            style={direction}
+          >
+            {status}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -250,41 +248,36 @@ export function AccountReviewRowPresentation({
         {categoryDisplayName || source.canEditCategory ? (
           <View
             testID="account-review-row-category"
-            className={
-              "min-w-0 max-w-full shrink items-start gap-1 " + ordering
-            }
+            className="min-w-0 max-w-full shrink"
           >
-            <View className="h-8 w-7 shrink-0 items-center justify-center">
-              <CategoryIcon
-                iconName={categoryIcon.iconName}
-                iconLibrary={categoryIcon.iconLibrary}
-                color={categoryIcon.iconColor}
-                size={18}
-              />
-            </View>
             <View
               testID="account-review-category-name-and-pencil"
               className={
-                "min-h-12 min-w-0 max-w-full shrink items-start gap-x-1 " +
-                ordering
+                "min-w-0 max-w-full items-center gap-x-1.5 " + ordering
               }
             >
-              <View className="min-h-8 min-w-0 max-w-full shrink justify-center">
-                <Text
-                  className={
-                    "min-w-0 max-w-full shrink text-sm leading-5 " +
-                    "text-text-secondary dark:text-text-secondary-dark " +
-                    (rtl ? "text-right" : "text-left")
-                  }
-                  style={
-                    rtl
-                      ? rowWritingDirectionStyles.rtl
-                      : rowWritingDirectionStyles.ltr
-                  }
-                >
-                  {categoryDisplayName || t("account_review_issue_category")}
-                </Text>
+              <View className="h-8 w-7 shrink-0 items-center justify-center">
+                <CategoryIcon
+                  iconName={categoryIcon.iconName}
+                  iconLibrary={categoryIcon.iconLibrary}
+                  color={categoryIcon.iconColor}
+                  size={18}
+                />
               </View>
+              <Text
+                className={
+                  "min-w-0 max-w-full shrink text-sm leading-5 " +
+                  "text-text-secondary dark:text-text-secondary-dark " +
+                  (rtl ? "text-right" : "text-left")
+                }
+                style={
+                  rtl
+                    ? rowWritingDirectionStyles.rtl
+                    : rowWritingDirectionStyles.ltr
+                }
+              >
+                {categoryDisplayName || t("account_review_issue_category")}
+              </Text>
               {source.canEditCategory && source.onEditCategory ? (
                 <TouchableOpacity
                   testID="account-review-row-category-pencil"
@@ -297,7 +290,7 @@ export function AccountReviewRowPresentation({
                     event.stopPropagation();
                     source.onEditCategory?.(source.rowId);
                   }}
-                  className="h-[48px] w-[48px] shrink-0 items-center justify-start"
+                  className="h-[48px] w-[48px] shrink-0 items-center justify-center"
                 >
                   <View
                     pointerEvents="none"
