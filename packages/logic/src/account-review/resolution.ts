@@ -16,6 +16,7 @@ import {
   eligibleCashDestinations,
   eligibleSourceAccounts,
   groundedOwnedCandidates,
+  groundedSourceCandidates,
   soleEligibleDefault,
   type KnownReviewCode,
   type OwnedReviewAccount,
@@ -140,11 +141,7 @@ function priorAssignmentStillEligible(
   if (row.source === "SMS" && row.accountEvidence.state === "contextual") {
     return false;
   }
-  const candidates = groundedOwnedCandidates(
-    row.accountEvidence,
-    eligible,
-    "source"
-  );
+  const candidates = groundedSourceCandidates(row, eligible, allOwned);
   return (
     groundedMatchAllowed(row) &&
     candidates.length === 1 &&
@@ -185,16 +182,13 @@ function resolveAbsentSource(
 
 function resolveGroundedSource(
   row: ReviewRow,
-  eligible: readonly OwnedReviewAccount[]
+  eligible: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): ReviewRow {
   if (!groundedMatchAllowed(row)) {
     return unresolvedSource(row, "account_identity_uncertain");
   }
-  const candidates = groundedOwnedCandidates(
-    row.accountEvidence,
-    eligible,
-    "source"
-  );
+  const candidates = groundedSourceCandidates(row, eligible, allOwned);
   if (candidates.length === 1 && candidates[0]) {
     return acceptedSource(row, candidates[0], "exact");
   }
@@ -243,7 +237,7 @@ function resolveSource(
     row.accountEvidence.state === "explicit" ||
     (row.source === "VOICE" && row.accountEvidence.state === "contextual")
   ) {
-    return resolveGroundedSource(row, eligible);
+    return resolveGroundedSource(row, eligible, snapshots.accounts);
   }
   return unresolvedSource(row, "account_identity_uncertain");
 }

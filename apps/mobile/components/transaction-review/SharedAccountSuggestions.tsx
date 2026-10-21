@@ -176,6 +176,7 @@ export function SharedAccountSuggestions(
   const showSaveExplanation = props.groups.some((group) => !group.isRemoved);
   const hasHelperContent =
     issues.length > 0 || showDefaultNote || showSaveExplanation;
+  const canExpand = props.groups.length > 0 || hasHelperContent;
   if (
     props.groups.length === 0 &&
     issues.length === 0 &&
@@ -189,7 +190,8 @@ export function SharedAccountSuggestions(
       className="w-full overflow-hidden rounded-xl border border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
     >
       <CompactReviewSummary
-        expanded={expanded}
+        expanded={expanded && canExpand}
+        canExpand={canExpand}
         pendingCount={props.summary.pendingGroupCount}
         accountNeededCount={accountNeededCount}
         isReviewed={reviewed}
@@ -199,7 +201,7 @@ export function SharedAccountSuggestions(
           setLinkedGroupId(null);
         }}
       />
-      {expanded ? (
+      {expanded && canExpand ? (
         <View className="gap-1 px-3 pb-3">
           {props.groups.map((group, index) => (
             <SharedAccountGroupRow

@@ -10,6 +10,7 @@ import {
 import type { AccountReviewOwnedContext } from "./normalization-types";
 import type {
   AccountReviewCurrency,
+  AccountReviewRow,
   AccountReviewSession,
 } from "./review-schemas";
 import { normalizeGroundedIdentity } from "./identity";
@@ -154,6 +155,46 @@ export function groundedOwnedCandidates(
     return [];
   if (!hasIndependentIdentity(evidence, role)) return [];
   return eligible.filter((account) => identityFieldsAgree(evidence, account));
+}
+
+/** Generic payment words identify Cash type, never a particular named purse. */
+function isCashPaymentWord(value: string): boolean {
+  return /^(cash|كاش|نقد|نقدا|نقدي|نقدية)$/u.test(
+    value
+      .normalize("NFKC")
+      .replace(/[\u064b-\u065f\u0670]/gu, "")
+      .trim()
+      .toLowerCase()
+  );
+}
+
+/** Voice-only type evidence: prefer compatible Cash default, otherwise require
+ * a sole Cash candidate. Named/provider/card identity still uses strict matching. */
+export function groundedSourceCandidates(
+  row: Pick<AccountReviewRow, "source" | "accountEvidence">,
+  eligible: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
+): readonly OwnedReviewAccount[] {
+  const evidence = row.accountEvidence;
+  const typeOnlyCash =
+    row.source === "VOICE" &&
+    evidence.state === "explicit" &&
+    evidence.type === "CASH" &&
+    evidence.institutionId === null &&
+    evidence.providerDisplayName === null &&
+    evidence.cardLast4 === null &&
+    (evidence.name === null || isCashPaymentWord(evidence.name)) &&
+    evidence.evidenceSpans.some(
+      (span) =>
+        span.field === "transcript" &&
+        span.text.split(/[^\p{L}\p{M}]+/u).some(isCashPaymentWord)
+    );
+  if (!typeOnlyCash) {
+    return groundedOwnedCandidates(evidence, eligible, "source");
+  }
+  const cash = eligible.filter((account) => account.type === "CASH");
+  const preferred = soleEligibleDefault(cash, allOwned);
+  return preferred ? [preferred] : cash;
 }
 
 /** Exactly one active default globally may be used as a default fallback.

@@ -43,6 +43,9 @@ approved or preserve it as a new authority.
 - Initially exact-matched or default-only accounts do not show an Accounts
   reviewed section. That feedback requires an explicit account review in this
   session; automatic matching is not a user confirmation.
+- The account summary has a chevron/button only when groups or helper content
+  actually exist. An account-needed-only status without details is static;
+  resolving that issue remains available through its tab and row account action.
 - What I heard shows its chevron and expand action only when native text layout
   exceeds the two-line preview at the current available width and font size.
 - Hide Account needed when its count is zero. Resolving its last row while that

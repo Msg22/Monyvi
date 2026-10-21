@@ -121,6 +121,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
   const action = source.accountActionLabel;
   const title = name ?? action;
   const status = source.accountStatusLabel;
+  const metadataType = source.accountIdentity?.type ?? source.accountType;
   const hasIcon =
     title !== null ||
     Boolean(source.accountType) ||
@@ -135,8 +136,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         testID="account-review-account-name-and-pencil"
         className={
           "min-w-0 max-w-full gap-x-1 " +
-          ((source.accountIdentity?.type ?? source.accountType) ===
-          "DIGITAL_WALLET"
+          (metadataType === "DIGITAL_WALLET" || !metadataType
             ? "items-center "
             : "items-baseline ") +
           ordering

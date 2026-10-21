@@ -271,6 +271,22 @@ async function resolveScenario(
 }
 
 describe("#395 review transcript fixture catalogue", () => {
+  it("resolves the grounded 40 EGP cash example to existing Cash without creating an account", async () => {
+    const scenario = REVIEW_TRANSCRIPT_FIXTURE_SCENARIOS.find(
+      (item) => item.id === "voice-cash-expense-egp"
+    );
+    if (!scenario) throw new Error("Missing Cash example");
+    const result = await resolveScenario(scenario, 0);
+    expect(result.rows[0]?.assignment).toMatchObject({
+      state: "existing",
+      accountId: ids.cash,
+      currency: "EGP",
+      origin: "exact",
+    });
+    expect(result.groups).toEqual([]);
+    expect(result.rows[0]?.transaction.amount).toBe(40);
+  });
+
   it.each([
     ["EXPENSE", ids.other, "Other"],
     ["INCOME", ids.incomeOther, "Other income"],

@@ -57,6 +57,12 @@ timestamps; SQL serialization proof and independent DB/logic gates remain.
    preferred code, or user's confirmation. Uncertainty blocks auto-assignment.
 3. Use explicit grounded identity/card/provider evidence to form candidate list.
    One compatible confident existing match accepts; several require choice.
+   Voice generic explicit Cash words are a type-only exception: compatible owned
+   Cash default, otherwise sole compatible Cash, else explicit choice. This uses
+   exact assignment provenance and is rechecked on refresh/Save. It cannot use a
+   Bank/Wallet default, create an account, resolve uncertain evidence/currency,
+   override a user choice, or relax named/card/provider proof. Ordinary SMS
+   source and ATM destination rules do not change.
 4. Explicit named unmatched evidence gives pending group or unresolved type/
    identity; never substitute default.
 5. With absent account evidence, exactly one eligible active default may accept,
