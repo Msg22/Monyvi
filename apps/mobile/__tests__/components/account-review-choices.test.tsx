@@ -1,3 +1,4 @@
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 /** #395 focused existing-account and explicit currency-choice regressions. */
 import {
   fireEvent,
@@ -884,6 +885,9 @@ it.each(["en", "ar"] as const)(
       .findAllByType(View)
       .find((view) => view.props.pointerEvents === "none");
     expect(background?.props.className).toContain("bg-nileGreen-600");
+    expect(option.findByType(AccountIdentityMark).props.surfaceContext).toBe(
+      "colored-card"
+    );
     expect(background?.props.className).not.toContain(
       "dark:bg-nileGreen-900/20"
     );
