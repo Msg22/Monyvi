@@ -173,11 +173,25 @@ function EditAccountForm({
   } = useEditAccountForm(account, bankDetails);
   const { state: defaultState, retry: retryDefaultState } =
     useOwnedAccountDefaultState();
+  // Readiness is decided by the owned default snapshot alone: the edited
+  // account must be one of the owner's active accounts. The previous
+  // comparison against the live `account.isDefault` compared two independent
+  // observations (the snapshot observer and the row read) and could lag after
+  // a successful save, which flashed the generic recovery notice for a state
+  // that was in fact consistent. The pending default intent lives in the
+  // form, not in the readiness check.
   const defaultReady =
     defaultState.status === "ready" &&
-    defaultState.snapshot.activeAccountIds.includes(account.id) &&
-    (defaultState.snapshot.defaultAccount?.accountId === account.id) ===
-      account.isDefault;
+    defaultState.snapshot.activeAccountIds.includes(account.id);
+  // The replacement hint names the account that would lose the default flag.
+  // It is only meaningful for a ready snapshot whose current default is a
+  // different account than the one being edited.
+  const previousDefaultName =
+    defaultState.status === "ready" &&
+    defaultState.snapshot.defaultAccount !== null &&
+    defaultState.snapshot.defaultAccount.accountId !== account.id
+      ? defaultState.defaultAccountName
+      : null;
   const { isEligible: isKnownProviderEligible } =
     useEgyptianInstitutionEligibility();
 
@@ -503,6 +517,7 @@ function EditAccountForm({
               accountType={accountType}
               checked={isDefault}
               disabled={!defaultReady || isSubmitting}
+              previousDefaultName={previousDefaultName}
               onChange={toggleDefault}
             />
             {defaultState.status === "recovery" ||

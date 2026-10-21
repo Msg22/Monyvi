@@ -17,6 +17,12 @@ import { makeT025ReviewSession } from "../../../../../packages/logic/src/sms-rev
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import type { Category } from "@monyvi/db";
 
+// The shared picker reads the category catalogue through the shared context;
+// the local database adapter is not available in the test environment.
+jest.mock("@monyvi/db", () => ({
+  database: { name: "test-database" },
+}));
+
 const mockChildren = [
   mockCategory({
     id: "clothes",

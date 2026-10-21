@@ -10,7 +10,21 @@ import {
   isHistoricalRecoveryRequired,
 } from "./historical-recovery";
 import { pullMarketRateSnapshots } from "./market-rate-snapshot-pull";
+import { emitCategoryReconciliationDiagnostics } from "./dev-category-reconciliation-diagnostics";
+import {
+  readCategoryCatalogueAttempt,
+  type CategoryCatalogueAttempt,
+} from "@/services/category-catalogue-service";
 import { sealSyncPull } from "./pull-fence";
+
+/**
+ * Categories pull extension: the attempt-bound catalogue snapshot of the very
+ * pull that produced this result. It is read by the sync invocation that
+ * requested the pull and committed only after that synchronize() succeeded.
+ */
+export interface CataloguePullResultExtension {
+  readonly catalogueAttempt?: CategoryCatalogueAttempt;
+}
 import { pullSnapshotDeletions } from "./snapshot-deletion-pull";
 import {
   protectMetalMetadataPullFragments,
@@ -60,7 +74,7 @@ export async function pullChanges(
   lastPulledAt: number | null,
   expectedUserId: string,
   database?: Database
-): Promise<HistoricalRecoveryPullResult> {
+): Promise<HistoricalRecoveryPullResult & CataloguePullResultExtension> {
   await assertExpectedPullUser(expectedUserId);
   const historicalRecoveryRequired =
     database !== undefined &&
@@ -81,6 +95,7 @@ export async function pullChanges(
     lastSyncDate,
     upperWatermark
   );
+  let catalogueAttempt: CategoryCatalogueAttempt | null = null;
   const changes: AppSyncDatabaseChangeSet = {
     market_rates: marketPull.changes.market_rates,
     market_rate_observations: marketPull.changes.market_rate_observations,
@@ -125,11 +140,28 @@ export async function pullChanges(
     }
 
     if (table === "categories") {
+      // Categories are always pulled as a complete window: the shared
+      // updated_at cursor belongs to another backend after a source switch and
+      // cannot express a same-host reseed.
       changes.categories = await pullCategories(
         expectedUserId,
-        lastSyncDate,
+        null,
         upperWatermark
       );
+      // The attempt travels with the result of this very pull, so the sync
+      // invocation that requested it can commit exactly that attempt after its
+      // own synchronize() succeeded. Nothing is staged globally.
+      const attempt = readCategoryCatalogueAttempt(changes.categories);
+      if (attempt !== null) catalogueAttempt = attempt;
+      // Dev-only diagnostic: compares the local categories with a complete
+      // server snapshot taken at this boundary. It never replaces or mutates
+      // the real change set, the sync checkpoint or the applied sync output,
+      // and it never throws.
+      await emitCategoryReconciliationDiagnostics({
+        database,
+        userId: expectedUserId,
+        upperWatermark,
+      });
       continue;
     }
 
@@ -190,6 +222,7 @@ export async function pullChanges(
   return {
     changes,
     timestamp: Date.parse(upperWatermark),
+    ...(catalogueAttempt === null ? {} : { catalogueAttempt }),
     ...(snapshotRetentionCutoffIso === null
       ? {}
       : {

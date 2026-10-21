@@ -169,10 +169,28 @@ jest.mock("@monyvi/db", () => {
     return m as MockModelRecord;
   }
 
+  function isMockRecordArray(
+    value: MockModelRecord | readonly MockModelRecord[]
+  ): value is readonly MockModelRecord[] {
+    return Array.isArray(value);
+  }
+
   function applyPreparedBatch(
-    ...records: readonly MockModelRecord[]
+    ...records: ReadonlyArray<MockModelRecord | readonly MockModelRecord[]>
   ): Promise<void> {
+    // The production path commits through commitPreparedBatch(), which calls
+    // database.batch([...records]); the plain writer path spreads the records.
+    const flat: MockModelRecord[] = [];
     for (const record of records) {
+      if (isMockRecordArray(record)) {
+        for (const nested of record) {
+          flat.push(nested);
+        }
+        continue;
+      }
+      flat.push(record);
+    }
+    for (const record of flat) {
       const preparedBuilder = record._preparedBuilder;
       if (isMockPreparedBuilder(preparedBuilder)) {
         preparedBuilder(record);
@@ -197,6 +215,16 @@ jest.mock("@monyvi/db", () => {
         getStore(tableName).set(m.id, m);
         return Promise.resolve(m);
       }),
+      prepareCreate: jest.fn(
+        (builder: (r: Record<string, unknown>) => void) => {
+          const m = createModel(`new-${tableName}-${Date.now()}`);
+          m._preparedBuilder = (record: MockModelRecord): void => {
+            builder(record);
+            getStore(tableName).set(record.id, record);
+          };
+          return m;
+        }
+      ),
       query: jest.fn((...clauses: readonly unknown[]) => ({
         fetch: jest.fn(() =>
           Promise.resolve(
@@ -213,6 +241,11 @@ jest.mock("@monyvi/db", () => {
     write: jest.fn((cb: () => Promise<unknown>) => cb()),
     get: jest.fn((t: string) => createCollection(t)),
     batch: jest.fn(applyPreparedBatch),
+    // The production path commits through commitPreparedBatch(), which needs
+    // the adapter boundary.
+    adapter: {
+      batch: jest.fn((): Promise<void> => Promise.resolve()),
+    },
   };
 
   return {
@@ -881,17 +914,19 @@ describe("edit-account-service", () => {
       const projection: Record<string, unknown> = {};
       input.updateMetadata(projection);
       expect(projection.name).toBe("Renamed");
-      expect(input.adjustmentTransaction).toEqual({
-        accountId: "acc-1",
-        amount: 250,
-        categoryId: "00000000-0000-0000-0001-000000000200",
-        currency: "EGP",
-        date: expect.any(Date) as unknown as Date,
-        note: "Balance adjustment: 100 → 350",
-        source: "MANUAL",
-        type: "INCOME",
-        userId: "user-1",
-      });
+      expect(input.adjustmentTransaction).toEqual(
+        expect.objectContaining({
+          accountId: "acc-1",
+          amount: 250,
+          categoryId: "00000000-0000-0000-0001-000000000200",
+          currency: "EGP",
+          note: "Balance adjustment: 100 → 350",
+          source: "MANUAL",
+          type: "INCOME",
+          userId: "user-1",
+        })
+      );
+      expect(input.adjustmentTransaction?.date).toBeInstanceOf(Date);
       // The row itself is updated by the guarded command, not the hook.
       expect(acc.name).toBe("Old");
       // The adjustment transaction commits through the group mutation, not

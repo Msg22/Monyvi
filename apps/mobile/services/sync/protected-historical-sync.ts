@@ -9,11 +9,20 @@ import type {
   SyncPushResult,
 } from "@nozbe/watermelondb/sync";
 import { logger } from "@/utils/logger";
+import {
+  commitCategoryCatalogueAttempt,
+  createCategoryCatalogueEnvironment,
+  readCategoryCatalogueAttempt,
+  type CategoryCatalogueAttempt,
+} from "@/services/category-catalogue-service";
 import { serializeAccountActionFailureContext } from "./account-action-failure-context";
 import { getCurrentUserId } from "../supabase";
 import { repairLegacyMetalAdds } from "../legacy-metal-add-repair-service";
 import { repairLegacyMetalEdits } from "../legacy-metal-edit-repair-service";
-import { pullChanges } from "./atomic-pull-strategies";
+import {
+  pullChanges,
+  type CataloguePullResultExtension,
+} from "./atomic-pull-strategies";
 import { pushChanges } from "./push-service";
 import { hasOwnedUnresolvedFinancialActions } from "./financial-pull-shaping";
 import {
@@ -88,7 +97,7 @@ export interface ProtectedHistoricalSyncHost {
     lastPulledAt: number | null,
     userId: string,
     database: Database
-  ) => Promise<HistoricalRecoveryPullResult>;
+  ) => Promise<HistoricalRecoveryPullResult & CataloguePullResultExtension>;
   readonly push: (
     database: Database,
     args: SyncPushArgs,
@@ -162,16 +171,47 @@ export function createProtectedHistoricalSync(
         if (startedUnresolved)
           logger.warn("sync.historicalRecoveryReceiptWithheld");
 
+        // The categories attempt belongs to this sync invocation only: it is
+        // captured in this closure and committed after the very synchronize()
+        // that applied it succeeds.
+        let catalogueAttempt: CategoryCatalogueAttempt | null = null;
+
         const deferred = await hooks.synchronize({
           database,
           expectedOwnerId: userId,
-          pullChanges: (lastPulledAt) =>
-            host.pull(forceFull ? null : lastPulledAt, userId, database),
+          pullChanges: async (lastPulledAt) => {
+            const result = await host.pull(
+              forceFull ? null : lastPulledAt,
+              userId,
+              database
+            );
+            // The attempt belongs to this sync invocation only: it is read
+            // from the result of this very pull and committed after the
+            // synchronize() that applied it succeeded.
+            const attempt = readCategoryCatalogueAttempt(result);
+            if (attempt !== null) catalogueAttempt = attempt;
+            return result;
+          },
           pushChanges: (args, capability) =>
             host.push(database, args, userId, capability),
         });
         await hooks.applyDeferred(database, userId, deferred);
         await hooks.assertOwner(userId);
+        // Category catalogue: the accepted manifest is committed only after the
+        // SDK applied the pulled rows and the ids were verified locally with
+        // their owner and scope classification. A failure here never fails the
+        // sync and never weakens any financial guard; the next sync retries.
+        if (catalogueAttempt !== null) {
+          try {
+            const committed = await commitCategoryCatalogueAttempt(
+              createCategoryCatalogueEnvironment(database),
+              { attempt: catalogueAttempt, ownerId: userId }
+            );
+            if (committed) logger.debug("categoryCatalogue.manifestCommitted");
+          } catch {
+            logger.warn("categoryCatalogue.commitDeferred");
+          }
+        }
         await database.adapter.setLocal(OWNER_LOCAL_KEY, userId);
         await hooks.assertOwner(userId);
 

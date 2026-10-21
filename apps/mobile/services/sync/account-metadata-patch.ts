@@ -525,3 +525,146 @@ export function isAccountMetadataPatchCandidate(
         changedColumns(record).has("is_default")))
   );
 }
+
+/** Physical columns that must never be part of a pending metadata change. */
+const PROTECTED_ACCOUNT_COLUMNS = [
+  "balance",
+  "financial_revision",
+  "type",
+  "currency",
+] as const;
+
+/** SDK bookkeeping columns that never exist on a remote row. */
+const SDK_ONLY_ACCOUNT_COLUMNS = ["_status", "_changed"] as const;
+
+/**
+ * A pending owned NON-FINANCIAL metadata change may be admitted from the
+ * cloud as an UNMODIFIED remote row.
+ *
+ * The local dirty value stays authoritative until the owner's positive
+ * owner-filtered UPDATE is acknowledged, which is exactly what the existing
+ * S19/S21 transport intends. The remote row is therefore handed to the normal
+ * SDK resolver unchanged: it is never omitted, never ACK-ed here and never
+ * rewritten, so the SDK's per-dirty-column local-wins rule keeps the pending
+ * value.
+ *
+ * The predicate is deliberately narrow. It proves, for this exact row:
+ * - the same owned identity on both sides, with a valid status;
+ * - a known terminal scope (an accepted Add creator or a strict ordinary
+ *   prior default), never an arbitrary owned row;
+ * - a strict metadata patch that actually carries the default flag;
+ * - that every dirty column is a known, covered metadata column, with no
+ *   protected, unknown or pending-delete column;
+ * - that the remote row is the same physical row without the SDK columns and
+ *   that every non-dirty field, including the financial core, is identical;
+ * - for an accepted Add creator, its immutable identity still holds.
+ */
+export function isAdmissiblePendingAccountMetadataPull(
+  local: Readonly<Record<string, unknown>>,
+  remote: Readonly<Record<string, unknown>>,
+  protection: AccountActionProtection,
+  expectedOwnerId: string
+): boolean {
+  const id = local.id;
+  if (typeof id !== "string" || id.length === 0) return false;
+  if (remote.id !== id) return false;
+  if (local.user_id !== expectedOwnerId) return false;
+  if (remote.user_id !== expectedOwnerId) return false;
+  if (local._status !== "created" && local._status !== "updated") return false;
+  // A losing, rejected or otherwise unsafe row is never admitted.
+  if (protection.losingIds.accounts?.has(id) === true) return false;
+  if (protection.unsafeDefaultIds.has(id)) return false;
+
+  const isAcceptedCreator =
+    protection.acceptedAddPostimages.has(id) ||
+    protection.acceptedAccountIds.has(id);
+  const isPriorDefault = protection.priorDefaultIds.has(id);
+  // A known terminal scope only. An arbitrary owned row proves nothing.
+  if (!isAcceptedCreator && !isPriorDefault) return false;
+
+  const dirtyColumns = new Set(changedColumns(local));
+  if (local._status === "created") {
+    // A created row has no per-field dirty marks; the accepted Add baseline
+    // provides its legitimate residual metadata columns.
+    for (const column of acceptedAddAccountResidualColumns(protection, local)) {
+      dirtyColumns.add(column);
+    }
+  }
+  const permittedColumns = new Set<string>([...METADATA_FIELDS, "updated_at"]);
+  for (const column of dirtyColumns) {
+    if (!permittedColumns.has(column)) return false;
+  }
+  for (const column of PROTECTED_ACCOUNT_COLUMNS) {
+    if (dirtyColumns.has(column)) return false;
+  }
+  // A pending delete is not a metadata-only default change.
+  if (dirtyColumns.has("deleted")) return false;
+
+  const patch = planAccountMetadataPatch(local, protection);
+  if (!patch) return false;
+  if (!patch.coveredColumns.includes("is_default")) return false;
+  if (typeof patch.values.is_default !== "boolean") return false;
+  for (const column of dirtyColumns) {
+    // updated_at is coupled automatically to any accepted write.
+    if (column === "updated_at") continue;
+    if (!patch.coveredColumns.includes(column)) return false;
+  }
+
+  const sdkOnlyColumns = new Set<string>(SDK_ONLY_ACCOUNT_COLUMNS);
+  const localKeys = Object.keys(local)
+    .filter((key) => !sdkOnlyColumns.has(key))
+    .sort();
+  const remoteKeys = Object.keys(remote).sort();
+  if (localKeys.length !== remoteKeys.length) return false;
+  for (const key of localKeys) {
+    if (!remoteKeys.includes(key)) return false;
+    if (dirtyColumns.has(key)) continue;
+    if (local[key] !== remote[key]) return false;
+  }
+  // The financial core and the immutable identity are never pending.
+  for (const key of [
+    "id",
+    "user_id",
+    "type",
+    "currency",
+    "balance",
+    "financial_revision",
+    "created_at",
+  ]) {
+    if (local[key] !== remote[key]) return false;
+  }
+  if (typeof local.is_default !== "boolean") return false;
+  if (typeof remote.is_default !== "boolean") return false;
+  if (typeof local.deleted !== "boolean") return false;
+  if (typeof remote.deleted !== "boolean") return false;
+  // The remote default flag may EQUAL the local pending value: after a
+  // partial server push the clear may already be applied while the set is
+  // still pending. An equal flag is NOT an acknowledgement, so the row stays
+  // dirty until the owner's positive owner-filtered UPDATE is counted. The
+  // pending admission therefore covers both a differing and an equal flag.
+
+  if (isAcceptedCreator) {
+    if (
+      protection.acceptedAddPostimages.has(id) &&
+      !matchesAcceptedAddAccountImmutableIdentity(protection, local)
+    ) {
+      return false;
+    }
+    if (
+      protection.acceptedAddPostimages.has(id) &&
+      !matchesAcceptedAddAccountImmutableIdentity(protection, remote)
+    ) {
+      return false;
+    }
+    // A created accepted Add keeps its original financial core until the
+    // initial ACK. A later updated row may legitimately have moved on after a
+    // real financial transaction.
+    if (
+      local._status === "created" &&
+      !matchesAcceptedAddAccountCorePostimage(protection, local)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}

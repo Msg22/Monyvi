@@ -1,15 +1,16 @@
-/**
- * CategoriesContext — Global category data provider.
- *
- * Loads ALL non-deleted categories via a single WatermelonDB observation
- * and exposes them as a Map<string, Category> for O(1) lookups.
- * Any category update (add, rename, reorder) propagates automatically.
- */
-
 import { Category, database } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import { queryAccessibleCategories } from "@/services/user-data-access";
 import { runUserScopedEffect, useCurrentUser } from "@/hooks/useCurrentUser";
+import {
+  createCategoryCatalogueEnvironment,
+  getCategoryCatalogueSnapshot,
+  loadCategoryCatalogueSnapshot,
+  resetCategoryCatalogueSnapshot,
+  subscribeCategoryCatalogue,
+  type CategoryCatalogueSnapshot,
+} from "@/services/category-catalogue-service";
+import { emitCategorySnapshotDiagnostics } from "@/utils/dev-category-aggregate-diagnostics";
 import { logger } from "@/utils/logger";
 import React, {
   useCallback,
@@ -18,6 +19,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +31,14 @@ interface CategoriesContextValue {
   readonly categories: readonly Category[];
   /** O(1) lookup map: category ID → Category model. */
   readonly categoryMap: ReadonlyMap<string, Category>;
+  /**
+   * Per-backend catalogue selection snapshot. Legacy categories stay in the
+   * map above (history and labels keep working) but are not offered for new
+   * choices while they are outside the current catalogue.
+   */
+  readonly catalogue: CategoryCatalogueSnapshot;
+  /** Re-reads the accepted catalogue manifest for the current owner. */
+  readonly reloadCatalogue: () => Promise<void>;
   /** True while the initial observation result hasn't arrived yet. */
   readonly isLoading: boolean;
   /** Observation failure; prior category data remains available when present. */
@@ -40,10 +50,6 @@ interface CategoriesContextValue {
 interface CategoriesProviderProps {
   readonly children: React.ReactNode;
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
 
 const CategoriesContext = createContext<CategoriesContextValue | null>(null);
 
@@ -59,6 +65,39 @@ export function CategoriesProvider({
   const [error, setError] = useState<unknown>(null);
   const [retryCounter, setRetryCounter] = useState(0);
   const { userId, isResolvingUser } = useCurrentUser();
+
+  const catalogue = useSyncExternalStore(
+    subscribeCategoryCatalogue,
+    getCategoryCatalogueSnapshot,
+    getCategoryCatalogueSnapshot
+  );
+
+  // Load the accepted catalogue manifest for the current backend and owner.
+  // This is a local read only: no network request is triggered here.
+  useEffect(() => {
+    if (userId === null) {
+      // Signout: no owner scope may survive the session end.
+      resetCategoryCatalogueSnapshot();
+      return;
+    }
+    let cancelled = false;
+    // A new owner never reuses the previous owner's published selection.
+    resetCategoryCatalogueSnapshot();
+    void loadCategoryCatalogueSnapshot(
+      createCategoryCatalogueEnvironment(database),
+      { ownerId: userId }
+    )
+      .then(() => {
+        if (cancelled) return;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        logger.warn("categoryCatalogue.manifestLoadFailed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     return runUserScopedEffect({
@@ -86,6 +125,7 @@ export function CategoriesProvider({
           .observe()
           .subscribe({
             next: (result) => {
+              emitCategorySnapshotDiagnostics(result);
               setCategories(result);
               setIsLoading(false);
               setError(null);
@@ -111,9 +151,33 @@ export function CategoriesProvider({
     [categories]
   );
 
+  const reloadCatalogue = useCallback(async (): Promise<void> => {
+    if (userId === null) return;
+    await loadCategoryCatalogueSnapshot(
+      createCategoryCatalogueEnvironment(database),
+      { ownerId: userId }
+    );
+  }, [userId]);
+
   const value = useMemo<CategoriesContextValue>(
-    () => ({ categories, categoryMap, isLoading, error, retry }),
-    [categories, categoryMap, error, isLoading, retry]
+    () => ({
+      categories,
+      categoryMap,
+      catalogue,
+      reloadCatalogue,
+      isLoading,
+      error,
+      retry,
+    }),
+    [
+      categories,
+      categoryMap,
+      catalogue,
+      reloadCatalogue,
+      isLoading,
+      error,
+      retry,
+    ]
   );
 
   return (
@@ -165,5 +229,72 @@ export function useAllCategories(): {
     isLoading: context.isLoading,
     error: context.error,
     retry: context.retry,
+  };
+}
+
+/**
+ * Returns the published per-backend catalogue selection snapshot.
+ *
+ * "ready" means the current backend's accepted catalogue is known, so the
+ * selection list can be derived from it. "unavailable" means no accepted
+ * catalogue exists for the current backend (for example a first run against a
+ * backend that was never synced); history lookups keep working regardless.
+ */
+export function useCategoryCatalogueSnapshot(): CategoryCatalogueSnapshot {
+  const context = useContext(CategoriesContext);
+  if (!context) {
+    throw new Error(
+      "useCategoryCatalogueSnapshot must be used within a CategoriesProvider"
+    );
+  }
+  return context.catalogue;
+}
+
+/**
+ * Optional access to the shared categories value.
+ *
+ * Returns null outside a CategoriesProvider so a component can fall back to
+ * its own data source instead of failing.
+ */
+export function useOptionalCategoriesValue(): CategoriesContextValue | null {
+  return useContext(CategoriesContext);
+}
+
+/**
+ * Optional access to the catalogue snapshot and its reload action.
+ *
+ * Returns null outside a CategoriesProvider so a component can render its
+ * normal content when no catalogue authority is mounted.
+ */
+export function useOptionalCategoryCatalogue(): {
+  readonly catalogue: CategoryCatalogueSnapshot;
+  readonly reloadCatalogue: () => Promise<void>;
+} | null {
+  const context = useContext(CategoriesContext);
+  if (!context) return null;
+  return {
+    catalogue: context.catalogue,
+    reloadCatalogue: context.reloadCatalogue,
+  };
+}
+
+/**
+ * Returns the catalogue snapshot and the action that re-reads the accepted
+ * manifest for the current owner (a local read only; it never performs a
+ * network request).
+ */
+export function useCategoryCatalogue(): {
+  readonly catalogue: CategoryCatalogueSnapshot;
+  readonly reloadCatalogue: () => Promise<void>;
+} {
+  const context = useContext(CategoriesContext);
+  if (!context) {
+    throw new Error(
+      "useCategoryCatalogue must be used within a CategoriesProvider"
+    );
+  }
+  return {
+    catalogue: context.catalogue,
+    reloadCatalogue: context.reloadCatalogue,
   };
 }
