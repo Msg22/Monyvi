@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { Modal, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useAccountReviewEditorCategories } from "@/hooks/useAccountReviewEditorCategories";
+import { useOptionalSelectableCategories } from "@/hooks/useSelectableCategories";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
@@ -75,7 +76,11 @@ function LiveCategoryChoice({
     rowRevision: row.revision,
     signal,
   });
-  const selectable = loaded.categories.filter(
+  // The service snapshot stays the validation authority for an already chosen
+  // (possibly legacy) category. The offered choices come from the canonical
+  // catalogue so a new choice can never land on a legacy twin.
+  const canonical = useOptionalSelectableCategories();
+  const selectable = (canonical?.categories ?? loaded.categories).filter(
     (category) =>
       category.type === row.transaction.type &&
       !category.deleted &&

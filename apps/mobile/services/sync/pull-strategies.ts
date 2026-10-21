@@ -12,7 +12,11 @@ import type {
 import { logger } from "@/utils/logger";
 import { parseCanonicalDecimal } from "@monyvi/logic";
 
-import { getCurrentUserId, supabase } from "../supabase";
+import {
+  getCurrentUserId,
+  getSupabaseClientOrigin,
+  supabase,
+} from "../supabase";
 import { SYNCABLE_TABLES } from "./config";
 import { createSnapshotRetentionCutoffIso } from "./historical-recovery";
 import {
@@ -533,11 +537,80 @@ export async function pullChildTable(
   };
 }
 
+/**
+ * Catalogue snapshot captured together with the categories pull.
+ *
+ * It is produced from the same network read as the pull (no extra request) and
+ * is handed to the catalogue service, which commits it only after the SDK
+ * applied the rows and the ids were verified locally.
+ */
+export interface PulledCategoryCatalogueSnapshot {
+  readonly origin: string | null;
+  readonly ownerId: string;
+  readonly capturedAt: number;
+  readonly complete: boolean;
+  readonly systemIds: readonly string[];
+  readonly customOwnerIds: readonly string[];
+}
+
+export type PulledCategoryChangeSet = SyncTableChangeSet & {
+  readonly catalogueAttempt?: PulledCategoryCatalogueSnapshot;
+};
+
+export function readCatalogueScope(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  ownerId: string
+): { readonly systemIds: string[]; readonly customOwnerIds: string[] } {
+  const systemIds: string[] = [];
+  const customOwnerIds: string[] = [];
+  for (const row of rows) {
+    // Tombstoned rows are not part of the active catalogue.
+    if (row["deleted"] === true) continue;
+    const id = row["id"];
+    if (typeof id !== "string") continue;
+    const userId = row["user_id"];
+    const isSystem = row["is_system"];
+    const ownerScoped = userId !== null && userId !== undefined;
+    if (ownerScoped) {
+      if (userId === ownerId) customOwnerIds.push(id);
+      continue;
+    }
+    if (isSystem === true) systemIds.push(id);
+  }
+  return { systemIds, customOwnerIds };
+}
+
+/**
+ * Resolves the runtime backend origin defensively.
+ *
+ * When the origin cannot be resolved the catalogue attempt stays incomplete
+ * and no manifest is committed; the pull itself is never affected.
+ */
+function readCatalogueOriginSafely(): string | null {
+  try {
+    return getSupabaseClientOrigin();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A catalogue snapshot is complete only for a full window pull.
+ *
+ * An incremental (cursor) pull describes a change set, never the whole
+ * catalogue, so it may never authorize a selection manifest.
+ */
+export function resolveCatalogueCompleteness(
+  lastSyncDate: string | null
+): boolean {
+  return lastSyncDate === null;
+}
+
 export async function pullCategories(
   userId: string,
   lastSyncDate: string | null,
   upperWatermark: string
-): Promise<SyncTableChangeSet> {
+): Promise<PulledCategoryChangeSet> {
   const data = await pullAllKeysetPages(
     async (cursor) => {
       let query = supabase
@@ -565,10 +638,24 @@ export async function pullCategories(
     .filter((record) => record.deleted !== true)
     .map((record) => transformFromSupabase("categories", record));
 
+  // The catalogue snapshot reuses this very network read: no second request.
+  // Only a complete full window may claim completeness; an incremental
+  // (cursor) pull never describes the whole catalogue.
+  const scope = readCatalogueScope(data, userId);
+  const catalogueAttempt: PulledCategoryCatalogueSnapshot = {
+    origin: readCatalogueOriginSafely(),
+    ownerId: userId,
+    capturedAt: Date.now(),
+    complete: resolveCatalogueCompleteness(lastSyncDate),
+    systemIds: scope.systemIds,
+    customOwnerIds: scope.customOwnerIds,
+  };
+
   return {
     created: [],
     updated: activeRecords,
     deleted,
+    catalogueAttempt,
   };
 }
 

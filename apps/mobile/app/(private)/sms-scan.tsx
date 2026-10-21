@@ -33,7 +33,7 @@ import {
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
 import { SmsReviewResumeState } from "@/components/sms-sync/SmsReviewResumeState";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useAllCategories } from "@/context/CategoriesContext";
+import { useSelectableCategories } from "@/hooks/useSelectableCategories";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
@@ -279,7 +279,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     setScanMode("incremental");
   }, [setScanMode]);
   const { categories: allCategories, isLoading: isCategoriesLoading } =
-    useAllCategories();
+    useSelectableCategories();
   const isAiContextReady = !isCategoriesLoading;
 
   // Build AI context from existing user data

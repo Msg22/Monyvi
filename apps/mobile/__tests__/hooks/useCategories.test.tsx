@@ -13,6 +13,13 @@ const mockUseAllCategories = jest.fn<UseAllCategoriesMockResult, []>();
 
 jest.mock("@/context/CategoriesContext", () => ({
   useAllCategories: () => mockUseAllCategories(),
+  useCategoryCatalogueSnapshot: () => ({
+    status: "ready",
+    origin: "https://project.supabase.co",
+    ownerId: "owner-1",
+    selectedSystemIds: new Set<string>(),
+    acceptedAt: null,
+  }),
 }));
 
 import { useCategories } from "@/hooks/useCategories";

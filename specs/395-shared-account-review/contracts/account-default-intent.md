@@ -233,9 +233,14 @@ first root ACK** and **after a prior guarded ACK**, A's and D's independently
 dirty metadata/default fields must be eligible for the existing owner-bound,
 clear-before-set, positively acknowledged metadata UPDATE path; B's original
 recovery-only default/tombstones/effect remain excluded from generic
-push/replay. The ordinary metadata-only Edit currently makes multiple awaited
-Model updates inside its writer and is NOT claimed to have a single prepared
-SQLite batch or any later-intent receipt.
+push/replay. An ordinary metadata-only Edit now applies its metadata writes in
+**one safe prepared batch** inside the existing writer, restores the cached
+beforeimages when a confirmed precommit failure occurs, and **never creates a
+financial effect** (no action, RPC, receipt or default-effect change). The
+owner-bound clear-before-set metadata UPDATE contract and its positive
+count-and-id acknowledgement are unchanged. Narrow pending metadata pull
+admission hands unmodified remote rows to the SDK dirty-column merge; equality
+alone is **not** an acknowledgement.
 
 For this narrow T069 technical liveness condition, a separate versioned
 **terminal private carrier** in the SAME existing local-only root field records
@@ -261,3 +266,19 @@ are in `local-recovery.md` and
 analysis, meaningful correctly serialized Red, disjoint source grants and
 independent SQL/sync review remain required. No Green, activation or hosted
 compatibility is claimed.
+
+### Current workflow status (2026-10-21)
+
+- The portable Default fix is in the reviewed child commit `0fa4dc3f` and is
+  cherry-picked into the parent branch with this change.
+- The ordinary zero-delta metadata Edit now uses one safe prepared batch,
+  restores the cached beforeimages on a confirmed precommit failure and never
+  creates a financial effect; the owner-bound clear-before-set metadata UPDATE
+  with positive count and id acknowledgement is unchanged, and narrow pending
+  metadata pull admission hands unmodified remote rows to the SDK dirty-column
+  merge (equality alone is not an ACK).
+- Verified in this delivery: the account default atomic Edit and pending pull
+  suites, the category catalogue service and SQLite runner suites, and the
+  mobile typecheck and touched-path lint. Device visual QA was **not** run (the
+  phone stayed locked/AOD), so the manual contrast and default-swap steps remain
+  open.

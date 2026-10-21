@@ -7,7 +7,7 @@
 
 import type { Category } from "@monyvi/db";
 import { useMemo } from "react";
-import { useAllCategories } from "../context/CategoriesContext";
+import { useSelectableCategories } from "./useSelectableCategories";
 
 /**
  * Given a list of categories, determines which ones actually have
@@ -19,7 +19,7 @@ import { useAllCategories } from "../context/CategoriesContext";
 export function useCategoriesWithChildren(
   categories: readonly Category[]
 ): Set<string> {
-  const { categories: allCategories } = useAllCategories();
+  const { categories: allCategories } = useSelectableCategories();
 
   return useMemo(() => {
     if (categories.length === 0) return new Set<string>();

@@ -8,6 +8,7 @@
 import { Category, TransactionType } from "@monyvi/db";
 import { useMemo } from "react";
 import { useAllCategories } from "../context/CategoriesContext";
+import { useSelectableCategories } from "./useSelectableCategories";
 
 interface UseCategoriesResult {
   readonly categories: readonly Category[];
@@ -38,12 +39,8 @@ export function useCategories(
   options: UseCategoriesOptions = {}
 ): UseCategoriesResult {
   const { topLevelOnly = true, type, includeHidden = false } = options;
-  const {
-    categories: allCategories,
-    isLoading,
-    error,
-    retry,
-  } = useAllCategories();
+  const { categories: allCategories, isLoading } = useSelectableCategories();
+  const { error, retry } = useAllCategories();
 
   const filtered = useMemo(() => {
     let result = allCategories.filter((c) => !c.isInternal);
