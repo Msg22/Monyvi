@@ -37,6 +37,13 @@ import {
   assertAccountSyncAckScopeCurrent,
   type AccountSyncAckCapability,
 } from "./account-sync-ack-scope";
+import {
+  buildPendingAddPriorDefaultProofs,
+  isPendingAddRootState,
+  type AcceptedCreatorIdentity,
+  type PendingAddPriorDefaultCandidate,
+  type PendingAddPriorDefaultProof,
+} from "./pending-add-default-pull";
 
 import { verifyReviewAcceptedReceipt } from "./financial-action-root-pull-identity";
 
@@ -94,6 +101,15 @@ export interface AccountActionProtection {
   /** Most recent immutable accepted default postimage for a genuine later edit. */
   readonly acceptedDefaultPostimages: ReadonlyMap<string, boolean>;
   readonly unsafeDefaultIds: ReadonlySet<string>;
+  /**
+   * A pending (not yet accepted) Add owns exactly one optimistic prior-default
+   * clear. Only a positively proven binding may be delivered unchanged to the
+   * stock SDK dirty-column merge while that Add is still pending.
+   */
+  readonly pendingAddPriorDefaultProofs: ReadonlyMap<
+    string,
+    PendingAddPriorDefaultProof
+  >;
 }
 
 function fail(): never {
@@ -358,6 +374,10 @@ export async function loadAccountActionProtection(input: {
   const acceptedCreatedDefaults = new Map<string, boolean>();
   const acceptedDefaultClears = new Set<string>();
   const priorDefaultHashes = new Map<string, Set<string>>();
+  // Unresolved (not accepted, not compensated) prior-default clear claims.
+  // A legitimate ACCEPTED historical clear is not a competing claim.
+  const unresolvedPriorDefaultClaims = new Map<string, string[]>();
+  const pendingAddCandidates: PendingAddPriorDefaultCandidate[] = [];
   const provedActionOwnedDefaultIds = new Set<string>();
   const children: Record<string, Set<string>> = {};
   const losing: Record<string, Set<string>> = {};
@@ -487,6 +507,19 @@ export async function loadAccountActionProtection(input: {
             expectedDefaultSnapshot: payload.expectedDefaultSnapshot,
           },
         });
+        // A pending (not yet accepted) Add still owns its optimistic
+        // prior-default clear. Its immutable root and parsed private snapshot
+        // are the only proof that may later admit that one row.
+        if (!accepted && isPendingAddRootState(root.state)) {
+          pendingAddCandidates.push({
+            actionId: root.actionId,
+            physicalRootId: root.id,
+            payloadHash: root.payloadHash,
+            rootState: root.state,
+            payload,
+            snapshot,
+          });
+        }
         if (root.state === "reconciled") {
           const expected: ExpectedAddRecoveryIdentity = {
             actionId: root.actionId,
@@ -580,6 +613,12 @@ export async function loadAccountActionProtection(input: {
       for (const member of payload.domainMutation.records) {
         if (member.entity === "account_default") {
           priorDefaultIds.add(member.after.id);
+          if (!accepted && !compensated) {
+            const claimants =
+              unresolvedPriorDefaultClaims.get(member.after.id) ?? [];
+            claimants.push(root.actionId);
+            unresolvedPriorDefaultClaims.set(member.after.id, claimants);
+          }
           if (isLosing) {
             if (!compensated) unsafeDefaultIds.add(member.after.id);
           } else {
@@ -723,6 +762,69 @@ export async function loadAccountActionProtection(input: {
     });
     if (hashes.has(actualHash)) provedActionOwnedDefaultIds.add(id);
   }
+  // A pending Add owns exactly ONE optimistic prior-default clear. That clear
+  // is applied by the Add's own authoritative RPC, never by an independent
+  // metadata UPDATE. Only a positively proven binding (immutable owned root +
+  // parsed private snapshot + exact physical local postimage) may be delivered
+  // unchanged to the stock SDK dirty-column merge while the Add is pending.
+  const acceptedCreatorIdentities = new Map<string, AcceptedCreatorIdentity>();
+  for (const [accountId, image] of acceptedAddPostimages) {
+    acceptedCreatorIdentities.set(
+      accountId,
+      Object.freeze({
+        ownerId: image.ownerId,
+        type: image.type,
+        currency: image.currency,
+        createdAt: image.createdAt,
+      })
+    );
+  }
+  const pendingAddPriorDefaultProofs = await buildPendingAddPriorDefaultProofs({
+    candidates: pendingAddCandidates,
+    unresolvedClaims: unresolvedPriorDefaultClaims,
+    losingAccountIds: losing.accounts ?? new Set<string>(),
+    acceptedCreatorIdentities,
+    expectedOwnerId,
+    loadPriorAccount: async (accountId: string) => {
+      const current = await scope
+        .findOwned(database.get<Account>("accounts"), accountId)
+        .catch(() => null);
+      if (!current) return null;
+      const physicalHash = await hashAccountReviewLocalPostimage({
+        table: "accounts",
+        id: accountId,
+        raw: current._raw,
+        hashProvider: {
+          digestUtf8: (value: string): Promise<string> =>
+            Crypto.digestStringAsync(
+              Crypto.CryptoDigestAlgorithm.SHA256,
+              value
+            ),
+        },
+      });
+      return {
+        id: current.id,
+        userId: current.userId,
+        deleted: current.deleted,
+        isDefault: current.isDefault,
+        type: current.type,
+        currency: current.currency,
+        financialRevision: current.financialRevision,
+        createdAt: current.createdAt.getTime(),
+        status: current._raw._status,
+        changedColumns:
+          typeof current._raw._changed === "string"
+            ? current._raw._changed.split(",").filter(Boolean)
+            : [],
+        physicalHash,
+        physicalFields: Object.fromEntries(
+          Object.entries(current._raw).filter(
+            ([key]) => key !== "_status" && key !== "_changed"
+          )
+        ),
+      };
+    },
+  });
   const acceptedDefaults = new Map<string, boolean>(acceptedCreatedDefaults);
   for (const accountId of acceptedDefaultClears) {
     // There must be an accepted creator for a clearing Add to supply a
@@ -746,6 +848,7 @@ export async function loadAccountActionProtection(input: {
     acceptedAccountIds,
     acceptedDefaultPostimages: acceptedDefaults,
     unsafeDefaultIds,
+    pendingAddPriorDefaultProofs,
   };
 }
 
