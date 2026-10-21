@@ -6,7 +6,10 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
-import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
+import {
+  ACCOUNT_IDENTITY_COLORED_SURFACE_INK,
+  AccountIdentityMark,
+} from "@/components/institutions/AccountIdentityMark";
 import { useTheme } from "@/context/ThemeContext";
 import {
   formatAccountPreviewBalance,
@@ -73,7 +76,7 @@ export function AccountPreviewCard({
               <Ionicons
                 name={getAccountPreviewFallbackIcon(accountType)}
                 size={24}
-                color={palette.nileGreen[700]}
+                color={ACCOUNT_IDENTITY_COLORED_SURFACE_INK}
               />
             }
           />

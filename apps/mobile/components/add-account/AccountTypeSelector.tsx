@@ -90,7 +90,9 @@ export function AccountTypeSelector({
                   size={17}
                   color={
                     isSelected
-                      ? palette.nileGreen[800]
+                      ? isDark
+                        ? palette.slate[25]
+                        : palette.nileGreen[800]
                       : isDark
                         ? palette.slate[400]
                         : palette.slate[600]

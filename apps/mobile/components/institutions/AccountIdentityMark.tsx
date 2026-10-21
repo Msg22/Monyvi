@@ -12,6 +12,16 @@ import {
   type InstitutionLogoMarkSize,
 } from "./InstitutionLogoMark";
 
+/**
+ * Contrast ink for a generic account-type glyph on a colored surface.
+ *
+ * A colored card (the Add preview gradient) or a selected green tile already
+ * carries a colored background, so a green fallback glyph would be
+ * green-on-green. Real institution logos keep their own contrast surfaces;
+ * only the generic type glyph uses this ink.
+ */
+export const ACCOUNT_IDENTITY_COLORED_SURFACE_INK = palette.slate[25];
+
 export interface AccountIdentitySource {
   readonly type: AccountType | null;
   readonly institutionId?: string | null;
@@ -74,13 +84,20 @@ export function AccountIdentityMark({
   accessibilityLabel,
   fallback,
   resolvedLogo,
-  fallbackColor = palette.slate[500],
+  fallbackColor,
   surfaceContext = "default",
   defaultSurfaceClassName,
   defaultSurfaceStyle,
   containerClassName,
 }: AccountIdentityMarkProps): React.JSX.Element {
   const type = account?.type ?? null;
+  // A generic type glyph on a colored surface needs a contrast ink; the
+  // default surface keeps the established neutral glyph color.
+  const resolvedFallbackColor =
+    fallbackColor ??
+    (surfaceContext === "colored-card"
+      ? ACCOUNT_IDENTITY_COLORED_SURFACE_INK
+      : palette.slate[500]);
   const institution =
     type === null
       ? null
@@ -98,7 +115,7 @@ export function AccountIdentityMark({
     <Ionicons
       name={fallbackAccountIcon(type)}
       size={fallbackIconSize(size)}
-      color={fallbackColor}
+      color={resolvedFallbackColor}
       accessibilityElementsHidden
       importantForAccessibility="no"
     />
