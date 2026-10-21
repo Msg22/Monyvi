@@ -273,6 +273,13 @@ verify account/transaction counts.
   review, not fabricated metadata.
 - Explicit account evidence with no match cannot become the default silently.
   Clearly scoped shared speech context may supply evidence for a group.
+- Voice-only generic, explicitly grounded Cash payment words identify CASH type.
+  With known currency and confident evidence, use the compatible owned Cash
+  default, otherwise the sole compatible Cash; multiple/no matches require
+  choice. Bank/Wallet defaults, named identity conflicts and account creation
+  are excluded from this rule (owner approved 2026-10-21). Revalidate on
+  refresh/Save; explicit user account overrides still win. SMS behavior stays
+  unchanged.
 - Currency omission differs from ambiguity/conflict; unsupported returned
   currency is not omission.
 - ATM bank source and Cash destination resolve independently. Use same-currency

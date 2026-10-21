@@ -35,6 +35,16 @@ separate manual checks.
    financial roots must still be rejected; do not reset real data to bypass
    them.
 
+7. Open Cash expense, explicit EGP with an existing matching Cash account.
+   Expect Cash default if eligible, otherwise sole EGP Cash; never Bank/Wallet
+   default. With multiple EGP Cash and no matching default, expect manual
+   choice; with no EGP Cash, no account is created. Use TEST profiles for those
+   variations.
+8. In a review with only an unresolved account and no suggested groups/help,
+   expect a static summary without chevron or expand button. Check the question
+   icon beside Choose an account; it shares the label center. Bank and Wallet
+   alignment must keep their already-confirmed appearance.
+
 These device cases remain pending until the owner records results. Automated
 regressions validate behavior and persistence, not native layout or keyboard QA.
 

@@ -122,7 +122,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         testID="account-review-account-name-and-pencil"
         className={
           "min-w-0 max-w-full gap-x-1 " +
-          (source.accountType === "DIGITAL_WALLET"
+          (source.accountType === "DIGITAL_WALLET" || !source.accountType
             ? "items-center "
             : "items-baseline ") +
           ordering

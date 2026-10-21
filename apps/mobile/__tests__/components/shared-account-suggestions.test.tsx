@@ -140,6 +140,49 @@ afterEach(async (): Promise<void> => {
 });
 
 describe("#395 compact inline account groups — parent callbacks only", () => {
+  it("keeps an account-needed-only summary static, then restores disclosure for real content", () => {
+    const fixture = makeSharedPresentation("r3-combined-en");
+    const summary = {
+      ...fixture.summary,
+      pendingGroupCount: 0,
+      confirmedGroupCount: 0,
+      hasReviewedAccounts: false,
+      issues: [],
+    };
+    const actions = makeActions();
+    const view = render(
+      <SharedAccountSuggestions
+        groups={[]}
+        summary={summary}
+        accountNeededCount={1}
+        isBusy={false}
+        {...actions}
+      />
+    );
+    expect(screen.getByTestId("account-review-compact-summary")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-review-compact-summary-toggle")
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "1 transaction needs an account" })
+    ).toBeNull();
+    view.rerender(
+      <SharedAccountSuggestions
+        groups={fixture.groups}
+        summary={fixture.summary}
+        accountNeededCount={1}
+        isBusy={false}
+        {...actions}
+      />
+    );
+    openDetails();
+    expect(
+      screen.getByTestId(
+        "account-review-group-name-" + requireGroup(fixture, "QNB").groupId
+      )
+    ).toBeTruthy();
+  });
+
   it("starts collapsed with truthful pending count and reveals independent QNB3/CIB1 without View all", () => {
     const view = makeSharedPresentation("r3-combined-en");
     const qnb = requireGroup(view, "QNB");
@@ -446,7 +489,9 @@ describe("#395 compact inline account groups — parent callbacks only", () => {
     expect(view.groups).toHaveLength(0);
     expect(view.summary.distinctNeedsReviewCount).toBe(1);
     expect(screen.getByText("1 transaction needs an account")).toBeTruthy();
-    openDetails();
+    expect(
+      screen.queryByTestId("account-review-compact-summary-toggle")
+    ).toBeNull();
     expect(screen.queryByTestId("account-review-compact-issues")).toBeNull();
     expect(actions.onConfirm).not.toHaveBeenCalled();
   });

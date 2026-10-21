@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 export interface CompactReviewSummaryProps {
   readonly expanded: boolean;
+  readonly canExpand: boolean;
   readonly pendingCount: number;
   readonly accountNeededCount: number;
   readonly isReviewed: boolean;
@@ -16,6 +17,7 @@ export interface CompactReviewSummaryProps {
 
 export function CompactReviewSummary({
   expanded,
+  canExpand,
   pendingCount,
   accountNeededCount,
   isReviewed,
@@ -41,18 +43,11 @@ export function CompactReviewSummary({
         : isReviewed
           ? t("compact_review_accounts_reviewed")
           : t("account_review_details_title");
-  return (
-    <TouchableOpacity
-      testID="account-review-compact-summary-toggle"
-      accessibilityRole="button"
-      accessibilityState={{ expanded }}
-      accessibilityLabel={title}
-      onPress={onToggle}
-      className={
-        "min-h-12 w-full items-center gap-2 px-3 py-2.5 " +
-        (rtl ? "flex-row-reverse" : "flex-row")
-      }
-    >
+  const className =
+    "min-h-12 w-full items-center gap-2 px-3 py-2.5 " +
+    (rtl ? "flex-row-reverse" : "flex-row");
+  const content = (
+    <>
       <Ionicons
         name={isReviewed ? "checkmark-circle-outline" : "alert-circle-outline"}
         size={20}
@@ -82,13 +77,31 @@ export function CompactReviewSummary({
               : t("compact_review_choose_below")}
         </Text>
       </View>
-      <Ionicons
-        name={expanded ? "chevron-up-outline" : "chevron-down-outline"}
-        size={18}
-        color={palette.slate[500]}
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-      />
+      {canExpand ? (
+        <Ionicons
+          name={expanded ? "chevron-up-outline" : "chevron-down-outline"}
+          size={18}
+          color={palette.slate[500]}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      ) : null}
+    </>
+  );
+  return canExpand ? (
+    <TouchableOpacity
+      testID="account-review-compact-summary-toggle"
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={title}
+      onPress={onToggle}
+      className={className}
+    >
+      {content}
     </TouchableOpacity>
+  ) : (
+    <View testID="account-review-compact-summary" className={className}>
+      {content}
+    </View>
   );
 }

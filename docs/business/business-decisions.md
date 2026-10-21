@@ -330,6 +330,14 @@ and PR #396 for validation status; this decision record does not certify it.
 - Use an eligible active owned default when no account is identified and the
   known currency matches, regardless of account count. Explain this choice in
   review and keep it editable; remove only the account blocker.
+- Voice explicit generic Cash payment evidence (approved 2026-10-21) selects the
+  active owned Cash default in the known transaction currency, otherwise the
+  sole active owned Cash in that currency. Several compatible Cash accounts
+  without a unique eligible default, or no compatible Cash, require user choice.
+  Never substitute a Bank/Wallet default, create an account, convert the amount,
+  or apply this type-only rule to named/provider/card identities or uncertain
+  evidence. This is an exact typed match, not absent-account default fallback;
+  refresh and Save must revalidate it. Explicit user overrides remain first.
 - Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
   destination resolve separately. Only genuinely absent destination evidence
   permits eligible same-currency default Cash, then sole eligible Cash; explicit
