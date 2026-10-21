@@ -15,7 +15,7 @@ import {
 
 function fail(
   reason: AccountActionFailureReason,
-  context: Pick<AccountActionFailureSite, "table" | "rootState"> = {}
+  context: Omit<AccountActionFailureSite, "phase" | "reason"> = {}
 ): never {
   throw malformedAccountActionRoot({
     phase: "inspector",
@@ -42,15 +42,49 @@ function expectDirty(
   changes: SyncPushArgs["changes"],
   table: string,
   id: string,
-  which: "created" | "updated" | "created_or_updated"
+  which: "created" | "updated" | "created_or_updated",
+  context: Pick<
+    AccountActionFailureSite,
+    "rootState" | "payloadVersion" | "mutationEntity"
+  >
 ): Readonly<Record<string, unknown>> {
   const candidates =
     which === "created_or_updated"
       ? [...rows(changes, table, "created"), ...rows(changes, table, "updated")]
       : rows(changes, table, which);
   const found = candidates.filter((candidate) => candidate.id === id);
-  if (found.length !== 1 || !found[0])
-    fail("dirty_member_missing_or_duplicate", { table });
+  if (found.length !== 1 || !found[0]) {
+    const created = rows(changes, table, "created").filter(
+      (row) => row.id === id
+    ).length;
+    const updated = rows(changes, table, "updated").filter(
+      (row) => row.id === id
+    ).length;
+    const deleted =
+      (
+        changes as unknown as Readonly<
+          Record<string, SyncTableChangeSet | undefined>
+        >
+      )[table]?.deleted.includes(id) ?? false;
+    const memberPresence =
+      found.length > 1 || created > 1 || updated > 1
+        ? "duplicate"
+        : created > 0 && updated > 0
+          ? "created_and_updated"
+          : created > 0
+            ? "created"
+            : updated > 0
+              ? "updated"
+              : deleted
+                ? "deleted"
+                : "absent";
+    fail("dirty_member_missing_or_duplicate", {
+      table,
+      ...context,
+      expectedBucket: which,
+      memberPresence,
+    });
+  }
   return found[0];
 }
 
@@ -119,7 +153,12 @@ export function inspectNewFinancialActionPushRoot(
         ? "created"
         : mutation.entity === "account_default"
           ? "created_or_updated"
-          : "updated"
+          : "updated",
+      {
+        rootState: root.state,
+        payloadVersion: version,
+        mutationEntity: mutation.entity,
+      }
     );
     if (mutation.mode === "create") {
       if (physical.deleted !== false) fail("created_member_deleted", { table });
@@ -156,7 +195,8 @@ export function inspectNewFinancialActionPushRoot(
       changes,
       "account_financial_effects",
       effect.effectId,
-      "created"
+      "created",
+      { rootState: root.state, payloadVersion: version }
     );
     if (
       physical.action_id !== envelope.actionId ||

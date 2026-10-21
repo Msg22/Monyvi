@@ -12,6 +12,7 @@ import {
   type AccountActionFailureSite,
 } from "./account-action-failure-context";
 import type { AccountActionProtection } from "./account-action-protection";
+import { collectAcceptedReviewRootOnlyAck } from "./accepted-review-root-ack";
 import {
   ACCOUNT_BALANCE_WRITER_REGISTRY,
   requireGuardedAccountBalanceWriter,
@@ -563,6 +564,12 @@ export function collectAccountFinancialActionPushBundles(
   const bundles = [...roots.created, ...roots.updated].flatMap((candidate) => {
     if (!isObject(candidate)) return [];
     if (isCataloguedNonDispatchRoot(candidate, catalog)) return [];
+    const acceptedRootOnly = collectAcceptedReviewRootOnlyAck(
+      candidate,
+      changes,
+      catalog
+    );
+    if (acceptedRootOnly) return [acceptedRootOnly];
     const refs = protectedRefsFromRoot(candidate, changes);
     const actionId = readNonEmptyString(candidate, "action_id");
     const payloadHash = readNonEmptyString(candidate, "payload_hash");
@@ -633,7 +640,9 @@ export function collectProtectedFinancialActionRowIds(
   ).financial_action_groups;
   const refs = roots
     ? [...roots.created, ...roots.updated].flatMap((root) =>
-        isObject(root) && isCataloguedNonDispatchRoot(root, catalog)
+        isObject(root) &&
+        (isCataloguedNonDispatchRoot(root, catalog) ||
+          collectAcceptedReviewRootOnlyAck(root, changes, catalog) !== null)
           ? []
           : protectedRefsFromRoot(root, changes)
       )

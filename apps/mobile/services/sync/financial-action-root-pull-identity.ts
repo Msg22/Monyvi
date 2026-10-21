@@ -252,7 +252,7 @@ function closedReceiptObject(
 function invalidReviewReceipt(): never {
   return invalid("invalid_review_acceptance_receipt");
 }
-function verifyReviewAcceptedReceipt(
+export function verifyReviewAcceptedReceipt(
   envelope: FinancialActionEnvelopeV1,
   state: FinancialActionState,
   serverOutcome: FinancialActionServerOutcome | null,

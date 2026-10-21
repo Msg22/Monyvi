@@ -66,6 +66,28 @@ const ROOT_STATES = [
   "reconciled",
 ] as const;
 
+const PAYLOAD_VERSIONS = [
+  "review.batch-save/v1",
+  "account.create-default/v1",
+] as const;
+const MUTATION_ENTITIES = [
+  "account",
+  "account_default",
+  "account_sms_sender",
+  "bank_details",
+  "transaction",
+  "transfer",
+] as const;
+const DIRTY_BUCKETS = ["created", "updated", "created_or_updated"] as const;
+const MEMBER_PRESENCE = [
+  "absent",
+  "created",
+  "updated",
+  "created_and_updated",
+  "deleted",
+  "duplicate",
+] as const;
+
 export type AccountActionFailurePhase = (typeof PHASES)[number];
 export type AccountActionFailureReason = (typeof REASONS)[number];
 
@@ -75,6 +97,10 @@ export interface AccountActionFailureSite {
   /** Unknown inputs are discarded, not logged, unless exactly allowlisted. */
   readonly table?: unknown;
   readonly rootState?: unknown;
+  readonly payloadVersion?: unknown;
+  readonly mutationEntity?: unknown;
+  readonly expectedBucket?: unknown;
+  readonly memberPresence?: unknown;
 }
 
 interface AccountActionFailureContext {
@@ -83,6 +109,10 @@ interface AccountActionFailureContext {
   readonly reason: AccountActionFailureReason | "unclassified";
   readonly table?: (typeof TABLES)[number];
   readonly rootState?: (typeof ROOT_STATES)[number];
+  readonly payloadVersion?: (typeof PAYLOAD_VERSIONS)[number];
+  readonly mutationEntity?: (typeof MUTATION_ENTITIES)[number];
+  readonly expectedBucket?: (typeof DIRTY_BUCKETS)[number];
+  readonly memberPresence?: (typeof MEMBER_PRESENCE)[number];
 }
 
 /** Not an Error field, property, cause or persisted payload. */
@@ -106,6 +136,18 @@ export function malformedAccountActionRoot(
   const rootState = isAllowed(site.rootState, ROOT_STATES)
     ? site.rootState
     : null;
+  const payloadVersion = isAllowed(site.payloadVersion, PAYLOAD_VERSIONS)
+    ? site.payloadVersion
+    : null;
+  const mutationEntity = isAllowed(site.mutationEntity, MUTATION_ENTITIES)
+    ? site.mutationEntity
+    : null;
+  const expectedBucket = isAllowed(site.expectedBucket, DIRTY_BUCKETS)
+    ? site.expectedBucket
+    : null;
+  const memberPresence = isAllowed(site.memberPresence, MEMBER_PRESENCE)
+    ? site.memberPresence
+    : null;
   privateTags.set(
     error,
     Object.freeze({
@@ -114,6 +156,10 @@ export function malformedAccountActionRoot(
       reason,
       ...(table === null ? {} : { table }),
       ...(rootState === null ? {} : { rootState }),
+      ...(payloadVersion === null ? {} : { payloadVersion }),
+      ...(mutationEntity === null ? {} : { mutationEntity }),
+      ...(expectedBucket === null ? {} : { expectedBucket }),
+      ...(memberPresence === null ? {} : { memberPresence }),
     })
   );
   return error;

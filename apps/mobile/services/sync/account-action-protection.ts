@@ -38,6 +38,8 @@ import {
   type AccountSyncAckCapability,
 } from "./account-sync-ack-scope";
 
+import { verifyReviewAcceptedReceipt } from "./financial-action-root-pull-identity";
+
 const FAIL = "account_sync_protection_invalid_root";
 const REGISTRY = createAccountReviewFinancialRegistry();
 
@@ -658,6 +660,14 @@ export async function loadAccountActionProtection(input: {
       envelope.kind === "review_batch_save" &&
       envelope.payloadVersion === "review.batch-save/v1"
     ) {
+      if (locallyAccepted) {
+        verifyReviewAcceptedReceipt(
+          envelope,
+          parsedState,
+          parsedOutcome ?? null,
+          root.outcomeJson
+        );
+      }
       // Preserve existing Review private-validation ownership, never widen
       // its group or SMS semantics into the Add-specific snapshot.
       if (root.localRecoverySnapshotJson !== null) {

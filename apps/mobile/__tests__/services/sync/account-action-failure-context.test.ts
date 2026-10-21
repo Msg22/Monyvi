@@ -129,6 +129,10 @@ describe("#395 financial-action failure context (diagnostic only)", () => {
       reason: "catalog_binding_mismatch",
       table: PRIVATE,
       rootState: PRIVATE,
+      payloadVersion: PRIVATE,
+      mutationEntity: PRIVATE,
+      expectedBucket: PRIVATE,
+      memberPresence: PRIVATE,
     });
     expect(diagnostic(tagged)).toEqual({
       event: "sync.financialActionRejected",
@@ -178,11 +182,55 @@ describe("#395 financial-action failure context (diagnostic only)", () => {
       phase: "inspector",
       reason: "dirty_member_missing_or_duplicate",
       table: "accounts",
+      rootState: "local_complete",
+      payloadVersion: "review.batch-save/v1",
+      mutationEntity: "account",
+      expectedBucket: "created",
+      memberPresence: "absent",
     });
     expect(serializeAccountActionFailureContext(error)).not.toContain(
       fixture.payloadJson
     );
   });
+
+  it.each(["updated", "deleted", "duplicate"] as const)(
+    "identifies %s membership without leaking account identity or changing rejection",
+    async (presence) => {
+      const fixture = await canonicalReviewChanges();
+      const account = fixture.changes.accounts?.created[0];
+      if (!account) throw new Error("missing_fixture_account");
+      const error = captureError(() =>
+        inspectNewFinancialActionPushRoot(
+          { ...firstRoot(fixture), state: "accepted" },
+          {
+            ...fixture.changes,
+            accounts: {
+              created: presence === "duplicate" ? [account, account] : [],
+              updated: presence === "updated" ? [account] : [],
+              deleted: presence === "deleted" ? [account.id] : [],
+            },
+          }
+        )
+      );
+      expect(error.message).toBe(MALFORMED_ACCOUNT_ACTION_ROOT_CODE);
+      expect(diagnostic(error)).toMatchObject({
+        phase: "inspector",
+        reason: "dirty_member_missing_or_duplicate",
+        table: "accounts",
+        rootState: "accepted",
+        payloadVersion: "review.batch-save/v1",
+        mutationEntity: "account",
+        expectedBucket: "created",
+        memberPresence: presence,
+      });
+      expect(serializeAccountActionFailureContext(error)).not.toContain(
+        account.id
+      );
+      expect(serializeAccountActionFailureContext(error)).not.toContain(
+        fixture.envelope.actionId
+      );
+    }
+  );
 
   it("distinguishes malformed JSON from a true effect-count mismatch without touching the validator", async () => {
     const fixture = await canonicalReviewChanges();
