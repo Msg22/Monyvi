@@ -33,6 +33,7 @@ jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
 
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import React from "react";
+import { Skeleton } from "@/components/ui/Skeleton";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import {
   accountReviewSessionSchema,
@@ -124,6 +125,10 @@ jest.mock("@/services/account-review-save-service", () => ({
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: mockToast }),
 }));
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: () => ({ isDark: false }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: (): null => null,
 }));
@@ -525,5 +530,7 @@ describe("#395 T054 Voice route boundary (real page, financial writer mocked)", 
     render(<VoiceReviewScreen />);
     expect(mockReview).not.toHaveBeenCalled();
     expect(screen.getByTestId("account-review-fixture-loading")).toBeTruthy();
+    expect(screen.UNSAFE_getAllByType(Skeleton)).toHaveLength(4);
+    expect(screen.queryByText("loading")).toBeNull();
   });
 });

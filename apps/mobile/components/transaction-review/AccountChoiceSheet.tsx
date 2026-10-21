@@ -112,9 +112,7 @@ function AccountOptionBackground({
       pointerEvents="none"
       className={
         "absolute inset-0 rounded-xl " +
-        (selected
-          ? "bg-nileGreen-50 dark:bg-nileGreen-900/20"
-          : "bg-surface dark:bg-surface-dark")
+        (selected ? "bg-nileGreen-600" : "bg-surface dark:bg-surface-dark")
       }
     />
   );
@@ -148,7 +146,7 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
         <Ionicons
           name={props.option.iconName ?? "help-circle-outline"}
           size={22}
-          color={palette.slate[500]}
+          color={props.selected ? "white" : palette.slate[500]}
           accessibilityElementsHidden
           importantForAccessibility="no"
         />
@@ -156,7 +154,10 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
       <View className="min-w-0 flex-1 gap-1">
         <Text
           className={
-            "text-base font-semibold leading-6 text-text-primary dark:text-text-primary-dark " +
+            "text-base font-semibold leading-6 " +
+            (props.selected
+              ? "text-white "
+              : "text-text-primary dark:text-text-primary-dark ") +
             (rtl ? "text-right" : "text-left")
           }
         >
@@ -165,7 +166,10 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
         {props.option.identityDetails.length > 0 ? (
           <Text
             className={
-              "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+              "text-sm leading-5 " +
+              (props.selected
+                ? "text-white "
+                : "text-text-secondary dark:text-text-secondary-dark ") +
               (rtl ? "text-right" : "text-left")
             }
           >
@@ -175,13 +179,22 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
         {props.option.currencyCode ? (
           <Text
             testID="account-review-account-option-currency"
-            className="self-start rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-text-primary dark:bg-slate-700 dark:text-text-primary-dark"
+            className={
+              "self-start rounded-md px-2 py-0.5 text-xs font-semibold " +
+              (props.selected
+                ? "text-white"
+                : "bg-slate-100 text-text-primary dark:bg-slate-700 dark:text-text-primary-dark")
+            }
           >
             {props.option.currencyCode}
           </Text>
         ) : null}
       </View>
-      <ChoiceRadio checked={props.selected} disabled={props.disabled} />
+      <ChoiceRadio
+        checked={props.selected}
+        disabled={props.disabled}
+        onSelectedSurface={props.selected}
+      />
     </TouchableOpacity>
   );
 }

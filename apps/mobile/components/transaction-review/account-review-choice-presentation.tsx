@@ -451,9 +451,11 @@ export function ChoiceActionButton(
 export function ChoiceRadio({
   checked,
   disabled,
+  onSelectedSurface = false,
 }: {
   readonly checked: boolean;
   readonly disabled: boolean;
+  readonly onSelectedSurface?: boolean;
 }): React.JSX.Element {
   return (
     <View
@@ -461,15 +463,24 @@ export function ChoiceRadio({
       importantForAccessibility="no"
       className={
         "h-6 w-6 items-center justify-center rounded-full border-2 " +
-        (disabled
-          ? "border-slate-400 dark:border-slate-600"
-          : checked
-            ? "border-nileGreen-600 dark:border-nileGreen-400"
-            : "border-text-secondary dark:border-text-secondary-dark")
+        (checked && onSelectedSurface
+          ? "border-white"
+          : disabled
+            ? "border-slate-400 dark:border-slate-600"
+            : checked
+              ? "border-nileGreen-600 dark:border-nileGreen-400"
+              : "border-text-secondary dark:border-text-secondary-dark")
       }
     >
       {checked ? (
-        <View className="h-3 w-3 rounded-full bg-nileGreen-600 dark:bg-nileGreen-400" />
+        <View
+          className={
+            "h-3 w-3 rounded-full " +
+            (onSelectedSurface
+              ? "bg-white"
+              : "bg-nileGreen-600 dark:bg-nileGreen-400")
+          }
+        />
       ) : null}
     </View>
   );

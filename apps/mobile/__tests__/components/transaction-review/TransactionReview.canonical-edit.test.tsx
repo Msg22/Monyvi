@@ -1,6 +1,7 @@
+import { registerCanonicalReviewActionCases } from "./TransactionReview.canonical-actions-cases";
 /** #395 canonical edit/review owner-revision and UI regressions. */
 
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import {
   accountReviewSessionSchema,
   accountReviewCommandSchema,
@@ -198,9 +199,11 @@ jest.mock("@/components/sms-sync/SafeguardQaDiagnosticsPanel", () => ({
     });
   },
 }));
-jest.mock("@/components/transaction-review/SmsReviewUndoBanner", () => ({
-  SmsReviewUndoBanner: () => null,
-}));
+jest.mock("@/components/transaction-review/SmsReviewUndoBanner", () =>
+  jest.requireActual<
+    typeof import("@/components/transaction-review/SmsReviewUndoBanner")
+  >("@/components/transaction-review/SmsReviewUndoBanner")
+);
 jest.mock(
   "@/components/transaction-review/edit-modal/TransactionEditModal",
   () => ({
@@ -862,7 +865,7 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
 });
 
 describe("#395 SMS filtered canonical discard wiring", () => {
-  it("maps the visible filtered row to its original SMS index and restores explicit footer discard", () => {
+  it("maps the visible filtered row to its original SMS index and restores explicit footer discard", async () => {
     const { original: two, filtered: selected } =
       makeSelectedSecondT025Review();
     mockHook.mockImplementation(() => fakeHook(selected));
@@ -889,10 +892,22 @@ describe("#395 SMS filtered canonical discard wiring", () => {
     );
     expect(screen.getByTestId("sms-review-discard-0")).toBeTruthy();
     expect(screen.queryByTestId("sms-review-discard-1")).toBeNull();
-    fireEvent.press(screen.getByTestId("sms-review-discard-0"));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("sms-review-discard-0"));
+      await Promise.resolve();
+    });
     expect(onDiscardItem).toHaveBeenCalledTimes(1);
     expect(onDiscardItem).toHaveBeenCalledWith(1, true);
     fireEvent.press(screen.getByTestId("canonical-discard-all"));
     expect(onDiscard).toHaveBeenCalledTimes(1);
   });
+});
+
+registerCanonicalReviewActionCases({
+  sourceSession,
+  fakeHook,
+  mockHook,
+  mockDispatch,
+  review,
+  reviewableTransactions,
 });

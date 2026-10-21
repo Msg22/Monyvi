@@ -846,15 +846,13 @@ export default function SmsReviewScreen(): React.JSX.Element {
         }
         onReviewLater={handleReviewLater}
         undoBanner={
-          canonicalOwnedQueue
-            ? undefined
-            : undo.undoItem && undo.discardedName
-              ? {
-                  discardedName: undo.discardedName,
-                  onUndo: handleUndoDiscard,
-                  onClose: handleCloseUndo,
-                }
-              : undefined
+          undo.undoItem && undo.discardedName
+            ? {
+                discardedName: undo.discardedName,
+                onUndo: handleUndoDiscard,
+                onClose: handleCloseUndo,
+              }
+            : undefined
         }
         isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}

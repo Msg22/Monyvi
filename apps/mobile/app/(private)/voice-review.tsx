@@ -41,7 +41,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Text, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type PrivateTabRoute =
@@ -306,11 +307,19 @@ export default function VoiceReviewScreen(): React.JSX.Element {
     return (
       <SafeAreaView
         testID="account-review-fixture-loading"
-        className="flex-1 items-center justify-center bg-background dark:bg-background-dark"
+        className="flex-1 bg-background dark:bg-background-dark"
       >
-        <Text className="text-text-secondary dark:text-text-secondary-dark">
-          {tCommon("loading")}
-        </Text>
+        <PageHeader
+          title={t("voice_review_title")}
+          variant="review"
+          showDrawer={false}
+        />
+        <View className="gap-4 p-5" accessibilityLabel={tCommon("loading")}>
+          <Skeleton width="100%" height={96} borderRadius={12} />
+          <Skeleton width="100%" height={64} borderRadius={12} />
+          <Skeleton width="100%" height={112} borderRadius={12} />
+          <Skeleton width="100%" height={112} borderRadius={12} />
+        </View>
       </SafeAreaView>
     );
   }

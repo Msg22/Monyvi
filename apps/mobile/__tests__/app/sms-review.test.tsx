@@ -1,7 +1,7 @@
+import type { TransactionReviewProps } from "@/components/transaction-review/TransactionReview";
 import { act, render, screen } from "@testing-library/react-native";
 import type { AccountReviewSession, ParsedSmsTransaction } from "@monyvi/logic";
 import type { AccountReviewRuntimeSaveCapture } from "@/services/account-review-runtime-save";
-import type { TransactionReviewProps } from "@/components/transaction-review/TransactionReview";
 import {
   T025_IDS,
   makeT025ConfirmedSession,
@@ -50,9 +50,7 @@ interface MockTransactionReviewProps {
       readonly selected: boolean;
     }>
   ) => Promise<void>;
-  readonly undoBanner?: {
-    readonly onUndo: () => Promise<void>;
-  };
+  readonly undoBanner?: TransactionReviewProps["undoBanner"];
   readonly isSaving: boolean;
   readonly onSave: (
     selected: readonly ParsedSmsTransaction[],
@@ -576,16 +574,17 @@ describe("SMS review route", () => {
     expect(mockSetSelection).not.toHaveBeenCalled();
   });
 
-  it("hides legacy Undo for a canonical queue and keeps final-draft Undo recoverable in the empty branch", () => {
+  it("exposes Undo for a nonempty canonical queue and keeps final-draft Undo in the empty branch", () => {
     mockUndoState = {
       ...mockUndoState,
       undoItem: { draftId: "discarded-final" },
       discardedName: "QA Merchant",
     };
     const view = render(<SmsReviewScreen />);
-    expect(
-      mockTransactionReview.mock.calls.at(-1)?.[0]?.undoBanner
-    ).toBeUndefined();
+    const undoBanner = mockTransactionReview.mock.calls.at(-1)?.[0]?.undoBanner;
+    expect(undoBanner?.discardedName).toBe("QA Merchant");
+    expect(typeof undoBanner?.onUndo).toBe("function");
+    expect(typeof undoBanner?.onClose).toBe("function");
     expect(screen.queryByTestId("sms-review-undo-banner")).toBeNull();
 
     mockQueueItems = [];

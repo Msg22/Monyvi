@@ -109,7 +109,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
   return (
     <View
       testID="account-review-row-account"
-      className="min-w-0 max-w-full shrink gap-0.5"
+      className="min-w-0 max-w-full shrink gap-0"
     >
       <View
         testID="account-review-account-name-and-pencil"
@@ -158,7 +158,10 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
               event.stopPropagation();
               source.onChooseAccount(source.rowId);
             }}
-            className="h-[48px] w-[48px] shrink-0 items-center justify-center"
+            className={
+              "h-[48px] w-[48px] shrink-0 justify-center " +
+              (rtl ? "items-end" : "items-start")
+            }
           >
             <View
               pointerEvents="none"
@@ -181,7 +184,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
           <Text
             testID="account-review-row-status"
             className={
-              "min-w-0 shrink text-xs leading-5 " +
+              "min-w-0 shrink text-xs leading-4 " +
               statusToneColor(source.accountStatusTone) +
               " " +
               textAlign
@@ -290,7 +293,10 @@ export function AccountReviewRowPresentation({
                     event.stopPropagation();
                     source.onEditCategory?.(source.rowId);
                   }}
-                  className="h-[48px] w-[48px] shrink-0 items-center justify-center"
+                  className={
+                    "h-[48px] w-[48px] shrink-0 justify-center " +
+                    (rtl ? "items-end" : "items-start")
+                  }
                 >
                   <View
                     pointerEvents="none"

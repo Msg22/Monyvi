@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react-native";
 import i18next from "i18next";
 import React from "react";
-import { KeyboardAvoidingView, Modal, ScrollView } from "react-native";
+import { KeyboardAvoidingView, Modal, ScrollView, View } from "react-native";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
@@ -862,3 +862,30 @@ describe("#395 owner recovery: account drafts and currency consent", () => {
     expect(onUseSelected).not.toHaveBeenCalled();
   });
 });
+
+it.each(["en", "ar"] as const)(
+  "uses the filled shared selected-account treatment in %s",
+  async (language) => {
+    mockLocale = language;
+    await i18next.changeLanguage(language);
+    const props = makeAccountChoiceProps();
+    const candidate = getQnbCandidate(props.candidateOptions, "9221");
+    renderAccounts({ ...props, selectedCandidateId: candidate.id });
+    const option = screen.getByLabelText(candidate.accessibilityLabel);
+    expect(option).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: true })
+    );
+    expect(within(option).getByText(candidate.displayName)).toHaveProp(
+      "className",
+      expect.stringContaining("text-white")
+    );
+    const background = option
+      .findAllByType(View)
+      .find((view) => view.props.pointerEvents === "none");
+    expect(background?.props.className).toContain("bg-nileGreen-600");
+    expect(background?.props.className).not.toContain(
+      "dark:bg-nileGreen-900/20"
+    );
+  }
+);

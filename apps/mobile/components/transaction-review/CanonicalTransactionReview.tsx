@@ -53,6 +53,10 @@ import { compactReviewCheckboxAction } from "./compact-review-checkbox-action";
 import { AccountChoiceLinkedRowsContext } from "./AccountChoiceSheet";
 import { ReviewActionBar } from "./ReviewActionBar";
 import {
+  CanonicalSmsUndoBanner,
+  useCanonicalSmsRowActions,
+} from "./CanonicalSmsRowActions";
+import {
   AccountReviewCategoryChoice,
   useReviewCategoryShortcut,
 } from "./account-review-category-choice";
@@ -96,7 +100,15 @@ export function CanonicalAccountReview(
   const model = view.readModel;
   const reload = view.reload;
   const onSessionChange = props.boundary.onSessionChange;
-  const busy = view.isBusy || props.isSaving || busySave || preparingDraft;
+  const commandBusy =
+    view.isBusy || props.isSaving || busySave || preparingDraft;
+  const rowActions = useCanonicalSmsRowActions({
+    isBusy: commandBusy,
+    signal: props.boundary.input.signal,
+    reload,
+    feedback,
+  });
+  const busy = commandBusy || rowActions.isBusy;
   useEffect(() => {
     onSessionChange?.(session);
   }, [onSessionChange, session]);
@@ -632,7 +644,15 @@ export function CanonicalAccountReview(
       language={language}
       transactions={props.transactions}
       workspaceVariant={props.workspaceVariant}
-      onDiscardItem={props.onDiscardItem}
+      onDiscardItem={
+        props.onDiscardItem
+          ? (index, selected) =>
+              rowActions.runMutation(
+                () => props.onDiscardItem?.(index, selected),
+                "discard"
+              )
+          : undefined
+      }
       isBusy={busy}
       onToggleRow={toggleRow}
       onEditRow={openTransactionEdit}
@@ -748,14 +768,9 @@ export function CanonicalAccountReview(
                   view.discardedGroupIds.includes(groupId)
                 )
                   return;
-                void view.undoRemoval().catch((error) => {
-                  if (!props.boundary.input.signal?.aborted)
-                    feedback.reportFailure({
-                      stage: "undo",
-                      surface: "page",
-                      error,
-                    });
-                });
+                void view
+                  .undoRemoval()
+                  .catch((error) => rowActions.reportFailure("undo", error));
               }}
               onDiscardRemoved={(groupId) => {
                 const group = groups.get(groupId);
@@ -765,14 +780,9 @@ export function CanonicalAccountReview(
                   view.discardedGroupIds.includes(groupId)
                 )
                   return;
-                void view.discardRemovedSuggestion(groupId).catch((error) => {
-                  if (!props.boundary.input.signal?.aborted)
-                    feedback.reportFailure({
-                      stage: "discard",
-                      surface: "page",
-                      error,
-                    });
-                });
+                void view
+                  .discardRemovedSuggestion(groupId)
+                  .catch((error) => rowActions.reportFailure("discard", error));
               }}
               onIssuePress={recoverIssue}
             />
@@ -786,6 +796,13 @@ export function CanonicalAccountReview(
         updateCellsBatchingPeriod={props.renderConfig.updateCellsBatchingPeriod}
         windowSize={props.renderConfig.windowSize}
       />
+      {props.workspaceVariant === "sms" ? (
+        <CanonicalSmsUndoBanner
+          undo={props.undoBanner}
+          actions={rowActions}
+          isBusy={busy}
+        />
+      ) : null}
       <ReviewActionBar
         selectedCount={model.summary.selectedCount}
         isSaving={busy}
@@ -802,11 +819,7 @@ export function CanonicalAccountReview(
         onDiscard={props.onDiscard}
         hideDiscard={accountNeededFilter.active}
         onUnhandledSaveError={(error) =>
-          feedback.reportFailure({
-            stage: "footer_unhandled",
-            surface: "page",
-            error,
-          })
+          rowActions.reportFailure("footer_unhandled", error)
         }
         isSmsWorkspace={props.workspaceVariant === "sms"}
         onReviewLater={props.onReviewLater}
@@ -839,6 +852,7 @@ export function CanonicalAccountReview(
             });
           },
           onClose: () => {
+            if (busy || draftInFlight.current) return;
             draftEpoch.current += 1;
             feedback.dismiss("modal");
             setChoice(null);
