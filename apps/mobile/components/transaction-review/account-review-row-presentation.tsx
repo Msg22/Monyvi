@@ -136,7 +136,9 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         testID="account-review-account-name-and-pencil"
         className={
           "min-w-0 max-w-full gap-x-1 " +
-          (metadataType === "DIGITAL_WALLET" || !metadataType
+          (metadataType === "DIGITAL_WALLET" ||
+          metadataType === "CASH" ||
+          !metadataType
             ? "items-center "
             : "items-baseline ") +
           ordering

@@ -105,7 +105,7 @@ function QuietDefaultDisclosure(
         <View className="h-6 w-6 shrink-0 items-center justify-center">
           <Ionicons
             name="information-circle-outline"
-            size={20}
+            size={22}
             color={props.iconColor}
             accessibilityElementsHidden
             importantForAccessibility="no"
@@ -138,7 +138,7 @@ function QuietDefaultNote({
       style={{ writingDirection }}
       className={
         (rtl ? "text-right " : "text-left ") +
-        "min-w-0 shrink text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+        "min-w-0 shrink text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
       }
     >
       {label}
