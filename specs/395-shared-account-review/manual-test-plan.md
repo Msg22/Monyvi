@@ -1,5 +1,16 @@
 # Manual test plan and automation mapping
 
+## Owner-confirmed label follow-up — 2026-10-21
+
+On the Metro-connected Samsung SM-A546E (Android 16), the owner confirmed that
+TEST Card Bank now displays completely, its edit icon is close to its name, and
+Wallet icon/name alignment is corrected. The label now uses the app's
+already-loaded Inter family (Noto Sans Arabic for Arabic UI); wallet metadata
+centers within its row while bank alignment retains its prior behavior.
+Temporary measurement logging was removed. This records those cases only;
+Arabic, other widths/font scales, picker scrolling and the full checklist remain
+separate manual checks.
+
 ## Current owner regression cases — 2026-10-21
 
 1. Open a short, exact-account Voice fixture without taking any account action.

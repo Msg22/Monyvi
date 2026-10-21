@@ -19,6 +19,7 @@ import React from "react";
 import { TouchableOpacity } from "react-native";
 
 import { TransactionItem } from "@/components/transaction-review/TransactionItem";
+import { fontFamily, arabicFontFamily } from "@/constants/typography";
 import { SharedAccountSuggestions } from "@/components/transaction-review/SharedAccountSuggestions";
 import { compactReviewCheckboxAction } from "@/components/transaction-review/compact-review-checkbox-action";
 import { makeDefaultInfoSession } from "./account-review-default-info-test-fixtures";
@@ -818,6 +819,23 @@ describe("#395 T021/T039 — lifecycle, accessibility, viewport and memo regress
     expect(getAccountAction().props.accessibilityLabel).toContain("تغيير");
     expect(props.accountReview.onChooseAccount).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["en", fontFamily.semiBold],
+    ["ar", arabicFontFamily.semiBold],
+  ] as const)(
+    "uses the loaded app font for complete account labels in %s",
+    async (language, family) => {
+      mockLanguage = language;
+      await changeLanguage(language);
+      renderRow(makeDefaultItem({ accountName: "TEST Card Bank" }));
+      const label = screen.getByTestId("transaction-account-match");
+      expect(label).toHaveTextContent("TEST Card Bank");
+      expect(label).toHaveStyle({ fontFamily: family, fontWeight: "normal" });
+      expect(label.props.numberOfLines).toBeUndefined();
+      // Native Android painting/overhang still needs device confirmation.
+    }
+  );
 
   it("React.memo must react to a shaped status and callback replacement with legacy props stable", () => {
     const before = makeDefaultItem();

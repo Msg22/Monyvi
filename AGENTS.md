@@ -34,6 +34,17 @@
   not claim an app-wide migration or introduce a new mockup/approval or
   tests-first gate for this established standard.
 
+## Typography and native text diagnosis (2026-10-21)
+
+Use the loaded locale fonts from `constants/typography.ts` for new/touched UI
+text; a weight class such as `font-semibold` does not select the font family.
+Keep icon fonts intact. When a last word disappears but its space remains,
+compare actual text content, native line metrics and device rendering before
+changing gaps. Android 15+ OEM-font measurement/painting can disagree; do not
+add fake trailing spaces, disable font scaling or claim a layout test proves
+pixels. Apply the existing font contract locally; untouched screens remain an
+incremental audit, not an unrequested app-wide migration.
+
 ## Project Context
 
 monyvi is a personal financial app — a frictionless financial companion that

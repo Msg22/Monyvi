@@ -10,6 +10,16 @@
   Source freshness is separate from the trusted governing revision and adds no
   design-approval gate.
 
+## Typography diagnosis during UI follow-up (2026-10-21)
+
+Follow the loaded locale-font contract in `docs/design/design-system.md`;
+font-weight utilities alone do not choose the app font. If text is missing while
+its layout space remains, verify the full string, native line measurements and
+actual rendering before changing margins. Keep diagnostic data limited to safe
+layout metadata, remove temporary logging, and record the exact owner-confirmed
+device case separately from other pending widths/locales. Do not introduce a
+native upgrade, global font migration or new approval gate for a scoped UI fix.
+
 ## Global form interaction standards (owner-approved 2026-10-20)
 
 All new or modified dropdown/picker selected options MUST show the current
