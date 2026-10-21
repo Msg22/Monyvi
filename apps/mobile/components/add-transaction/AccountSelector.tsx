@@ -80,6 +80,7 @@ export function AccountSelector({
                 <AccountIdentityMark
                   account={account}
                   size="group"
+                  surfaceContext={isSelected ? "colored-card" : "default"}
                   testID={"manual-account-selector-logo-" + account.id}
                   fallbackColor={
                     isSelected

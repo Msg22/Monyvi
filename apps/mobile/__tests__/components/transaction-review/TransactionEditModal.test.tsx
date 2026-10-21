@@ -1,5 +1,6 @@
 import { fireEvent, render, within } from "@testing-library/react-native";
 
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { TransactionEditModal } from "@/components/transaction-review/edit-modal/TransactionEditModal";
 
 const mockSetAmount = jest.fn();
@@ -9,6 +10,10 @@ const mockSetIsCurrencyPickerOpen = jest.fn();
 const mockHandleSave = jest.fn();
 const mockHandleSelectAccount = jest.fn();
 let mockStateOverrides: Record<string, unknown> = {};
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: () => ({ isDark: false }),
+}));
 
 jest.mock("@/hooks/useModalBottomInset", () => ({
   useModalBottomInset: (): number => 16,
@@ -317,4 +322,41 @@ describe("TransactionEditModal existing voice workspace", () => {
 
     expect(mockSetAmount).toHaveBeenCalledWith("123");
   });
+});
+
+it("retains a known pending account logo when reopening a legacy review editor", () => {
+  mockStateOverrides = {
+    selectedAccountId: "pending-known-bank",
+    selectedAccountName: "TEST pending bank",
+    accountOptions: [
+      {
+        id: "pending-known-bank",
+        name: "TEST pending bank",
+        currency: "EGP",
+        isPending: true,
+        type: "BANK",
+      },
+    ],
+  };
+  const view = render(
+    <TransactionEditModal
+      {...baseProps}
+      sourceVariant="sms"
+      pendingAccounts={[
+        {
+          tempId: "pending-known-bank",
+          name: "TEST pending bank",
+          currency: "EGP",
+          type: "BANK",
+          institutionId: "nbe",
+          senderDisplayName: "NBE",
+        },
+      ]}
+    />
+  );
+  const mark = view
+    .UNSAFE_getAllByType(AccountIdentityMark)
+    .find((item) => item.props.testID === "sms-edit-selected-account-identity");
+  expect(mark?.props.account).toEqual({ type: "BANK", institutionId: "nbe" });
+  expect(mockHandleSave).not.toHaveBeenCalled();
 });

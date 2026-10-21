@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react-native";
 import React from "react";
 import { Platform } from "react-native";
 
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
+import { AccountSelector } from "@/components/add-transaction/AccountSelector";
 import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { FrequencyPickerModal } from "@/components/modals/FrequencyPickerModal";
@@ -124,11 +126,47 @@ describe("recurring payment selector safe areas", () => {
     });
   });
 
-  it("pads the account selector above the native bottom bar", () => {
+  it("pads the account selector above the native bottom bar and protects selected logo contrast", () => {
+    const accounts = [account] as unknown as Account[];
+    const selector = render(
+      <AccountSelectorModal
+        visible
+        accounts={accounts}
+        selectedId="account-1"
+        onSelect={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(
+      selector.UNSAFE_getByType(AccountIdentityMark).props.surfaceContext
+    ).toBe("colored-card");
+    selector.unmount();
+    const manual = render(
+      <AccountSelector
+        accounts={accounts}
+        selectedId="account-1"
+        onSelect={jest.fn()}
+      />
+    );
+    expect(
+      manual.UNSAFE_getByType(AccountIdentityMark).props.surfaceContext
+    ).toBe("colored-card");
+    manual.rerender(
+      <AccountSelector
+        accounts={accounts}
+        selectedId="other"
+        onSelect={jest.fn()}
+      />
+    );
+    expect(
+      manual.UNSAFE_getByType(AccountIdentityMark).props.surfaceContext
+    ).toBe("default");
+    manual.unmount();
     render(
       <AccountSelectorModal
         visible
-        accounts={[account] as unknown as Account[]}
+        accounts={accounts}
         selectedId="account-1"
         onSelect={jest.fn()}
         onClose={jest.fn()}

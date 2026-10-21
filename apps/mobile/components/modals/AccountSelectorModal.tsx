@@ -137,6 +137,9 @@ export function AccountSelectorModal({
                           <AccountIdentityMark
                             account={account}
                             size="group"
+                            surfaceContext={
+                              isSelected ? "colored-card" : "default"
+                            }
                             testID={"account-selector-identity-" + account.id}
                             fallbackColor={
                               isSelected

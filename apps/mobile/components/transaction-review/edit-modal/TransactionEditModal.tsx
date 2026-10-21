@@ -132,15 +132,17 @@ function LegacyTransactionEditModal(
     ...props,
     allowTransactionCurrencyEdit: isSmsWorkspace,
   });
-  // Brand only by persisted account ID; never infer from a nickname.
+  // Brand by concrete persisted or pending identity, never by a nickname.
   const branded = (
     options: readonly AccountOption[]
   ): readonly AccountOption[] =>
     options.map((option) => {
       const account = props.accounts.find((item) => item.id === option.id);
-      return account?.institutionId
-        ? { ...option, institutionId: account.institutionId }
-        : option;
+      const institutionId =
+        account?.institutionId ??
+        props.pendingAccounts.find((pending) => pending.tempId === option.id)
+          ?.institutionId;
+      return institutionId ? { ...option, institutionId } : option;
     });
 
   return (
