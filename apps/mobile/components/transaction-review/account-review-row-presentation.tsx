@@ -113,16 +113,16 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
     >
       <View
         testID="account-review-account-name-and-pencil"
-        className={"min-w-0 max-w-full items-baseline gap-x-1 " + ordering}
+        className={
+          "min-w-0 max-w-full gap-x-1 " +
+          (source.accountType === "DIGITAL_WALLET"
+            ? "items-center "
+            : "items-baseline ") +
+          ordering
+        }
       >
         {hasIcon ? (
-          <View
-            className={
-              "h-8 w-7 shrink-0 items-center justify-center " +
-              // Ionicons wallet ink sits higher than the bank glyph at the same baseline.
-              (source.accountType === "DIGITAL_WALLET" ? "translate-y-0.5" : "")
-            }
-          >
+          <View className="h-8 w-7 shrink-0 items-center justify-center">
             <Ionicons
               testID="account-review-account-type-icon"
               name={accountTypeIcon(source.accountType)}
