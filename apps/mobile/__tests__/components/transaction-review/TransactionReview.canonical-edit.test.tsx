@@ -26,7 +26,6 @@ import {
 } from "@/hooks/useAccountReview";
 import {
   makeT025ReviewSession,
-  makeT025SmsOriginal,
   T025_IDS,
 } from "../../../../../packages/logic/src/sms-review-drafts/__tests__/account-review-v2-t025-fixtures";
 import {
@@ -532,18 +531,13 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     expect(screen.getByTestId("canonical-account-choice")).toBeTruthy();
   });
 
-  it("account issue drills into original-order missing rows and All tab restores the list", () => {
-    const two = makeT025ReviewSession(
-      T025_IDS.queue,
-      [makeT025SmsOriginal(0), makeT025SmsOriginal(1)],
-      [T025_IDS.rowOne, T025_IDS.rowTwo]
-    );
-    const bank = makeOwnedContext().accounts.find(
-      (account) => account.type === "BANK"
-    );
+  it("Needs review shows missing-account rows without changing global selected Save scope", () => {
+    const two = twoGroupSession();
+    const bank = makeOwnedContext().accounts.find((a) => a.type === "BANK");
     if (!bank) throw new Error("Missing owned bank");
-    const filtered = accountReviewSessionSchema.parse({
+    const needsReview = accountReviewSessionSchema.parse({
       ...two,
+      filter: "needs_review",
       groups: [],
       rows: two.rows.map((row, index) =>
         index === 0
@@ -571,33 +565,29 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
             }
       ),
     });
-    mockHook.mockImplementation(() => fakeHook(filtered));
-    const screen = render(review());
-    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
-    expect(screen.getByTestId("pr-account-needed-count")).toHaveTextContent(
+    mockHook.mockImplementation(() => fakeHook(needsReview));
+    const view = render(review());
+    expect(view.getByTestId("pr-account-needed-count")).toHaveTextContent("1");
+    expect(view.getAllByTestId("canonical-edit-row")).toHaveLength(1);
+    expect(view.getByTestId("canonical-choose-account")).toBeTruthy();
+    expect(view.getByTestId("pr-global-save-selected-count")).toHaveTextContent(
       "1"
     );
-    expect(
-      screen.getByTestId("pr-global-save-selected-count")
-    ).toHaveTextContent("1");
-    fireEvent.press(screen.getByTestId("pr-account-needed-tab"));
-    expect(screen.getByTestId("pr-account-needed-tab")).toHaveProp(
-      "accessibilityState",
-      { selected: true }
+    expect(view.getByTestId("canonical-discard-all")).toBeTruthy();
+
+    const all = accountReviewSessionSchema.parse({
+      ...needsReview,
+      filter: "all",
+    });
+    mockHook.mockImplementation(() => fakeHook(all));
+    view.rerender(review());
+    expect(view.getAllByTestId("canonical-edit-row")).toHaveLength(2);
+    expect(view.getByTestId("pr-global-save-selected-count")).toHaveTextContent(
+      "1"
     );
-    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(1);
-    expect(
-      screen.getByTestId("pr-global-save-selected-count")
-    ).toHaveTextContent("1");
-    expect(screen.queryByTestId("canonical-discard-all")).toBeNull();
-    expect(mockDispatch).not.toHaveBeenCalled();
-    fireEvent.press(screen.getByTestId("pr-filter-all"));
-    expect(screen.getAllByTestId("canonical-edit-row")).toHaveLength(2);
-    expect(
-      screen.getByTestId("pr-global-save-selected-count")
-    ).toHaveTextContent("1");
     expect(mockDispatch).not.toHaveBeenCalled();
   });
+
   it("linked disclosure preserves main-list rows, account identity and global selection", () => {
     const linked = twoGroupSession();
     mockHook.mockImplementation(() => fakeHook(linked));
@@ -759,24 +749,20 @@ describe("#395 PR396 review comment regressions — canonical actual-container b
     );
   });
 
-  it("currency/account blockers appear in the distinct Account needed tab, not duplicate card actions", () => {
+  it("currency/account blockers stay in Needs review with no duplicate card actions", () => {
     const blocked = makeUnconfirmedCurrencyReview(sourceSession);
-    mockHook.mockImplementation(() => fakeHook(blocked));
+    mockHook.mockImplementation(() =>
+      fakeHook(
+        accountReviewSessionSchema.parse({ ...blocked, filter: "needs_review" })
+      )
+    );
     const rendered = render(review());
     expect(rendered.getByTestId("pr-account-needed-count")).toHaveTextContent(
       "1"
     );
     expect(rendered.queryAllByTestId("pr-localized-row-issue")).toHaveLength(0);
-    expect(rendered.getByTestId("pr-account-needed-tab")).toHaveProp(
-      "accessibilityState",
-      { selected: false }
-    );
-    fireEvent.press(rendered.getByTestId("pr-account-needed-tab"));
-    expect(rendered.getByTestId("pr-account-needed-tab")).toHaveProp(
-      "accessibilityState",
-      { selected: true }
-    );
     expect(rendered.getAllByTestId("canonical-edit-row")).toHaveLength(1);
+    expect(rendered.getByTestId("canonical-choose-account")).toBeTruthy();
     expect(
       rendered.getByTestId("pr-global-save-selected-count")
     ).toHaveTextContent("0");

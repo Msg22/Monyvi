@@ -48,7 +48,6 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 
 type PanelProps = ComponentProps<typeof AccountReviewPanel>;
 type ReviewFilter = AccountReviewSession["filter"];
-type ReviewVisibleTab = ReviewFilter | "account_needed";
 
 function requireScene(id: string): (typeof descriptorCatalog.scenes)[number] {
   const result = descriptorCatalog.scenes.find((scene) => scene.id === id);
@@ -214,27 +213,39 @@ function openDetails(): void {
   expect(toggle).toHaveProp("accessibilityState", { expanded: true });
 }
 
-function assertFourTabs(
-  current: ReviewVisibleTab | null,
-  temporarilyFiltered = false,
-  hasAccountNeeded = true
+function getReactTestInstanceProps(instance: unknown): Record<string, unknown> {
+  const instanceWithProps = instance as { readonly props?: unknown };
+  return instanceWithProps.props &&
+    typeof instanceWithProps.props === "object" &&
+    !Array.isArray(instanceWithProps.props)
+    ? (instanceWithProps.props as Record<string, unknown>)
+    : {};
+}
+
+function testIdOf(instance: unknown): string | undefined {
+  const props = getReactTestInstanceProps(instance);
+  return typeof props.testID === "string" ? props.testID : undefined;
+}
+
+function assertThreeTabs(
+  current: ReviewFilter | null,
+  temporarilyFiltered = false
 ): void {
-  const filters: readonly ReviewVisibleTab[] = [
-    "all",
-    "needs_review",
-    "account_needed",
-    "selected",
-  ];
+  const filters: readonly ReviewFilter[] = ["all", "needs_review", "selected"];
+  const tabs = within(
+    screen.getByTestId("account-review-filter-bar")
+  ).getAllByRole("button");
+  expect(tabs.map((tab) => testIdOf(tab))).toEqual(
+    filters.map((filter) => "account-review-filter-" + filter)
+  );
+  expect(
+    screen.queryByTestId("account-review-filter-account_needed")
+  ).toBeNull();
   for (const tab of filters) {
-    if (tab === "account_needed" && !hasAccountNeeded) {
-      expect(screen.queryByTestId("account-review-filter-" + tab)).toBeNull();
-      continue;
-    }
     const button = screen.getByTestId("account-review-filter-" + tab);
     expect(button).toHaveProp("accessibilityRole", "button");
     expect(button.props.accessibilityLabel).toEqual(expect.any(String));
-    const selected =
-      tab === current && (!temporarilyFiltered || tab === "account_needed");
+    const selected = !temporarilyFiltered && tab === current;
     if (selected) expect(button).toBeSelected();
     else expect(button).not.toBeSelected();
   }
@@ -262,7 +273,7 @@ afterEach(async (): Promise<void> => {
 });
 
 describe("#395 T058 — B1 R3 conditional panel composition", () => {
-  it("R3-05 starts collapsed, then shows QNB3/CIB1 with Account needed in the fourth tab", () => {
+  it("R3-05 starts collapsed, then shows QNB3/CIB1 with three accurate tab counts", () => {
     const props = show("r3-combined-en");
     const qnb = requireGroup(
       { groups: props.groups, summary: props.summary },
@@ -293,11 +304,12 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     ).toBeTruthy();
     expect(screen.queryByTestId("account-review-compact-issues")).toBeNull();
     expect(props.accountNeededCount).toBe(1);
-    expect(
-      screen.getByTestId("account-review-filter-account_needed")
-    ).toHaveProp("accessibilityLabel", "Account needed (1)");
+    expect(screen.getByTestId("account-review-filter-needs_review")).toHaveProp(
+      "accessibilityLabel",
+      "Needs review (5)"
+    );
     expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
-    assertFourTabs("all");
+    assertThreeTabs("all");
     expect(screen.getByTestId("account-review-clear-selection")).toBeTruthy();
     expect(
       screen.getByTestId("account-review-visible-count")
@@ -321,7 +333,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onSelectReady).not.toHaveBeenCalled();
   });
 
-  it("issues-only keeps amount/category inline while account/currency recovery belongs to fourth tab", () => {
+  it("issues-only keeps amount/category inline and missing accounts under Needs review", () => {
     const props = show("r3-issues-only");
     expect(props.groups).toEqual([]);
     expect(props.summary).toMatchObject({
@@ -337,23 +349,26 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(issues.queryByText("Account needed")).toBeNull();
     expect(issues.queryByText("Confirm currency")).toBeNull();
     expect(props.accountNeededCount).toBe(2);
-    expect(
-      screen.getByTestId("account-review-filter-account_needed")
-    ).toHaveProp("accessibilityLabel", "Account needed (2)");
+    expect(screen.getByTestId("account-review-filter-needs_review")).toHaveProp(
+      "accessibilityLabel",
+      "Needs review (4)"
+    );
+    assertThreeTabs("all");
     expect(screen.queryByTestId("account-review-default-info")).toBeNull();
     expect(screen.queryByTestId("account-review-group-view-all")).toBeNull();
   });
 
-  it("fourth-tab account recovery and inline category recovery invoke distinct scoped callbacks", () => {
+  it("Needs review retains missing-account reasons and independent category recovery", () => {
     const props = show("r3-issues-only");
     openDetails();
-    const accountTab = screen.getByTestId(
-      "account-review-filter-account_needed"
+    const needsReview = screen.getByTestId(
+      "account-review-filter-needs_review"
     );
-    expect(accountTab).toHaveProp("accessibilityRole", "button");
-    expect(accountTab).toHaveProp("accessibilityLabel", "Account needed (2)");
-    fireEvent.press(accountTab);
-    expect(props.onAccountNeededPress).toHaveBeenCalledTimes(1);
+    expect(needsReview).toHaveProp("accessibilityRole", "button");
+    expect(needsReview).toHaveProp("accessibilityLabel", "Needs review (4)");
+    fireEvent.press(needsReview);
+    expect(props.onFilterChange).toHaveBeenCalledWith("needs_review");
+    expect(props.onAccountNeededPress).not.toHaveBeenCalled();
     expect(props.onIssuePress).not.toHaveBeenCalled();
     const issues = within(screen.getByTestId("account-review-compact-issues"));
     expect(issues.queryByLabelText("Account needed")).toBeNull();
@@ -364,7 +379,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onIssuePress).toHaveBeenCalledWith(
       "account_review_issue_category"
     );
-    expect(props.onFilterChange).not.toHaveBeenCalled();
+    expect(props.onFilterChange).toHaveBeenCalledTimes(1);
     expect(props.onConfirm).not.toHaveBeenCalled();
     expect(props.onSelectReady).not.toHaveBeenCalled();
     expect(props.onClearSelection).not.toHaveBeenCalled();
@@ -382,7 +397,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(screen.queryByTestId("account-review-details-panel")).toBeNull();
     expect(screen.queryByTestId("account-review-default-info")).toBeNull();
     expect(screen.queryByTestId("account-review-filter-empty")).toBeNull();
-    assertFourTabs("all", false, false);
+    assertThreeTabs("all");
   });
 
   it("shows reviewed feedback after an explicit existing-account choice", () => {
@@ -392,7 +407,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     });
     expect(screen.getByText("Accounts reviewed")).toBeTruthy();
     expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
-    assertFourTabs("all", false, false);
+    assertThreeTabs("all");
   });
 
   it("confirmed QNB/CIB expose direct Change without reopening group confirmation", () => {
@@ -437,24 +452,22 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onRemove).not.toHaveBeenCalled();
   });
 
-  it("fourth Account needed tab is a temporary scoped action and keeps canonical filters untouched", () => {
+  it("positive missing-account count never creates a fourth tab or changes the canonical filter", () => {
     const props = show("r3-combined-en");
-    const accountNeeded = screen.getByTestId(
-      "account-review-filter-account_needed"
-    );
-    expect(accountNeeded).toHaveProp(
+    expect(props.accountNeededCount).toBe(1);
+    assertThreeTabs("all");
+    expect(screen.getByTestId("account-review-filter-needs_review")).toHaveProp(
       "accessibilityLabel",
-      "Account needed (1)"
+      "Needs review (5)"
     );
-    assertFourTabs("all");
-    fireEvent.press(accountNeeded);
-    expect(props.onAccountNeededPress).toHaveBeenCalledTimes(1);
-    expect(props.onFilterChange).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("account-review-filter-needs_review"));
+    expect(props.onFilterChange).toHaveBeenCalledWith("needs_review");
+    expect(props.onAccountNeededPress).not.toHaveBeenCalled();
     expect(props.onSelectReady).not.toHaveBeenCalled();
     expect(props.onClearSelection).not.toHaveBeenCalled();
   });
 
-  it("temporary Account needed uses distinct source-row union, hides toolbar, and preserves global Selected count", () => {
+  it("legacy in-flight account scope preserves Selected count without a visible fourth tab", () => {
     const original = propsFor("r3-issues-only");
     const props = show("r3-issues-only", {
       accountNeededActive: true,
@@ -483,10 +496,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
         ],
       },
     });
-    assertFourTabs("account_needed", true);
-    expect(
-      screen.getByTestId("account-review-filter-account_needed")
-    ).toHaveProp("accessibilityLabel", "Account needed (2)");
+    assertThreeTabs(null, true);
     expect(screen.getByTestId("account-review-filter-selected")).toHaveProp(
       "accessibilityLabel",
       "Selected (1)"
@@ -504,13 +514,13 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onClearSelection).not.toHaveBeenCalled();
   });
 
-  it("resolving the last account hides its tab and returns to All", () => {
+  it("resolving the last in-flight account scope returns to All without a fourth tab", () => {
     const props = show("r3-clean", {
       accountNeededActive: true,
       temporaryScopeActive: true,
       accountNeededCount: 0,
     });
-    assertFourTabs(null, true, false);
+    assertThreeTabs(null, true);
     expect(
       screen.queryByTestId("account-review-account-needed-empty")
     ).toBeNull();
@@ -547,7 +557,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(
       screen.getByTestId("account-review-group-linked-row-preview-panel")
     ).toHaveTextContent(/Coffee/);
-    assertFourTabs("all");
+    assertThreeTabs("all");
     expect(screen.getByTestId("account-review-selection-toolbar")).toBeTruthy();
     expect(
       screen.queryByTestId("account-review-linked-transactions-only")
@@ -571,7 +581,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       selectedCount: 0,
       distinctNeedsReviewCount: 0,
     });
-    assertFourTabs("selected", false, false);
+    assertThreeTabs("selected");
     // Filtering does not hide the real unfiltered summary.
     expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
     expect(screen.getByTestId("account-review-filter-empty")).toBeTruthy();
@@ -597,7 +607,7 @@ describe("#395 T058 — parent-owned filters, selections and group actions", () 
     fireEvent.press(screen.getByTestId("account-review-filter-selected"));
     expect(props.onFilterChange).toHaveBeenNthCalledWith(1, "needs_review");
     expect(props.onFilterChange).toHaveBeenNthCalledWith(2, "selected");
-    assertFourTabs("all", false, false);
+    assertThreeTabs("all");
     expect(screen.queryByTestId("account-review-clear-selection")).toBeNull();
     fireEvent.press(screen.getByTestId("account-review-select-ready"));
     expect(props.onSelectReady).toHaveBeenCalledTimes(1);
@@ -699,6 +709,7 @@ describe("#395 T058 — responsive, RTL, long-list and semantic-only coverage", 
         index === 1 ? { ...group, displayName: longName } : group
       );
       show("r3-combined-en", { groups, summary: scene.summary });
+      assertThreeTabs("all");
       openDetails();
       expect(
         screen.getByText(longName + " · " + groups[1]?.currencyLabel)
@@ -721,7 +732,7 @@ describe("#395 T058 — responsive, RTL, long-list and semantic-only coverage", 
       distinctNeedsReviewCount: 5,
       selectedCount: 2,
     });
-    assertFourTabs("all");
+    assertThreeTabs("all");
     expect(screen.getByText("حسابان يحتاجان مراجعة")).toBeTruthy();
     openDetails();
     for (const group of props.groups) {

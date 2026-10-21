@@ -22,7 +22,7 @@ import {
 } from "./SharedAccountSuggestions";
 
 type ReviewFilter = AccountReviewSession["filter"];
-type ReviewVisibleTab = ReviewFilter | "account_needed";
+type ReviewVisibleTab = ReviewFilter;
 type ReviewRowId = AccountReviewRow["rowId"];
 
 export interface AccountReviewPanelProps extends SharedAccountSuggestionsProps {
@@ -106,11 +106,8 @@ function FilterButton(props: FilterButtonProps): React.JSX.Element {
 interface FilterBarProps {
   readonly filter: ReviewFilter;
   readonly summary: SharedReviewSummaryView;
-  readonly accountNeededActive: boolean;
-  readonly accountNeededCount: number;
   readonly temporaryScopeActive: boolean;
   readonly isBusy: boolean;
-  readonly onAccountNeededPress: () => void;
   readonly onFilterChange: (filter: ReviewFilter) => void;
 }
 
@@ -127,18 +124,15 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
     selected: t("account_review_filter_selected", {
       defaultValue: approvedCopy[language].selected,
     }),
-    account_needed: t("account_review_issue_account_needed"),
   };
   const counts: Record<ReviewVisibleTab, number> = {
     all: props.summary.totalCount,
     needs_review: props.summary.distinctNeedsReviewCount,
     selected: props.summary.selectedCount,
-    account_needed: props.accountNeededCount,
   };
   const filters: readonly ReviewVisibleTab[] = [
     "all",
     "needs_review",
-    "account_needed",
     "selected",
   ];
   return (
@@ -157,30 +151,18 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
           (language === "ar" ? "flex-row-reverse" : "flex-row")
         }
       >
-        {filters
-          .filter(
-            (value) =>
-              value !== "account_needed" || props.accountNeededCount > 0
-          )
-          .map((value) => (
-            <FilterButton
-              key={value}
-              value={value}
-              label={labels[value]}
-              count={counts[value]}
-              active={
-                value === "account_needed"
-                  ? props.accountNeededActive
-                  : !props.temporaryScopeActive && props.filter === value
-              }
-              language={language}
-              disabled={props.isBusy}
-              onChange={(tab) => {
-                if (tab === "account_needed") props.onAccountNeededPress();
-                else props.onFilterChange(tab);
-              }}
-            />
-          ))}
+        {filters.map((value) => (
+          <FilterButton
+            key={value}
+            value={value}
+            label={labels[value]}
+            count={counts[value]}
+            active={!props.temporaryScopeActive && props.filter === value}
+            language={language}
+            disabled={props.isBusy}
+            onChange={props.onFilterChange}
+          />
+        ))}
       </View>
     </ScrollView>
   );
@@ -434,11 +416,8 @@ export function AccountReviewPanel(
       <ReviewFilterBar
         filter={props.filter}
         summary={props.summary}
-        accountNeededActive={props.accountNeededActive}
-        accountNeededCount={props.accountNeededCount}
         temporaryScopeActive={props.temporaryScopeActive}
         isBusy={props.isBusy}
-        onAccountNeededPress={props.onAccountNeededPress}
         onFilterChange={props.onFilterChange}
       />
       {!props.temporaryScopeActive ? (

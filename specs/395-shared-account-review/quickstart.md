@@ -37,7 +37,16 @@ preserved.
   integration and validation are tracked independently; do not infer logo device
   acceptance from the compact-review tests.
 
-## CURRENT manual entry and owner compact UI — 2026-10-20
+## Current tab correction — owner approval, 2026-10-21
+
+The visible, horizontally scrollable tabs are **All / Needs review / Selected**
+in that order (RTL mirrored). Missing-account/currency issues, including
+discontiguous source rows and SMS ATM Cash destinations, stay in Needs review.
+Keep direct Choose an account, truthful selected counts, inline linked rows and
+selected-only Save. The 2026-10-20 fourth-tab interactive HTML is superseded
+only for its tab navigation; immutable design files stay unchanged.
+
+## Voice fixture entry and owner compact UI — 2026-10-20 (updated 2026-10-21)
 
 This dated update supersedes conflicting earlier ACTIVE text below; original
 quickstart, historical planning and evidence are otherwise unchanged.
@@ -49,12 +58,13 @@ it does **not** use the old `reviewFixtureSceneId` harness, a microphone or
 Gemini. **TEST Save is still a real guarded local Save**: check
 Transactions/accounts before retrying an uncertain result.
 
-In the current compact review, the fourth **Account needed** tab is a
-**temporary, distinct source-row account/currency union**, including
-discontiguous rows and eligible genuine SMS ATM Cash destination issues. It does
-**not** add `account_needed` to the canonical filter enum. `Show all` restores
-source order without changing globally selected Save rows. Selected counts
-remain truthful; pending groups still require explicit Confirm. The expanded
+In the current compact review, **All / Needs review / Selected** are the only
+visible tabs. Missing-account/currency blockers, including discontiguous source
+rows and genuine SMS ATM Cash destinations, remain under **Needs review** with
+direct row-level account recovery. No `account_needed` canonical tab or new
+session filter is introduced. An already-active legacy temporary account scope
+can exit through `Show all`; it does not alter source order, globally selected
+Save rows or counts. Pending groups still require explicit Confirm. The expanded
 account card has **no duplicate account/currency action row**; amount/category
 actions remain inline.
 
@@ -117,13 +127,13 @@ in their earlier scope. See
    `[TEST] Game` and unselected QNB, synthetic text drives the _real current_
    account-review controls and **real clearly marked TEST Save**. It does
    **not** call the microphone, Gemini, transcription or SMS provider. Open
-   collapsed account review/two-line transcript, discontiguous Account
-   needed/Show all, linked rows, explicit Confirm, compact inline ellipsis, one
-   chooser/overlay, ready auto-selection with manual opt-out, Undo/Discard
-   lease, footer/insets and responsive conditions. A TEST Save can persist local
-   account/financial records—**not a dry run**. **Before retrying an uncertain
-   Save, check Transactions and the account list**; a successful Save must not
-   be mistaken for a failure and repeated.
+   collapsed account review/two-line transcript, missing-account rows under
+   Needs review with inline account choice, linked rows, explicit Confirm,
+   compact inline ellipsis, one chooser/overlay, ready auto-selection with
+   manual opt-out, Undo/Discard lease, footer/insets and responsive conditions.
+   A TEST Save can persist local account/financial records—**not a dry run**.
+   **Before retrying an uncertain Save, check Transactions and the account
+   list**; a successful Save must not be mistaken for a failure and repeated.
 2. **Actual Voice capture is different evidence.** Only real owner-authorized
    recording can cover permission rationale/grant/denial,
    recording/interruption, temporary file cleanup, transcription/Gemini, spoken
@@ -146,10 +156,11 @@ not a Maestro scene identifier; do not interchange them.
   `Accounts reviewed` is conditional. Transactions appear early; the transcript
   starts at **two lines** and expands. No `View all` and no implicit
   confirmation by clicking a pending-group transaction.
-- Account needed/linked-row views are **temporary** source-ordered filters with
-  `Show all`; selected/Save scope stays canonical. Ready rows auto-select
-  initially/when newly ready, explicit manual uncheck stays honored, and
-  `Select ready` reselects eligible rows **in the active filter**.
+- Missing-account rows stay in **Needs review**, while linked rows expand
+  inline. Any legacy in-flight account temporary scope can exit via `Show all`
+  without changing selected/Save scope. Ready rows auto-select initially/when
+  newly ready, explicit manual uncheck stays honored, and `Select ready`
+  reselects eligible rows **in the active filter**.
 - One account chooser shows current choice/type/currency and affected rows.
   `Use account — EGP/USD` applies authoritative account+currency together,
   **without FX conversion, a standalone currency-only action, or a second
