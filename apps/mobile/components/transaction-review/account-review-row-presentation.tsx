@@ -12,6 +12,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { palette } from "@/constants/colors";
+import { fontFamily, arabicFontFamily } from "@/constants/typography";
 import {
   getCategoryIconConfig,
   getSafeCategoryIconConfig,
@@ -27,6 +28,12 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 const rowWritingDirectionStyles = StyleSheet.create({
   rtl: { writingDirection: "rtl" },
   ltr: { writingDirection: "ltr" },
+  // Use the app's loaded fonts, avoiding OEM-font overhang clipping on Android 15+.
+  accountLatin: { fontFamily: fontFamily.semiBold, fontWeight: "normal" },
+  accountArabic: {
+    fontFamily: arabicFontFamily.semiBold,
+    fontWeight: "normal",
+  },
 });
 
 export type AccountReviewRowStatusTone = "pending" | "confirmed" | "removed";
@@ -126,7 +133,14 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
     >
       <View
         testID="account-review-account-name-and-pencil"
-        className={"min-w-0 max-w-full items-baseline gap-x-1 " + ordering}
+        className={
+          "min-w-0 max-w-full gap-x-1 " +
+          ((source.accountIdentity?.type ?? source.accountType) ===
+          "DIGITAL_WALLET"
+            ? "items-center "
+            : "items-baseline ") +
+          ordering
+        }
       >
         {hasIcon ? (
           <View className="h-8 w-7 shrink-0 items-center justify-center">
@@ -139,25 +153,15 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
               size="metadata"
               testID="account-review-account-type-icon"
               fallback={
-                <View
-                  className={
-                    // Optical correction belongs only to the wallet fallback glyph.
-                    (source.accountIdentity?.type ?? source.accountType) ===
-                    "DIGITAL_WALLET"
-                      ? "translate-y-0.5"
-                      : ""
-                  }
-                >
-                  <Ionicons
-                    name={accountTypeIcon(
-                      source.accountIdentity?.type ?? source.accountType
-                    )}
-                    color={palette.slate[500]}
-                    size={20}
-                    accessibilityElementsHidden
-                    importantForAccessibility="no"
-                  />
-                </View>
+                <Ionicons
+                  name={accountTypeIcon(
+                    source.accountIdentity?.type ?? source.accountType
+                  )}
+                  color={palette.slate[500]}
+                  size={20}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
               }
             />
           </View>
@@ -170,11 +174,16 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
                 : "account-review-account-label"
             }
             className={
-              "min-w-0 max-w-full shrink text-sm font-semibold leading-5 " +
+              "min-w-0 max-w-full shrink text-sm leading-5 " +
               "text-text-primary dark:text-text-primary-dark " +
               textAlign
             }
-            style={direction}
+            style={[
+              direction,
+              rtl
+                ? rowWritingDirectionStyles.accountArabic
+                : rowWritingDirectionStyles.accountLatin,
+            ]}
           >
             {title}
           </Text>

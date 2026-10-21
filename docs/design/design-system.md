@@ -150,7 +150,19 @@ Fonts:
 - Readex Pro is loaded for brand use.
 
 Use locale-aware typography through `getTextStyles()` when a style object is
-needed. `textStyles` is deprecated because it is static Inter-only.
+needed. `textStyles` is deprecated because it is static Inter-only. A NativeWind
+weight class alone does not apply Inter/Noto Sans Arabic; bind the loaded family
+explicitly when no shared typography primitive already does so. For named weight
+files, avoid an additional synthetic weight.
+
+Android 15+ can measure text on glyph advances but paint it on glyph bounds,
+leaving a missing final word with its space still reserved. This was reproduced
+in a Review account label on an Android 16 Samsung device; applying the existing
+Inter family resolved the owner's example. See the
+[upstream React Native fix](https://github.com/react/react-native/commit/dcdb52b).
+This scoped font correction is not an app-wide native-engine fix. Compare native
+line/layout metrics with device pixels before changing spacing or wrapping;
+never insert padding characters into account names to mask missing text.
 
 Common scale:
 
