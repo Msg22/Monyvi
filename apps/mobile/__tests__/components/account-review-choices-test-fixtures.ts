@@ -63,7 +63,8 @@ export function makeQnbChoiceCandidates(): readonly ChoiceCandidate[] {
     (account): ChoiceCandidate => ({
       id: account.id,
       displayName: account.name,
-      identityDetails: "Bank · EGP · QNB · •••• " + account.cardLast4,
+      identityDetails: "Bank · QNB · •••• " + account.cardLast4,
+      currencyCode: account.currency,
       accessibilityLabel:
         account.name + ", Bank, EGP, card ending " + account.cardLast4,
       isEligible: true,
@@ -72,7 +73,8 @@ export function makeQnbChoiceCandidates(): readonly ChoiceCandidate[] {
   const extra: ChoiceCandidate = {
     id: "synthetic-ui-only-third-QNB-candidate",
     displayName: "QNB Everyday",
-    identityDetails: "Bank · EGP · QNB · •••• 4402",
+    identityDetails: "Bank · QNB · •••• 4402",
+    currencyCode: "EGP",
     accessibilityLabel: "QNB Everyday, Bank, EGP, card ending 4402",
     isEligible: true,
   };

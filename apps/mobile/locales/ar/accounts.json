@@ -46,6 +46,7 @@
   "danger_zone": "منطقة الخطر",
   "default_account": "الحساب الافتراضي",
   "default_account_badge": "الحساب الافتراضي",
+  "default_account_short_badge": "افتراضي",
   "default_account_description": "سيتم اختيار هذا الحساب افتراضياً للمعاملات الجديدة.",
   "default_account_bank_helper": "يُستخدم للمعاملات الجديدة ومعاملات الصوت والرسائل عندما لا يُذكر حساب وتطابق العملة عملة الحساب.",
   "default_account_cash_helper": "يُستخدم للمعاملات الجديدة ومعاملات الصوت عندما لا يُذكر حساب وتطابق العملة عملة الحساب.",

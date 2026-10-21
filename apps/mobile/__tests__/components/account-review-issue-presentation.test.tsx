@@ -24,6 +24,7 @@ import {
   presentCanonicalRowDetails,
   presentIssueRecoveryTarget,
   presentReviewIssues,
+  presentReviewAccountChoices,
   presentReviewRowIssueKeys,
   reviewChoiceStamp,
 } from "@/components/transaction-review/shared-account-presentation";
@@ -59,6 +60,55 @@ afterEach(async (): Promise<void> => {
 });
 
 describe("#395 accepted review context and modal revision gates", () => {
+  it.each(["EGP", "BTC"])(
+    "keeps %s in the currency badge and accessible label, outside identity details",
+    (currency) => {
+      const [option] = presentReviewAccountChoices([
+        {
+          id: "account-currency-badge",
+          name: "Travel account",
+          providerDisplayName: "Example provider",
+          cardLast4: "1234",
+          type: "BANK",
+          currency,
+        },
+      ]);
+      expect(option?.identityDetails).toBe(
+        "Bank Account · Example provider · •••• 1234"
+      );
+      expect(option?.currencyCode).toBe(currency);
+      expect(option?.accessibilityLabel).toBe(
+        "Travel account, Bank Account · Example provider · •••• 1234, " +
+          currency
+      );
+    }
+  );
+
+  it.each([
+    ["en", "Default"],
+    ["ar", "افتراضي"],
+  ] as const)(
+    "marks only the actual default account in %s",
+    (language, label) => {
+      const account = {
+        id: "actual-default",
+        name: "Current default",
+        providerDisplayName: null,
+        cardLast4: null,
+        currency: "EGP",
+        isDefault: true,
+      };
+      const [defaultOption, ordinaryOption] = presentReviewAccountChoices(
+        [account, { ...account, id: "ordinary", isDefault: false }],
+        language
+      );
+      expect(defaultOption?.defaultBadgeLabel).toBe(label);
+      expect(defaultOption?.accessibilityLabel).toContain(label);
+      expect(ordinaryOption?.defaultBadgeLabel).toBeUndefined();
+      expect(ordinaryOption?.accessibilityLabel).not.toContain(label);
+    }
+  );
+
   it("R2 combined shows one account-needed issue for uncertain currency, never two CTAs", () => {
     const session = makeDefaultInfoSession("r3-combined-en");
     const distinctNeedsReviewCount = session.rows.filter(
