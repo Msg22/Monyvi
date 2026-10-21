@@ -587,6 +587,7 @@ export function presentReviewAccountChoices(
     readonly cardLast4: string | null;
     readonly type?: string;
     readonly currency: string;
+    readonly isDefault?: boolean;
   }>,
   language: ReviewDisplayLanguage = "en"
 ): readonly AccountChoiceCandidateView[] {
@@ -598,11 +599,13 @@ export function presentReviewAccountChoices(
           defaultValue: account.type,
         })
       : null;
+    const defaultBadgeLabel = account.isDefault
+      ? t("default_account_short_badge", { ns: "accounts", lng: language })
+      : undefined;
     const identityDetails = [
       typeLabel,
       account.providerDisplayName ?? account.institutionId ?? null,
       account.cardLast4 ? "•••• " + account.cardLast4 : null,
-      account.currency,
     ]
       .filter((text) => text !== null && text.length > 0)
       .join(" · ");
@@ -619,6 +622,7 @@ export function presentReviewAccountChoices(
           : null,
       institutionId: account.institutionId ?? null,
       providerDisplayName: account.providerDisplayName,
+      defaultBadgeLabel,
       iconName:
         account.type === "CASH"
           ? "cash-outline"
@@ -627,7 +631,14 @@ export function presentReviewAccountChoices(
             : account.type === "BANK"
               ? "business-outline"
               : "help-circle-outline",
-      accessibilityLabel: account.name + ", " + identityDetails,
+      accessibilityLabel: [
+        account.name,
+        defaultBadgeLabel ?? "",
+        identityDetails,
+        account.currency,
+      ]
+        .filter((text) => text.length > 0)
+        .join(", "),
       isEligible: true,
     };
   });

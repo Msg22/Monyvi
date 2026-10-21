@@ -42,6 +42,7 @@
   "danger_zone": "Danger Zone",
   "default_account": "Default account",
   "default_account_badge": "Default account",
+  "default_account_short_badge": "Default",
   "default_account_description": "This account will be selected by default for new transactions.",
   "default_account_bank_helper": "Used for new transactions and voice or SMS entries when no account is mentioned and the currency matches.",
   "default_account_cash_helper": "Used for new transactions and voice entries when no account is mentioned and the currency matches.",

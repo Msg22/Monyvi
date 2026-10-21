@@ -892,8 +892,25 @@ it.each(["en", "ar"] as const)(
     await i18next.changeLanguage(language);
     const props = makeAccountChoiceProps();
     const candidate = getQnbCandidate(props.candidateOptions, "9221");
-    renderAccounts({ ...props, selectedCandidateId: candidate.id });
+    const defaultLabel = language === "ar" ? "افتراضي" : "Default";
+    const view = render(
+      <AccountChoiceSheet
+        {...props}
+        selectedCandidateId={candidate.id}
+        candidateOptions={props.candidateOptions.map((account) => ({
+          ...account,
+          defaultBadgeLabel:
+            account.id === candidate.id ? defaultLabel : undefined,
+        }))}
+      />
+    );
     const option = screen.getByLabelText(candidate.accessibilityLabel);
+    expect(
+      screen.getAllByTestId("account-review-account-option-default")
+    ).toHaveLength(1);
+    expect(
+      within(option).getByTestId("account-review-account-option-default")
+    ).toHaveTextContent(defaultLabel);
     expect(option).toHaveProp(
       "accessibilityState",
       expect.objectContaining({ selected: true })
@@ -912,5 +929,9 @@ it.each(["en", "ar"] as const)(
     expect(background?.props.className).not.toContain(
       "dark:bg-nileGreen-900/20"
     );
+    view.rerender(<AccountChoiceSheet {...props} />);
+    expect(
+      screen.queryByTestId("account-review-account-option-default")
+    ).toBeNull();
   }
 );

@@ -48,6 +48,7 @@ export interface AccountChoiceCandidateView {
   readonly accountType?: AccountIdentitySource["type"];
   readonly institutionId?: string | null;
   readonly providerDisplayName?: string | null;
+  readonly defaultBadgeLabel?: string;
   readonly accessibilityLabel: string;
   readonly isEligible: boolean;
   readonly iconName?:
@@ -171,17 +172,37 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
         }
       />
       <View className="min-w-0 flex-1 gap-1">
-        <Text
+        <View
           className={
-            "text-base font-semibold leading-6 " +
-            (props.selected
-              ? "text-white "
-              : "text-text-primary dark:text-text-primary-dark ") +
-            (rtl ? "text-right" : "text-left")
+            "min-w-0 flex-wrap items-center gap-2 " +
+            (rtl ? "flex-row-reverse" : "flex-row")
           }
         >
-          {props.option.displayName}
-        </Text>
+          <Text
+            className={
+              "min-w-0 shrink text-base font-semibold leading-6 " +
+              (props.selected
+                ? "text-white "
+                : "text-text-primary dark:text-text-primary-dark ") +
+              (rtl ? "text-right" : "text-left")
+            }
+          >
+            {props.option.displayName}
+          </Text>
+          {props.option.defaultBadgeLabel ? (
+            <Text
+              testID="account-review-account-option-default"
+              className={
+                "shrink-0 rounded-md border px-2 py-0.5 text-xs font-semibold " +
+                (props.selected
+                  ? "border-white bg-transparent text-white"
+                  : "border-nileGreen-600 bg-nileGreen-50 text-nileGreen-700 dark:border-nileGreen-400 dark:bg-nileGreen-900 dark:text-white")
+              }
+            >
+              {props.option.defaultBadgeLabel}
+            </Text>
+          ) : null}
+        </View>
         {props.option.identityDetails.length > 0 ? (
           <Text
             className={
@@ -199,10 +220,10 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
           <Text
             testID="account-review-account-option-currency"
             className={
-              "self-start rounded-md px-2 py-0.5 text-xs font-semibold " +
+              "self-start rounded-md border px-2 py-0.5 text-xs font-semibold " +
               (props.selected
-                ? "text-white"
-                : "bg-slate-100 text-text-primary dark:bg-slate-700 dark:text-text-primary-dark")
+                ? "border-white bg-transparent text-white"
+                : "border-transparent bg-slate-100 text-text-primary dark:bg-slate-700 dark:text-text-primary-dark")
             }
           >
             {props.option.currencyCode}

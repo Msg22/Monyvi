@@ -25,7 +25,12 @@ separate manual checks.
 4. Open Choose an account with enough candidates to scroll. Scroll to the bottom
    and back. Expect the whole description to hide as soon as the list scrolls
    down and return at the top; title, close and footer actions stay reachable.
-5. After an existing valid Metals action, run Prepare test accounts. Expect
+5. Open Choose an account with EGP and BTC candidates where available. Currency
+   appears in the tag only, not appended to type/provider/card details. Select
+   each candidate; the currency tag has a visible white outline on green. The
+   actual default account has a Default tag beside its name (افتراضي in Arabic);
+   selecting another account does not move or change that default tag.
+6. After an existing valid Metals action, run Prepare test accounts. Expect
    setup to succeed without changing that Metals action. Malformed or future
    financial roots must still be rejected; do not reset real data to bypass
    them.
