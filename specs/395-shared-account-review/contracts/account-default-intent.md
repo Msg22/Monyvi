@@ -282,3 +282,32 @@ compatibility is claimed.
   mobile typecheck and touched-path lint. Device visual QA was **not** run (the
   phone stayed locked/AOD), so the manual contrast and default-swap steps remain
   open.
+
+### Pending Add prior-default pull admission (2026-10-21)
+
+A pending (`local_complete` / `sync_pending` / `sync_failed`)
+`account.create-default/v1` Add owns exactly ONE optimistic prior-default clear.
+While that Add is pending the cloud still reports the prior account as default,
+so the ordinary stock pull guard aborted the whole sync BEFORE the Add's own
+authoritative RPC could run.
+
+The pull now admits the UNMODIFIED remote row of that ONE positively proven
+prior-default account into the stock SDK dirty-column merge. The proof requires
+the immutable owned root, its parsed device-private recovery snapshot and the
+exact physical local postimage hash to agree on the same account; the clear must
+be the Add's own true->false update; exactly ONE unresolved root may claim that
+account and it must be this Add's own bound root; and every non-dirty field plus
+the financial core must still equal the proven local preimage. A legitimate
+ACCEPTED historical clear is not a competing claim, and an accepted creator
+keeps its immutable identity (owner, id, type, currency, creation time) without
+freezing its financial core to its ORIGINAL creation balance or revision: the
+CURRENT pending private postimage of that account must still match exactly.
+
+The admitted remote row may still carry the captured default or may already echo
+the same clear; both are the same unchanged physical row. The clear itself is
+still applied ONLY by the Add's own RPC, and the pending local flag stays
+authoritative until that root's own positive receipt. Equality is never an
+acknowledgement; no row is omitted, rewritten or generically upserted, and no
+independent default-clear UPDATE is sent. Every unproven path (user edit after
+the clear, diverged core, foreign owner, extra dirty field, overlapping
+unresolved claim, terminal/rejected root) keeps the ordinary fail-closed guard.

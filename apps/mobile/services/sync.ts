@@ -43,6 +43,7 @@ import {
 } from "./sync/account-action-protection";
 import { prepareOwnedFinancialActionRootPull } from "./sync/financial-action-root-pull";
 import { isAdmissiblePendingAccountMetadataPull } from "./sync/account-metadata-patch";
+import { isAdmissiblePendingAddPriorDefaultPull } from "./sync/pending-add-default-pull";
 import { acceptedAddMembersStillMatch } from "./sync/terminal-account-add-ack";
 
 export const SYNC_ERROR_CODES = {
@@ -342,6 +343,23 @@ async function admitPullInsideWriter(
             catalog,
             ownerId
           )
+        ) {
+          (kind === "created" ? admittedCreated : admittedUpdated).push(remote);
+          continue;
+        }
+        // A pending Add owns exactly ONE optimistic prior-default clear. That
+        // clear is applied only by the Add's own authoritative RPC, so the
+        // UNMODIFIED remote row is handed to the stock SDK dirty-column merge
+        // and the pending local flag stays authoritative until the Add's own
+        // positive receipt. This is never an acknowledgement.
+        if (
+          table === "accounts" &&
+          isAdmissiblePendingAddPriorDefaultPull({
+            local: localRaw,
+            remote,
+            proof: catalog.pendingAddPriorDefaultProofs.get(id),
+            expectedOwnerId: ownerId,
+          })
         ) {
           (kind === "created" ? admittedCreated : admittedUpdated).push(remote);
           continue;
