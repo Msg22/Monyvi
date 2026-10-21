@@ -24,7 +24,6 @@ import {
   Transfer,
   database,
   type CurrencyType,
-  type TransactionType,
 } from "@monyvi/db";
 import {
   roundForCurrency,
@@ -38,15 +37,19 @@ import { redactIdentifierForLog } from "@/utils/logger-redaction";
 import { isInstitutionAllowedForAccountType } from "@/validation/account-validation";
 import {
   USER_DATA_ACCESS_ERROR_CODES,
+  assertExpectedCurrentUser,
   findOwnedById,
   getCurrentUserDataScope,
   queryChildrenOfOwnedParent,
   queryOwned,
 } from "./user-data-access";
+import { prepareReplaceAccountSmsSenders } from "./account-sms-sender-service";
 import {
-  prepareReplaceAccountSmsSenders,
-  replaceAccountSmsSendersWithinWriter,
-} from "./account-sms-sender-service";
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+  type CachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 import type { PrepareInsideWriterResult } from "./core-account-financial-action-service";
 import type { FinancialActionLinkedExistingOperation } from "./financial-action-foundation-repository";
 import { editGuardedAccount } from "./account-core-writer-production";
@@ -95,6 +98,16 @@ export const EDIT_ACCOUNT_ERROR_CODES = {
   OWNERSHIP_FAILED: "OWNERSHIP_FAILED",
   NOT_FOUND: "NOT_FOUND",
   INVALID_INSTITUTION_FOR_ACCOUNT_TYPE: "INVALID_INSTITUTION_FOR_ACCOUNT_TYPE",
+  /**
+   * The owner scope holds more than one default account. The edit refuses to
+   * guess which one to clear; the existing recovery path reports the state.
+   */
+  AMBIGUOUS_DEFAULT_SCOPE: "AMBIGUOUS_DEFAULT_SCOPE",
+  /**
+   * A balance-adjustment record was requested for a non-zero live delta, which
+   * the metadata path cannot record outside the guarded account writer.
+   */
+  INVALID_BALANCE_DELTA: "INVALID_BALANCE_DELTA",
 } as const;
 export type EditAccountErrorCode =
   (typeof EDIT_ACCOUNT_ERROR_CODES)[keyof typeof EDIT_ACCOUNT_ERROR_CODES];
@@ -466,8 +479,6 @@ export async function updateAccountWithinWriter(
       accountId,
       data,
       currentUserId,
-      existingAccount,
-      previousBalance,
       newBalance,
       adjustment
     );
@@ -572,7 +583,7 @@ export async function updateAccountWithinWriter(
           date: new Date(),
           note: `Balance adjustment: ${previousBalance} \u2192 ${newBalance}`,
           source: "MANUAL" as const,
-          type: (isIncrease ? "INCOME" : "EXPENSE") as TransactionType,
+          type: isIncrease ? ("INCOME" as const) : ("EXPENSE" as const),
           userId: currentUserId,
         };
 
@@ -587,100 +598,197 @@ export async function updateAccountWithinWriter(
 }
 
 /**
- * Metadata-only account update inside an already-open `database.write`
- * block: the legacy composition (default reassignment, row metadata, SMS
- * senders, bank details, optional adjustment transaction) without touching
- * the protected balance revision. Used only when the balance delta rounds
- * to zero minor units and there is no financial effect to guard.
+ * Metadata-only account update committed as ONE atomic SQLite batch.
+ *
+ * `database.write` only serializes writers; it is not a transaction. Every
+ * row this edit touches - the owned prior default, the edited account row,
+ * the SMS senders and the bank details - is therefore prepared first and
+ * applied in a single `database.batch(...)` transaction. No `.update()`,
+ * `.create()` or partial `.batch()` may run before that final batch, so a
+ * failure inside it leaves the previous default, the new default, the bank
+ * details and the SMS senders all unchanged.
+ *
+ * Every read happens INSIDE the serialized writer, immediately before the
+ * preparation. A queued competing writer can no longer move the default
+ * graph between the lookup and the batch, and the edited row is re-read
+ * inside the writer because a row read outside it is not a snapshot
+ * authority. The owner scope is asserted again after all asynchronous
+ * planning and before the first cached row is touched.
+ *
+ * The protected balance column and revision are deliberately untouched: this
+ * path runs only for zero minor-unit deltas, so there is no financial effect
+ * to guard and this path never creates a monetary transaction. A requested
+ * balance adjustment is validated against the account's own currency and
+ * fails closed when the live balance moved.
  */
 async function updateAccountMetadataWithinWriter(
   accountId: string,
   data: UpdateAccountData,
   currentUserId: string,
-  existingAccount: Account,
-  previousBalance: number,
   newBalance: number,
   adjustment: BalanceAdjustmentPayload | null
 ): Promise<void> {
-  const accountsCollection = database.get<Account>("accounts");
-
   await database.write(async () => {
-    // If setting as default, unset any current default for this user
-    if (data.isDefault && !existingAccount.isDefault) {
-      const currentDefaults = await queryOwned(
-        accountsCollection,
-        existingAccount.userId,
-        Q.where("is_default", true),
-        Q.where("deleted", Q.notEq(true)),
-        Q.where("id", Q.notEq(accountId))
-      ).fetch();
+    // The owner scope must still hold after the caller's reads.
+    await assertExpectedCurrentUser(currentUserId);
 
-      // There should be at most one default, but we defensively unset all that match the criteria just in case of data inconsistency.
-      const currentDefault = currentDefaults[0];
-      if (currentDefault) {
-        await currentDefault.update((acc) => {
-          acc.isDefault = false;
-        });
-      }
+    const accountsCollection = database.get<Account>("accounts");
+    // Re-read the target inside the writer: the caller's row was read before
+    // the writer was entered and is not a snapshot authority.
+    const target = await findOwnedById(
+      accountsCollection,
+      accountId,
+      currentUserId
+    );
+    if (target.deleted) {
+      throw new Error(t("accounts:cannot_update_deleted_account"));
     }
 
-    // Update account metadata fields. The protected balance column is
-    // deliberately untouched here: this path runs only for zero minor-unit
-    // deltas, so any float dust below one minor unit is dropped instead of
-    // being written outside the guarded boundary.
-    await existingAccount.update((acc) => {
-      acc.name = data.name.trim();
-      acc.isDefault = data.isDefault;
-      if (hasOwnDataField(data, "institutionId")) {
-        acc.institutionId = data.institutionId?.trim() || undefined;
-      }
-
-      if (hasOwnDataField(data, "providerDisplayName")) {
-        acc.providerDisplayName = data.providerDisplayName?.trim() || undefined;
-      } else if (hasOwnDataField(data, "bankName")) {
-        acc.providerDisplayName = data.bankName?.trim() || undefined;
-      }
-    });
-
-    if (hasOwnDataField(data, "senderNames")) {
-      await replaceAccountSmsSendersWithinWriter(
-        existingAccount,
-        currentUserId,
-        data.senderNames ?? []
-      );
+    // Unset the owned prior default. The query stays owner-scoped, so a
+    // default owned by another user is never touched.
+    const priorDefaults =
+      data.isDefault && !target.isDefault
+        ? await queryOwned(
+            accountsCollection,
+            currentUserId,
+            Q.where("is_default", true),
+            Q.where("deleted", Q.notEq(true)),
+            Q.where("id", Q.notEq(accountId))
+          ).fetch()
+        : [];
+    // An ambiguous default graph is not repaired by guessing. Two owned
+    // defaults cannot be cleared by picking one, so the edit fails closed and
+    // the existing recovery path reports the state.
+    if (priorDefaults.length > 1) {
+      throw new Error(EDIT_ACCOUNT_ERROR_CODES.AMBIGUOUS_DEFAULT_SCOPE);
     }
+    const priorDefault = priorDefaults[0] ?? null;
 
-    // Update bank details if this is a bank account
-    if (existingAccount.isBank) {
-      const [activeBankDetail] = await queryChildrenOfOwnedParent(
-        database.get<BankDetails>("bank_details"),
-        existingAccount,
-        currentUserId,
-        "account_id",
-        Q.where("deleted", false)
-      ).fetch();
+    const activeBankDetail = target.isBank
+      ? ((
+          await queryChildrenOfOwnedParent(
+            database.get<BankDetails>("bank_details"),
+            target,
+            currentUserId,
+            "account_id",
+            Q.where("deleted", false)
+          ).fetch()
+        )[0] ?? null)
+      : null;
 
-      if (activeBankDetail) {
-        await activeBankDetail.update((bd) => {
-          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-        });
-      } else if (hasBankDetailsData(data)) {
-        await database.get<BankDetails>("bank_details").create((bd) => {
-          bd.accountId = accountId;
-          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-          bd.deleted = false;
-        });
-      }
-    }
+    const senderWrites = hasOwnDataField(data, "senderNames")
+      ? await prepareReplaceAccountSmsSenders(
+          target,
+          currentUserId,
+          data.senderNames ?? []
+        )
+      : null;
 
+    // A requested balance adjustment can only be recorded for a zero delta
+    // in the account's own currency. The live balance is read inside the
+    // writer, so a moved balance fails closed instead of writing an effect
+    // outside the guarded boundary. A zero delta has nothing to record, so
+    // this path never creates a monetary transaction.
     if (adjustment !== null) {
-      await createBalanceAdjustmentTransactionWithinWriter(
-        accountId,
-        currentUserId,
-        adjustment.currency,
-        previousBalance,
-        newBalance
+      if (adjustment.currency !== target.currency) {
+        throw new Error(EDIT_ACCOUNT_ERROR_CODES.INVALID_BALANCE_DELTA);
+      }
+      if (minorUnitDelta(target.balance, newBalance, target.currency) !== 0n) {
+        throw new Error(EDIT_ACCOUNT_ERROR_CODES.INVALID_BALANCE_DELTA);
+      }
+    }
+
+    // --- Prepare every row, then apply them in one transaction. ---
+    const prepared: Model[] = [];
+    // WatermelonDB mutates the cached raw during prepareUpdate(), and neither
+    // an adapter failure nor a preparation failure restores it. Capture the
+    // cache of every existing row this edit touches so a failed edit cannot
+    // leave the session reading a state that was never persisted.
+    const cacheSnapshots: CachedModelSnapshot[] = [];
+    const snapshotExisting = (model: Model): void => {
+      cacheSnapshots.push(captureCachedModelSnapshot(model));
+    };
+
+    // All asynchronous planning is finished. The owner scope must still hold
+    // before the first cached row is touched, so an owner change during the
+    // planning aborts without any saved or cached change.
+    await assertExpectedCurrentUser(currentUserId);
+
+    try {
+      if (priorDefault) {
+        snapshotExisting(priorDefault);
+        prepared.push(
+          priorDefault.prepareUpdate((draft): void => {
+            draft.isDefault = false;
+          })
+        );
+      }
+
+      snapshotExisting(target);
+      // Update account metadata fields. The protected balance column is
+      // deliberately untouched here: this path runs only for zero minor-unit
+      // deltas, so any float dust below one minor unit is dropped instead of
+      // being written outside the guarded boundary.
+      prepared.push(
+        target.prepareUpdate((acc): void => {
+          acc.name = data.name.trim();
+          acc.isDefault = data.isDefault;
+          if (hasOwnDataField(data, "institutionId")) {
+            acc.institutionId = data.institutionId?.trim() || undefined;
+          }
+
+          if (hasOwnDataField(data, "providerDisplayName")) {
+            acc.providerDisplayName =
+              data.providerDisplayName?.trim() || undefined;
+          } else if (hasOwnDataField(data, "bankName")) {
+            acc.providerDisplayName = data.bankName?.trim() || undefined;
+          }
+        })
       );
+
+      if (senderWrites) {
+        // The prepared sender creates are not applied until the batch, so a
+        // later failure simply discards them.
+        prepared.push(...senderWrites.preparedCreates);
+        prepared.push(
+          ...senderWrites.existingOperations.map((operation) => {
+            snapshotExisting(operation.model);
+            return operation.model.prepareUpdate(operation.update);
+          })
+        );
+      }
+
+      // Update bank details if this is a bank account
+      if (target.isBank) {
+        if (activeBankDetail) {
+          snapshotExisting(activeBankDetail);
+          prepared.push(
+            activeBankDetail.prepareUpdate((bd): void => {
+              bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+            })
+          );
+        } else if (hasBankDetailsData(data)) {
+          prepared.push(
+            database.get<BankDetails>("bank_details").prepareCreate((bd) => {
+              bd.accountId = accountId;
+              bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+              bd.deleted = false;
+            })
+          );
+        }
+      }
+
+      // The adapter commit and the post-commit publication are separated: a
+      // subscriber failure after a committed transaction is never exposed as a
+      // retryable persistence error.
+      await commitPreparedBatch(prepared, database);
+    } catch (error) {
+      // The transaction did not commit, so the cached rows are restored to
+      // their persisted state before the failure is re-thrown.
+      for (const snapshot of cacheSnapshots) {
+        restoreCachedModelSnapshot(snapshot);
+      }
+      throw error;
     }
   });
 }
@@ -837,60 +945,6 @@ export async function deleteAccountWithCascade(
     logger.error("deleteAccountWithCascade_failed", error);
     return { success: false, error: message };
   }
-}
-
-// ---------------------------------------------------------------------------
-// T008: Create Balance Adjustment Transaction
-// ---------------------------------------------------------------------------
-
-/**
- * Create a balance-adjustment transaction inside an already-open
- * `database.write` block.
- *
- * Skips creation entirely when the delta rounds to zero minor units for the
- * account currency — a fixed float epsilon would omit real high-precision
- * changes (for example 1000 satoshis on a BTC account).
- *
- * Throws on failure so the surrounding writer rolls back.
- *
- * @returns `true` if a transaction was actually created, `false` if skipped
- *          due to a zero minor-unit delta.
- */
-async function createBalanceAdjustmentTransactionWithinWriter(
-  accountId: string,
-  userId: string,
-  currency: CurrencyType,
-  previousBalance: number,
-  newBalance: number
-): Promise<boolean> {
-  if (minorUnitDelta(previousBalance, newBalance, currency) === 0n) {
-    return false;
-  }
-
-  const difference = newBalance - previousBalance;
-  const isIncome = difference > 0;
-  const categoryId = isIncome
-    ? BALANCE_ADJUSTMENT_INCOME_CATEGORY_ID
-    : BALANCE_ADJUSTMENT_EXPENSE_CATEGORY_ID;
-  const transactionType: TransactionType = isIncome ? "INCOME" : "EXPENSE";
-
-  const transactionsCollection = database.get<Transaction>("transactions");
-
-  await transactionsCollection.create((tx) => {
-    tx.userId = userId;
-    tx.accountId = accountId;
-    tx.amount = roundForCurrency(Math.abs(difference), currency);
-    tx.currency = currency;
-    tx.type = transactionType;
-    tx.categoryId = categoryId;
-    tx.date = new Date();
-    tx.source = "MANUAL";
-    tx.isDraft = false;
-    tx.deleted = false;
-    tx.note = `Balance adjustment: ${previousBalance} \u2192 ${newBalance}`;
-  });
-
-  return true;
 }
 
 // ---------------------------------------------------------------------------

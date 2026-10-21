@@ -106,6 +106,11 @@ let mockRejectPartialAccountUpserts = false;
 let mockForceUnverifiedUpdateResult = false;
 let mockRemoteDefaultAccountId: string | null = null;
 let mockEnforceRemoteDefaultUnique = false;
+let mockBeforeAccountMetadataUpdate:
+  | ((observation: Readonly<AccountMetadataUpdateObservation>) => Promise<void>)
+  | null = null;
+let mockFailAccountMetadataUpdateOnceForId: string | null = null;
+let mockAccountMetadataUpdateFailOnceUsed = false;
 
 interface MockLedgerModule {
   readonly database: Database;
@@ -255,7 +260,7 @@ jest.mock("@/services/supabase", () => ({
             return query;
           },
           select: (_columns: string): unknown => query,
-          then: (
+          then: async (
             resolve: (value: {
               readonly error: null | {
                 readonly code: string;
@@ -277,6 +282,31 @@ jest.mock("@/services/supabase", () => ({
             const confirmedIds = mockForceUnverifiedUpdateResult ? [] : ids;
             const defaultValue = values.is_default;
             const defaultTarget = ids[0];
+            // Authorized observation seam: the update was captured, and the
+            // observation happens BEFORE any success response or remote
+            // default map mutation.
+            if (mockBeforeAccountMetadataUpdate) {
+              await mockBeforeAccountMetadataUpdate({
+                table,
+                values,
+                filters: { ...filters },
+              });
+            }
+            // A single controlled failure for one target id, before its map
+            // mutation, so a later retry can succeed.
+            if (
+              table === "accounts" &&
+              typeof defaultTarget === "string" &&
+              mockFailAccountMetadataUpdateOnceForId === defaultTarget &&
+              !mockAccountMetadataUpdateFailOnceUsed
+            ) {
+              mockAccountMetadataUpdateFailOnceUsed = true;
+              return Promise.resolve({
+                error: { code: "23505", message: "accounts_one_default" },
+                data: [],
+                count: 0,
+              }).then(resolve);
+            }
             if (
               mockEnforceRemoteDefaultUnique &&
               table === "accounts" &&
@@ -654,13 +684,40 @@ beforeEach(async (): Promise<void> => {
 });
 afterEach((): void => {
   mockActiveOwner = OWNER;
+  mockBeforeAccountMetadataUpdate = null;
+  mockFailAccountMetadataUpdateOnceForId = null;
+  mockAccountMetadataUpdateFailOnceUsed = false;
   dbModule.__setDatabase(dbModule.__original);
 });
+
+/** The captured owner-filtered UPDATE, observed before any response. */
+export interface AccountMetadataUpdateObservation {
+  readonly table: string;
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly filters: Readonly<Record<string, unknown>>;
+}
 
 /** Mutable test transport controls backed by this module's exact Jest mocks.
  * Both suites use this typed facade rather than assigning imported ESM bindings.
  */
 export const syncFixtureControls = {
+  /** Observation seam: the captured owner-filtered UPDATE, before any response
+   * or remote default map mutation. */
+  set beforeAccountMetadataUpdate(
+    hook:
+      | ((
+          observation: Readonly<AccountMetadataUpdateObservation>
+        ) => Promise<void>)
+      | null
+  ) {
+    mockBeforeAccountMetadataUpdate = hook;
+  },
+  /** Fail the first owner-filtered UPDATE for this account id once, before its
+   * remote default map mutation. */
+  set failAccountMetadataUpdateOnceForId(value: string | null) {
+    mockFailAccountMetadataUpdateOnceForId = value;
+    mockAccountMetadataUpdateFailOnceUsed = false;
+  },
   // Synthetic remote outcome, not a local DB override. Must be set only
   // when the test has positively committed the corresponding remote RPC.
   setAccountFinancialReadback(

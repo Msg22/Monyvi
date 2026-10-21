@@ -42,6 +42,7 @@ import {
   matchesAcceptedAddAccountImmutableIdentity,
 } from "./sync/account-action-protection";
 import { prepareOwnedFinancialActionRootPull } from "./sync/financial-action-root-pull";
+import { isAdmissiblePendingAccountMetadataPull } from "./sync/account-metadata-patch";
 import { acceptedAddMembersStillMatch } from "./sync/terminal-account-add-ack";
 
 export const SYNC_ERROR_CODES = {
@@ -323,6 +324,25 @@ async function admitPullInsideWriter(
           throw new Error("account_sync_pull_default_conflict");
         }
         if (localRaw._status === "synced") {
+          (kind === "created" ? admittedCreated : admittedUpdated).push(remote);
+          continue;
+        }
+        // A pending owned NON-FINANCIAL metadata change (the legitimate Edit
+        // default replacement) keeps the local dirty value authoritative until
+        // the owner's positive owner-filtered UPDATE is acknowledged, which is
+        // what the existing transport already intends. The remote row is
+        // handed to the normal SDK resolver UNMODIFIED: it is never omitted
+        // and never ACK-ed here, so the SDK's per-dirty-column local-wins
+        // rule keeps the pending value.
+        if (
+          table === "accounts" &&
+          isAdmissiblePendingAccountMetadataPull(
+            localRaw,
+            remote,
+            catalog,
+            ownerId
+          )
+        ) {
           (kind === "created" ? admittedCreated : admittedUpdated).push(remote);
           continue;
         }

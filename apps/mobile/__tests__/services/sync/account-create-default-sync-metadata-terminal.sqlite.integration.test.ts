@@ -717,7 +717,8 @@ describe("#395 T069 — owned metadata, terminal receipts and default-state orde
     expect(refreshed.isDefault).toBe(false);
     expect(refreshed._raw._status).toBe("synced");
 
-    // 2. But if local row is dirty (unacknowledged optimistic edit on is_default), pull conflict MUST be thrown
+    // 2. A difference on a NON-dirty core field is refused: the pending
+    // default admission never covers a protected or financial divergence.
     await db.write(() =>
       refreshed.update((r) => {
         r.isDefault = true;
@@ -725,20 +726,45 @@ describe("#395 T069 — owned metadata, terminal receipts and default-state orde
     );
     expect(refreshed._raw._status).toBe("updated");
 
-    const conflictingEcho = await cloudAccount(db, a.accountId, {
+    const divergedEcho = await cloudAccount(db, a.accountId, {
       is_default: false,
+      balance: 4242,
     });
     await expect(
       realSynchronize(db, {
         pull: (): Promise<SyncPullResult> =>
           Promise.resolve({
             changes: {
-              accounts: tableUpdated(conflictingEcho),
+              accounts: tableUpdated(divergedEcho),
             },
             timestamp: ++syncFixtureControls.mockNextWatermark,
           }),
       })
     ).rejects.toThrow("account_sync_pull_default_conflict");
+
+    // 3. A pending owned non-financial default edit is admitted: the local
+    // dirty value stays authoritative until the owner's positive UPDATE ACK,
+    // so the pull succeeds and the local value is preserved.
+    const conflictingEcho = await cloudAccount(db, a.accountId, {
+      is_default: false,
+    });
+    await realSynchronize(db, {
+      pull: (): Promise<SyncPullResult> =>
+        Promise.resolve({
+          changes: {
+            accounts: tableUpdated(conflictingEcho),
+          },
+          timestamp: ++syncFixtureControls.mockNextWatermark,
+        }),
+    });
+
+    const afterPending = await db.get<Account>("accounts").find(a.accountId);
+    // The local pending value stays authoritative; the row is handed to the
+    // normal SDK resolver, which applies the remote row unchanged and keeps
+    // the local dirty column. The owner's positive owner-filtered UPDATE
+    // remains the only path that moves the server default.
+    expect(afterPending.isDefault).toBe(true);
+    expect(afterPending._raw._status).toBe("synced");
 
     noPrivateNetworkBytes();
   });
