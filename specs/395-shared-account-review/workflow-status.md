@@ -55,14 +55,14 @@ workers explicitly.
 
 ## Scope and decision ledger
 
-| ID  | Decision                                                                                  | Owner direction                                    | State                                                                         |
-| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| D01 | Independent shared-draft actions, compact combined review                                 | Prior owner approval of R1 retained concepts/R2    | Approved scopes in mockup receipt                                             |
-| D02 | Add Account same Default flag as Edit                                                     | Owner B1 approval                                  | Approved placement/first/later states; atomic create/default contract planned |
-| D03 | Choose another currency reuses existing modal with transaction context                    | Image annotation 2026-10-14                        | Required; supersedes custom picker depiction                                  |
-| D04 | Separate issue/branch/PR with mockups in new spec; retarget latest main after #383 merged | Latest explicit requests                           | Authorized; branch updated to main                                            |
-| D05 | No more mockup generation                                                                 | Latest explicit request                            | Enforced; existing final generated files only                                 |
-| D06 | R3 missing-state visuals/copy                                                             | Owner reply approving B1 bindings and R3 additions | Approved exact manifest and combined revisions; receipt authoritative         |
+| ID  | Decision                                                                                  | Owner direction                                    | State                                                                                                                 |
+| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| D01 | Independent shared-draft actions, compact combined review                                 | Prior owner approval of R1 retained concepts/R2    | Approved scopes in mockup receipt                                                                                     |
+| D02 | Add Account same Default flag as Edit                                                     | Owner B1 approval                                  | Approved placement/first/later states; atomic create/default contract planned                                         |
+| D03 | Choose another currency reuses existing modal with transaction context                    | Image annotation 2026-10-14                        | Historical currency-screen entry superseded: one account+currency confirmation; shared picker inside new account form |
+| D04 | Separate issue/branch/PR with mockups in new spec; retarget latest main after #383 merged | Latest explicit requests                           | Authorized; branch updated to main                                                                                    |
+| D05 | No more mockup generation                                                                 | Latest explicit request                            | Enforced; existing final generated files only                                                                         |
+| D06 | R3 missing-state visuals/copy                                                             | Owner reply approving B1 bindings and R3 additions | Approved exact manifest and combined revisions; receipt authoritative                                                 |
 
 ## Planned delivery sequence
 

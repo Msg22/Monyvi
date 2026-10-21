@@ -181,8 +181,8 @@ activated. Use a controlled owner/test profile.
       account and its currency together with the **numeric amount unchanged**
       (no FX conversion) and **no second Confirm currency or Confirm
       account-and-currency overlay**. Cancel/dismiss leaves the original choice
-      intact. Independent currency-only correction may still use the existing
-      contextual picker.
+      intact. There is no standalone currency-only correction. The shared picker
+      is reused inside a new account form's currency field.
 - [ ] **F07 / M06,M13 — draft boundary:** Add/Edit suggested draft has name,
       type and currency **together in one form**, with affected group scope and
       current choice/type visible. Material change invalidates confirmation when

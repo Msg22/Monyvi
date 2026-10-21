@@ -1,5 +1,11 @@
 # T004 normative wire shapes
 
+**Current UI scope (owner clarification, 2026-10-21):** Retained wire operations
+such as `confirm_row_currency` describe supported domain shapes, not required
+visible controls. Current review accepts account and currency together once,
+with currency selection inside new account forms. No standalone currency-only
+correction or extra confirmation screen is authorized by these shapes.
+
 Frozen T004 technical target for #395; these APIs and operations are **not yet
 implemented**. Default CAS compares exact current logical state, without a
 timestamp or new global revision. Shared serialization remains an explicit SQL

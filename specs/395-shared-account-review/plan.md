@@ -668,9 +668,10 @@ validation pending):**
 - `AccountChoiceSheet` / `account-review-choice-presentation` /
   `EditSuggestedAccountSheet`: one active account/category/draft overlay,
   currency per candidate and explicit `Use account — CODE`, same numeric amount;
-  draft name/type/currency in the same form with no early persistence. Distinct
-  currency-only picker remains an independent existing control. Canonical sheet
-  orchestration must not stack modals.
+  draft name/type/currency in the same form with no early persistence. The
+  existing CurrencyPicker belongs to that form's currency field, not a separate
+  currency-only correction action. Canonical orchestration must not stack
+  modals.
 - Voice transcript starts at two lines, expandable in EN/AR. Keep page notice
   under PageHeader/outside scroll, modal notices inside sheet,
   keyboard/scroll/safe-inset/footer/last-divider fixes; no toast. No Voice

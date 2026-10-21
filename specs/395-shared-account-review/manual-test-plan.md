@@ -1,5 +1,27 @@
 # Manual test plan and automation mapping
 
+## Current owner regression cases — 2026-10-21
+
+1. Open a short, exact-account Voice fixture without taking any account action.
+   Expect no Accounts reviewed section, no Account needed (0) tab, and no
+   transcript chevron when the native preview fits within two lines.
+2. Open a long transcript at a narrow width. Expand and collapse it; increase
+   usable width or reduce font size until it fits. Expect the chevron only while
+   expansion is useful, with no missing text when expanded.
+3. Open Account needed, resolve its last transaction's account, and return.
+   Expect the tab to disappear and All to become active; manual selection
+   remains intact. Explicitly reviewed accounts may now show Accounts reviewed.
+4. Open Choose an account with enough candidates to scroll. Scroll to the bottom
+   and back. Expect the whole description to hide as soon as the list scrolls
+   down and return at the top; title, close and footer actions stay reachable.
+5. After an existing valid Metals action, run Prepare test accounts. Expect
+   setup to succeed without changing that Metals action. Malformed or future
+   financial roots must still be rejected; do not reset real data to bypass
+   them.
+
+These device cases remain pending until the owner records results. Automated
+regressions validate behavior and persistence, not native layout or keyboard QA.
+
 ## Latest local implementation evidence — 2026-10-20
 
 This supplement supersedes older pending counts below; historical records remain
@@ -167,16 +189,16 @@ parsing/provider retest is **not** required for unchanged provider paths.
 
 ### Supersessions of historical M01–M20 descriptions
 
-| Historical entry below | Active compact interpretation                                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M04                    | Explicit group Confirm can make rows **newly ready and auto-selected** unless manually unchecked; confirmation alone does not create accounts. CIB remains independent.                                |
-| M05                    | Selecting a pending-group row **must not implicitly confirm** the group.                                                                                                                               |
-| M08                    | Removed ghost offers Undo and final Discard **revokes session lease**; transactions remain intact.                                                                                                     |
-| M09                    | Account chooser confirms account **and authoritative currency once** without changing numeric amount. Separate existing currency-only picker is not another confirmation modal for account selection.  |
-| M10                    | Collapsed Review details expands **all groups inline**, not `View all` or a second list modal; `Accounts reviewed` is conditional and not global Save-ready.                                           |
-| M11                    | Initial/newly-ready auto-select, manual opt-out and active-filter `Select ready`; Clear affects active-filter selected rows.                                                                           |
-| M13–M14                | Real clearly marked TEST Save is permitted in the controlled Voice fixture; never imply dry-run or successful transaction from a button click. Check Transactions before a retry if outcome uncertain. |
-| M17                    | Browser preview 320 CSS px is **not** an RN device measurement. Native layout, safe areas, keyboard and screen-reader checks remain open.                                                              |
+| Historical entry below | Active compact interpretation                                                                                                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M04                    | Explicit group Confirm can make rows **newly ready and auto-selected** unless manually unchecked; confirmation alone does not create accounts. CIB remains independent.                                                     |
+| M05                    | Selecting a pending-group row **must not implicitly confirm** the group.                                                                                                                                                    |
+| M08                    | Removed ghost offers Undo and final Discard **revokes session lease**; transactions remain intact.                                                                                                                          |
+| M09                    | Account chooser confirms account **and authoritative currency once** without changing numeric amount. No standalone currency-only action or second confirmation; use the shared CurrencyPicker inside the new account form. |
+| M10                    | Collapsed Review details expands **all groups inline**, not `View all` or a second list modal; `Accounts reviewed` is conditional and not global Save-ready.                                                                |
+| M11                    | Initial/newly-ready auto-select, manual opt-out and active-filter `Select ready`; Clear affects active-filter selected rows.                                                                                                |
+| M13–M14                | Real clearly marked TEST Save is permitted in the controlled Voice fixture; never imply dry-run or successful transaction from a button click. Check Transactions before a retry if outcome uncertain.                      |
+| M17                    | Browser preview 320 CSS px is **not** an RN device measurement. Native layout, safe areas, keyboard and screen-reader checks remain open.                                                                                   |
 
 **Entry distinction:** `voice-shared-drafts-qnb-cib` is a manual transcript
 catalog scenario. The old `reviewFixtureSceneId` query recorded below is a

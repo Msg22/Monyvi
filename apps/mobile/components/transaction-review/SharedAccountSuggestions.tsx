@@ -49,6 +49,8 @@ export interface SharedReviewSummaryView {
   readonly defaultAssignmentCount: number;
   readonly selectedCount: number;
   readonly issueLabels: readonly string[];
+  /** True only for explicit account choices in this review, not automatic matches. */
+  readonly hasReviewedAccounts?: boolean;
   readonly issues?: readonly ReviewIssueEntry[];
 }
 export interface SharedAccountSuggestionsProps {
@@ -128,7 +130,7 @@ function InlineReviewIssues({
 
 export function SharedAccountSuggestions(
   props: SharedAccountSuggestionsProps
-): React.JSX.Element {
+): React.JSX.Element | null {
   const { language } = useLocale();
   const { t } = useTranslation("transactions");
   const { colorScheme } = useColorScheme();
@@ -150,7 +152,10 @@ export function SharedAccountSuggestions(
     )?.count ??
     0;
   const reviewed =
-    props.summary.pendingGroupCount === 0 && accountNeededCount === 0;
+    (props.summary.confirmedGroupCount > 0 ||
+      props.summary.hasReviewedAccounts === true) &&
+    props.summary.pendingGroupCount === 0 &&
+    accountNeededCount === 0;
   // Account/currency-needed rows have their own truthful temporary filter tab.
   // Keep category/amount recovery in details without duplicating that action.
   const issues = (props.summary.issues ?? []).filter(
@@ -166,6 +171,13 @@ export function SharedAccountSuggestions(
   const showSaveExplanation = props.groups.some((group) => !group.isRemoved);
   const hasHelperContent =
     issues.length > 0 || showDefaultNote || showSaveExplanation;
+  if (
+    props.groups.length === 0 &&
+    issues.length === 0 &&
+    accountNeededCount === 0 &&
+    !reviewed
+  )
+    return null;
   return (
     <View
       testID="account-review-details-panel"

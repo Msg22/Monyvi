@@ -4,7 +4,9 @@
 
 **Created**: 2026-10-14
 
-**Status**: Specified and clarified; final visual bindings pending
+**Status**: Implemented in PR #396; owner device acceptance remains tracked in
+the PR checklist. The approved interactive design is the visual reference; no
+separate binding approval is required.
 
 **Issue**: [#395](https://github.com/Msg22/Monyvi/issues/395)
 
@@ -15,9 +17,35 @@ preserve that provenance.
 
 **Input**: Implement the agreed shared-account confirmation, default-account
 assignment and compact review mockups in a separate stacked PR. Add the existing
-Edit Account Default control to Add Account. Reuse the existing currency modal
-with transaction context. Stop generating mockups and use the existing approved
-references and documented adjustments.
+Edit Account Default control to Add Account. Apply account and currency together
+through one account chooser; reuse CurrencyPicker inside new-account forms. Stop
+generating mockups and use the existing approved references and documented
+adjustments.
+
+## Current currency flow — owner clarification, 2026-10-21
+
+The account chooser's single final confirmation applies the chosen account and
+its currency, with the numeric amount unchanged. There is no standalone
+currency-only correction, Confirm currency, or second account-and-currency
+confirmation step. New account forms reuse the existing CurrencyPicker inside
+that form. Earlier currency-screen clarifications, image approvals and retained
+domain commands are historical/technical records, not a requirement to restore a
+currency-only UI. FR-011 and User Story 3 below reflect this current rule.
+
+## Current visibility and linked-preview rules — owner clarification, 2026-10-21
+
+Initially clean or automatically matched/default-only accounts do not show
+Accounts reviewed. Show that feedback only after explicit account review in the
+current session. Hide Account needed at zero; resolving its last row while
+active returns to All. What I heard offers expansion only when its native text
+layout exceeds two lines. View linked transactions expands previews inside the
+suggested account group, without replacing the main list or adding a linked
+filter banner. The account chooser hides its whole description while scrolling
+down and restores it at the top; its title and close action remain visible.
+
+These rules supersede older unconditional summary/tab visibility and linked
+full-list-filter wording. See the compact review UI contract for current
+details.
 
 ## Context and scope
 
@@ -131,8 +159,9 @@ group-wide changes.
 **Why this priority**: Prevents amounts being saved against the wrong financial
 account or currency.
 
-**Independent Test**: Open account choices for one row, cancel without changes,
-then confirm a different currency using the existing currency modal.
+**Independent Test**: Open account choices for one row and cancel without
+changes. Reopen, choose an owned account and confirm its stated currency once.
+For a new account, choose currency within the same account form.
 
 **Acceptance Scenarios**:
 
@@ -142,9 +171,10 @@ then confirm a different currency using the existing currency modal.
 2. **Given** choice opened on one transaction, **when** an account is chosen,
    **then** update only that row; group-menu replacement must instead disclose
    its linked count and affect that group.
-3. **Given** EGP and USD are conflicting suggestions, **when** neither is
-   correct, **then** Choose another currency opens the existing modal with
-   transaction context and no implied confirmation.
+3. **Given** uncertain or conflicting currency, **when** an account is chosen,
+   **then** the chooser states its authoritative currency and requires one final
+   account-and-currency acceptance. New accounts choose currency inside their
+   form; no standalone currency-confirmation screen is opened.
 4. **Given** one row changes currency, **when** confirmed, **then** preserve its
    numeric amount, detach/regroup that row and leave other transactions and
    persisted account currencies unchanged.
@@ -294,9 +324,11 @@ verify account/transaction counts.
   provide reversible Undo consistent with later user edits.
 - **FR-010**: Account choices MUST distinguish per-row and group scope, show
   only compatible owned active choices, and commit nothing on cancel.
-- **FR-011**: Choose another currency MUST reuse the existing currency modal
-  with transaction context; no parallel picker/modal. Explicit confirmation
-  changes currency interpretation without converting the amount.
+- **FR-011**: The account chooser MUST state the selected account's currency and
+  apply both in one final confirmation, without converting the numeric amount.
+  There MUST NOT be a standalone currency-only correction or second currency
+  confirmation step. New account forms MUST reuse the existing CurrencyPicker
+  within that form; opening/cancelling commits nothing.
 - **FR-012**: A row's currency/account override MUST detach/regroup only
   affected rows and preserve unrelated choices; material draft identity edits
   require reconfirmation.
@@ -448,10 +480,10 @@ header, no new toast.
 replaced by inline expansion; US2/FR-007's selection-unchanged statement is
 superseded only by approved newly-ready auto-selection; US2/FR-008's disclosed
 row-click implicit group confirmation is replaced by explicit group
-confirmation; FR-011's separate currency picker remains only for independent
-currency-only correction, not a second account-selection confirmation; FR-024's
-historical image-binding gate does not create a new sidecar gate here. See
-[compact-review-ui-contract.md](contracts/compact-review-ui-contract.md) for
+confirmation; FR-011 is fulfilled by the single account-and-currency acceptance
+and the shared picker inside a new account form, with no currency-only action;
+FR-024's historical image-binding gate does not create a new sidecar gate here.
+See [compact-review-ui-contract.md](contracts/compact-review-ui-contract.md) for
 precise frontend/domain owner separation and existing-path mapping. **Local
 implementation status (2026-10-20):** Root completed scoped analysis, activated
 frontend/domain ownership, and integrated the authored compact UI and NormalB's

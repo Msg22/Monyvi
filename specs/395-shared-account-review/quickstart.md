@@ -152,9 +152,9 @@ not a Maestro scene identifier; do not interchange them.
   `Select ready` reselects eligible rows **in the active filter**.
 - One account chooser shows current choice/type/currency and affected rows.
   `Use account — EGP/USD` applies authoritative account+currency together,
-  **without FX conversion or a second Confirm Currency modal**. Separate
-  currency-only picker may still be used independently. Draft name/type/
-  currency stay in one form and persist only on final selected Save.
+  **without FX conversion, a standalone currency-only action, or a second
+  confirmation modal**. New account name/type/currency stay in one form, reusing
+  the shared CurrencyPicker there, and persist only on final selected Save.
 - Remove shows a ghost with Undo and final Discard; Discard must revoke the
   **actual current-review Undo lease**, not just hide a control. No deletion of
   transactions or accounts. Only one overlay is active.

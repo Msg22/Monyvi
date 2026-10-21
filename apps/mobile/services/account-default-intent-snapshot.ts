@@ -16,6 +16,7 @@ import {
   type AccountDefaultSnapshot,
 } from "../../../packages/logic/src/financial-actions/account-create-default";
 import { createAccountReviewFinancialRegistry } from "./account-review-financial-command-service";
+import { formatFinancialActionLocalDate } from "./transaction-financial-action-service";
 import type { CurrentUserDataScope } from "./user-data-access";
 
 export interface OwnedDefaultSnapshot {
@@ -148,13 +149,21 @@ export async function readDefaultCreatorDependencies(
     )
     .fetch();
   const registry = createAccountReviewFinancialRegistry();
+  // Metals roots require a trusted caller date even when not account creators.
+  const validationInput = {
+    latestAllowedCalendarDate: formatFinancialActionLocalDate(new Date()),
+  };
   const result = new Set<string>();
   for (const root of roots) {
     if (root.userId !== scope.userId || root.deleted)
       fail("foreign_creator_root");
     let envelope: FinancialActionEnvelopeV1;
     try {
-      envelope = parseFinancialActionEnvelopeJson(root.payloadJson, registry);
+      envelope = parseFinancialActionEnvelopeJson(
+        root.payloadJson,
+        registry,
+        validationInput
+      );
     } catch {
       fail("unparseable_creator_root");
     }
@@ -210,6 +219,10 @@ export async function readCompleteDefaultCreatorMembership(
     .queryOwned(db.get<FinancialActionGroup>("financial_action_groups"))
     .fetch();
   const registry = createAccountReviewFinancialRegistry();
+  // Metals roots require a trusted caller date even when not account creators.
+  const validationInput = {
+    latestAllowedCalendarDate: formatFinancialActionLocalDate(new Date()),
+  };
   const found = new Map<string, string>();
   const createdIds = new Set<string>();
   const unresolved = new Set<string>();
@@ -217,7 +230,11 @@ export async function readCompleteDefaultCreatorMembership(
     if (root.userId !== scope.userId) fail("foreign_creator_root");
     let envelope: FinancialActionEnvelopeV1;
     try {
-      envelope = parseFinancialActionEnvelopeJson(root.payloadJson, registry);
+      envelope = parseFinancialActionEnvelopeJson(
+        root.payloadJson,
+        registry,
+        validationInput
+      );
     } catch {
       fail("unparseable_creator_root");
     }
@@ -243,7 +260,8 @@ export async function readCompleteDefaultCreatorMembership(
     const digest = await hashFinancialActionEnvelope(
       envelope,
       hashProvider,
-      registry
+      registry,
+      validationInput
     );
     if (
       digest.canonicalText !== root.payloadJson ||

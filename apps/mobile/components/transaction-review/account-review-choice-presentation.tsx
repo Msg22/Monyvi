@@ -135,6 +135,8 @@ export interface ChoiceModalFrameProps {
   readonly testID: string;
   readonly title: string;
   readonly contextSubtitle?: string;
+  readonly description?: string;
+  readonly hideDescriptionOnScroll?: boolean;
   readonly closeAccessibilityLabel: string;
   readonly onClose: () => void;
   readonly language: ChoiceLanguage;
@@ -191,6 +193,7 @@ function ChoiceModalContent({
 }: ChoiceModalContentProps): React.JSX.Element {
   const rtl = props.language === "ar";
   const scrollRef = React.useRef<ScrollView>(null);
+  const [descriptionHidden, setDescriptionHidden] = React.useState(false);
   const focusedTarget = React.useRef<number | null>(null);
   const [handleHeight, setHandleHeight] = React.useState(0);
   const [headerHeight, setHeaderHeight] = React.useState(0);
@@ -227,6 +230,31 @@ function ChoiceModalContent({
       if (target !== null) revealFocusedInput();
     },
     [revealFocusedInput]
+  );
+  const description = (
+    <>
+      {props.contextSubtitle ? (
+        <Text
+          className={
+            "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+        >
+          {props.contextSubtitle}
+        </Text>
+      ) : null}
+      {props.description ? (
+        <Text
+          testID="account-review-choice-description"
+          className={
+            "pb-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+        >
+          {props.description}
+        </Text>
+      ) : null}
+    </>
   );
   const footer = (
     <View
@@ -268,16 +296,7 @@ function ChoiceModalContent({
       >
         <View className="gap-1 px-5">
           <ChoiceModalHeader props={props} />
-          {props.contextSubtitle ? (
-            <Text
-              className={
-                "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-                (rtl ? "text-right" : "text-left")
-              }
-            >
-              {props.contextSubtitle}
-            </Text>
-          ) : null}
+          {props.hideDescriptionOnScroll ? null : description}
         </View>
         <ReviewInlineNotice
           notice={props.reviewFeedback?.modalNotice ?? null}
@@ -289,10 +308,33 @@ function ChoiceModalContent({
         ref={scrollRef}
         className="min-h-0 shrink"
         onLayout={revealFocusedInput}
+        scrollEventThrottle={16}
+        onScroll={
+          props.hideDescriptionOnScroll
+            ? (event) => {
+                const hidden = event.nativeEvent.contentOffset.y > 0;
+                setDescriptionHidden((previous) =>
+                  previous === hidden ? previous : hidden
+                );
+              }
+            : undefined
+        }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerClassName="px-5 pb-3"
       >
+        {props.hideDescriptionOnScroll ? (
+          <View
+            testID="account-review-choice-scroll-description"
+            className={descriptionHidden ? "opacity-0" : "opacity-100"}
+            accessibilityElementsHidden={descriptionHidden}
+            importantForAccessibility={
+              descriptionHidden ? "no-hide-descendants" : "auto"
+            }
+          >
+            {description}
+          </View>
+        ) : null}
         <ChoiceFocusedInputContext.Provider value={reportFocus}>
           <View className="w-full gap-3">{props.children}</View>
         </ChoiceFocusedInputContext.Provider>

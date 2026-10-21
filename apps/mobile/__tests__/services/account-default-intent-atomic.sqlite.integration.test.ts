@@ -20,6 +20,12 @@ import {
 } from "@/validation/account-validation";
 import { assertNoDuplicateAddAccountIdentity } from "@/services/account-service";
 import {
+  canonicalizeFinancialActionEnvelope,
+  hashFinancialActionEnvelope,
+} from "@monyvi/logic";
+import { createAccountReviewFinancialRegistry } from "@/services/account-review-financial-command-service";
+import { readDefaultCreatorDependencies } from "@/services/account-default-intent-snapshot";
+import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
 } from "@/services/user-data-access";
@@ -193,7 +199,161 @@ beforeEach(async (): Promise<void> => {
   await clearAndSeed(ledger.database, { onlyCategories: true });
 });
 
+async function seedUnrelatedMetalsRoot(
+  disposalDate = "2026-08-31"
+): Promise<FinancialActionGroup> {
+  const registry = createAccountReviewFinancialRegistry();
+  const holdingId = randomUUID();
+  const validationInput = { latestAllowedCalendarDate: disposalDate };
+  const envelope = canonicalizeFinancialActionEnvelope(
+    {
+      actionId: randomUUID(),
+      accountGuards: [],
+      domain: "metals",
+      domainReferenceId: holdingId,
+      envelopeVersion: "monyvi.financial-action/v1",
+      occurredAt: "2026-09-01T12:00:00.000Z",
+      kind: "dispose",
+      payloadVersion: "metals.dispose/v1",
+      userId: ADD_DEFAULT_IDS.owner,
+      payload: {
+        holdingId,
+        expectedHoldingRevision: "7",
+        predecessorEventId: randomUUID(),
+        reversesEventId: null,
+        disposalDate,
+        reason: "lost_or_stolen",
+        notes: null,
+        rateSnapshots: [],
+      },
+    },
+    registry,
+    validationInput
+  );
+  const signed = await hashFinancialActionEnvelope(
+    envelope,
+    {
+      digestUtf8: (text: string): Promise<string> =>
+        Promise.resolve(
+          createHash("sha256").update(text, "utf8").digest("hex")
+        ),
+    },
+    registry,
+    validationInput
+  );
+  return ledger.database.write(async (): Promise<FinancialActionGroup> => {
+    const root = ledger.database
+      .get<FinancialActionGroup>("financial_action_groups")
+      .prepareCreate((row): void => {
+        row.actionId = envelope.actionId;
+        row.userId = envelope.userId;
+        row.domain = envelope.domain;
+        row.kind = envelope.kind;
+        row.domainReferenceId = envelope.domainReferenceId;
+        row.payloadJson = signed.canonicalText;
+        row.payloadHash = signed.payloadHash;
+        row.accountGuardsJson = JSON.stringify(envelope.accountGuards);
+        row.state = "local_complete";
+        row.serverOutcome = null;
+        row.outcomeJson = null;
+        row.rejectionCode = null;
+        row.deleted = false;
+      });
+    await ledger.database.batch(root);
+    return root;
+  });
+}
+
 describe("#395 prepared Add default command — physical SQLite boundary", () => {
+  it("prepares and creates a zero-balance test account after an unrelated valid Metals action without altering the default or Metals root", async (): Promise<void> => {
+    await seed(ADD_DEFAULT_IDS.previous, true);
+    const metals = await seedUnrelatedMetalsRoot();
+    const originalMetalsRaw = { ...metals._raw };
+    const scope = await getCurrentUserDataScope();
+    await expect(
+      readDefaultCreatorDependencies(ledger.database, scope, {
+        activeAccountIds: [ADD_DEFAULT_IDS.previous],
+        defaultAccount: {
+          accountId: ADD_DEFAULT_IDS.previous,
+          isDefault: true,
+        },
+      })
+    ).resolves.toEqual([]);
+    const svc = service();
+    const command = await svc.prepare(
+      ADD_DEFAULT_IDS.owner,
+      form("TEST after Metals", "0", false)
+    );
+    expect(command.dependencyActionIds).toEqual([]);
+    await expect(svc.commitPrepared(command)).resolves.toMatchObject({
+      kind: "committed",
+      accountId: command.accountId,
+    });
+    await expect(svc.commitPrepared(command)).resolves.toMatchObject({
+      kind: "replay",
+      accountId: command.accountId,
+    });
+    const db = await current();
+    const accounts = await db.get<Account>("accounts").query().fetch();
+    expect(accounts).toHaveLength(2);
+    expect(
+      accounts.find((account) => account.id === command.accountId)
+    ).toMatchObject({
+      name: "TEST after Metals",
+      balance: 0,
+      isDefault: false,
+    });
+    expect(
+      accounts.find((account) => account.id === ADD_DEFAULT_IDS.previous)
+    ).toMatchObject({
+      balance: 100,
+      isDefault: true,
+    });
+    expect(
+      (
+        await db
+          .get<FinancialActionGroup>("financial_action_groups")
+          .find(metals.id)
+      )._raw
+    ).toEqual(originalMetalsRaw);
+    expect(
+      await db
+        .get<AccountFinancialEffect>("account_financial_effects")
+        .query()
+        .fetch()
+    ).toHaveLength(0);
+    expect(
+      await db.get<Transaction>("transactions").query().fetch()
+    ).toHaveLength(0);
+  });
+
+  it.each(["malformed", "future"] as const)(
+    "still refuses an unrelated %s Metals root before creating any account",
+    async (variant): Promise<void> => {
+      await seed(ADD_DEFAULT_IDS.previous, true);
+      const metals = await seedUnrelatedMetalsRoot(
+        variant === "future" ? "2999-01-01" : undefined
+      );
+      if (variant === "malformed") {
+        await ledger.database.write(async (): Promise<void> => {
+          await ledger.database.batch(
+            metals.prepareUpdate((root): void => {
+              root.payloadJson = "{";
+            })
+          );
+        });
+      }
+      const before = await snapshot();
+      await expect(
+        service().prepare(
+          ADD_DEFAULT_IDS.owner,
+          form("TEST rejected Metals", "0", false)
+        )
+      ).rejects.toThrow("account_default_unparseable_creator_root");
+      expect(await snapshot()).toEqual(before);
+    }
+  );
+
   it("validates explicit Add intent without accepting a string toggle or altering old optional callers", (): void => {
     expect(
       accountFormSchema.safeParse({

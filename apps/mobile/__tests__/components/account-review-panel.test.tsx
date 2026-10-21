@@ -216,7 +216,8 @@ function openDetails(): void {
 
 function assertFourTabs(
   current: ReviewVisibleTab | null,
-  temporarilyFiltered = false
+  temporarilyFiltered = false,
+  hasAccountNeeded = true
 ): void {
   const filters: readonly ReviewVisibleTab[] = [
     "all",
@@ -225,6 +226,10 @@ function assertFourTabs(
     "selected",
   ];
   for (const tab of filters) {
+    if (tab === "account_needed" && !hasAccountNeeded) {
+      expect(screen.queryByTestId("account-review-filter-" + tab)).toBeNull();
+      continue;
+    }
     const button = screen.getByTestId("account-review-filter-" + tab);
     expect(button).toHaveProp("accessibilityRole", "button");
     expect(button.props.accessibilityLabel).toEqual(expect.any(String));
@@ -300,7 +305,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(screen.queryByTestId("account-review-group-view-all")).toBeNull();
   });
 
-  it("default-only keeps quiet Why with a collapsed reviewed summary", () => {
+  it("default-only keeps quiet Why without claiming the user reviewed accounts", () => {
     const props = show("r3-default-only");
     expect(props.summary).toMatchObject({
       totalCount: 2,
@@ -308,7 +313,8 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       selectedCount: 2,
       defaultAssignmentCount: 2,
     });
-    expect(screen.getByText("Accounts reviewed")).toBeTruthy();
+    expect(screen.queryByText("Accounts reviewed")).toBeNull();
+    expect(screen.queryByTestId("account-review-details-panel")).toBeNull();
     expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
     fireEvent.press(screen.getByTestId("account-review-default-why-trigger"));
     expect(props.onDefaultWhyPress).toHaveBeenCalledTimes(1);
@@ -364,7 +370,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onClearSelection).not.toHaveBeenCalled();
   });
 
-  it("clean state has reviewed summary and filters without invented groups/default", () => {
+  it("initially clean state hides reviewed summary and zero Account needed tab", () => {
     const props = show("r3-clean");
     expect(props.summary).toMatchObject({
       totalCount: 2,
@@ -372,10 +378,21 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       distinctNeedsReviewCount: 0,
       defaultAssignmentCount: 0,
     });
-    expect(screen.getByText("Accounts reviewed")).toBeTruthy();
+    expect(screen.queryByText("Accounts reviewed")).toBeNull();
+    expect(screen.queryByTestId("account-review-details-panel")).toBeNull();
     expect(screen.queryByTestId("account-review-default-info")).toBeNull();
     expect(screen.queryByTestId("account-review-filter-empty")).toBeNull();
-    assertFourTabs("all");
+    assertFourTabs("all", false, false);
+  });
+
+  it("shows reviewed feedback after an explicit existing-account choice", () => {
+    const base = propsFor("r3-clean");
+    show("r3-clean", {
+      summary: { ...base.summary, hasReviewedAccounts: true },
+    });
+    expect(screen.getByText("Accounts reviewed")).toBeTruthy();
+    expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
+    assertFourTabs("all", false, false);
   });
 
   it("confirmed QNB/CIB expose direct Change without reopening group confirmation", () => {
@@ -487,19 +504,17 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
     expect(props.onClearSelection).not.toHaveBeenCalled();
   });
 
-  it("zero Account needed count has an honest empty state and does not offer a false selection", () => {
+  it("resolving the last account hides its tab and returns to All", () => {
     const props = show("r3-clean", {
       accountNeededActive: true,
       temporaryScopeActive: true,
       accountNeededCount: 0,
     });
-    assertFourTabs("account_needed", true);
+    assertFourTabs(null, true, false);
     expect(
-      screen.getByTestId("account-review-filter-account_needed")
-    ).toHaveProp("accessibilityLabel", "Account needed (0)");
-    expect(
-      screen.getByTestId("account-review-account-needed-empty")
-    ).toHaveTextContent("No transactions need an account right now.");
+      screen.queryByTestId("account-review-account-needed-empty")
+    ).toBeNull();
+    expect(props.onFilterChange).toHaveBeenCalledWith("all");
     expect(screen.queryByTestId("account-review-selection-toolbar")).toBeNull();
     expect(props.onSelectReady).not.toHaveBeenCalled();
   });
@@ -556,7 +571,7 @@ describe("#395 T058 — B1 R3 conditional panel composition", () => {
       selectedCount: 0,
       distinctNeedsReviewCount: 0,
     });
-    assertFourTabs("selected");
+    assertFourTabs("selected", false, false);
     // Filtering does not hide the real unfiltered summary.
     expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
     expect(screen.getByTestId("account-review-filter-empty")).toBeTruthy();
@@ -582,7 +597,7 @@ describe("#395 T058 — parent-owned filters, selections and group actions", () 
     fireEvent.press(screen.getByTestId("account-review-filter-selected"));
     expect(props.onFilterChange).toHaveBeenNthCalledWith(1, "needs_review");
     expect(props.onFilterChange).toHaveBeenNthCalledWith(2, "selected");
-    assertFourTabs("all");
+    assertFourTabs("all", false, false);
     expect(screen.queryByTestId("account-review-clear-selection")).toBeNull();
     fireEvent.press(screen.getByTestId("account-review-select-ready"));
     expect(props.onSelectReady).toHaveBeenCalledTimes(1);

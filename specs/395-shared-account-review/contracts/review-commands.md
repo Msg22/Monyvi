@@ -1,5 +1,11 @@
 # Review engine, services and UI contract
 
+**Current UI scope (owner clarification, 2026-10-21):** The account chooser
+confirms account and currency once; new account forms include their currency
+field. The retained `confirm_row_currency` domain command below is not a
+requirement to expose an independent currency-only UI or restore a confirmation
+sheet. Keep its existing data-safety contract intact.
+
 Frozen T004 technical target; exact schema/API names, command keys, revision
 checks and SMS v2 root are in [wire shapes](wire-shapes.md). Full integration
 and final acceptance remain pending; [spec](../spec.md),

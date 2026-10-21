@@ -116,7 +116,13 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         className={"min-w-0 max-w-full items-baseline gap-x-1 " + ordering}
       >
         {hasIcon ? (
-          <View className="h-8 w-7 shrink-0 items-center justify-center">
+          <View
+            className={
+              "h-8 w-7 shrink-0 items-center justify-center " +
+              // Ionicons wallet ink sits higher than the bank glyph at the same baseline.
+              (source.accountType === "DIGITAL_WALLET" ? "translate-y-0.5" : "")
+            }
+          >
             <Ionicons
               testID="account-review-account-type-icon"
               name={accountTypeIcon(source.accountType)}
@@ -251,7 +257,7 @@ export function AccountReviewRowPresentation({
         {categoryDisplayName || source.canEditCategory ? (
           <View
             testID="account-review-row-category"
-            className="min-w-0 max-w-full shrink ml-3"
+            className="min-w-0 max-w-full shrink"
           >
             <View
               testID="account-review-category-name-and-pencil"
