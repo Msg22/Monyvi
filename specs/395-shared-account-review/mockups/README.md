@@ -1,5 +1,12 @@
 # Shared account mockups
 
+**Current currency flow (owner clarification, 2026-10-21):** Choose the account
+and accept its currency once in the same chooser. New accounts choose currency
+inside their form using the shared picker. Older currency-confirmation images,
+bindings and captions below are retained provenance, not active instructions to
+restore a standalone currency-only action. See
+[FR-011](../spec.md#functional-requirements).
+
 **2026-10-20 interactive reference:**
 [Compact review — preview and provenance](interactive/compact-review-2026-10-20/README.md).
 

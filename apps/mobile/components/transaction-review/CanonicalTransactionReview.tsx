@@ -619,6 +619,13 @@ export function CanonicalAccountReview(
   );
   const summary = {
     ...model.summary,
+    hasReviewedAccounts: session.rows.some(
+      (row) =>
+        (row.assignment.state === "existing" &&
+          row.assignment.origin === "user") ||
+        (row.toAssignment?.state === "existing" &&
+          row.toAssignment.origin === "user")
+    ),
     issueLabels: issues.map((issue) => issue.label),
     issues,
   };

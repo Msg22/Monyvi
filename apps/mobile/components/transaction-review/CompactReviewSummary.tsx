@@ -38,7 +38,9 @@ export function CompactReviewSummary({
       ? t("compact_review_pending", { count: pendingCount })
       : accountNeededCount > 0
         ? t("compact_review_account_needed", { count: accountNeededCount })
-        : t("compact_review_accounts_reviewed");
+        : isReviewed
+          ? t("compact_review_accounts_reviewed")
+          : t("account_review_details_title");
   return (
     <TouchableOpacity
       testID="account-review-compact-summary-toggle"

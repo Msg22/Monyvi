@@ -6,7 +6,7 @@
  * This component never reads accounts, runs a reducer or persists a change.
  */
 import type { AccountReviewRow, AccountReviewSession } from "@monyvi/logic";
-import React from "react";
+import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
@@ -157,25 +157,30 @@ function ReviewFilterBar(props: FilterBarProps): React.JSX.Element {
           (language === "ar" ? "flex-row-reverse" : "flex-row")
         }
       >
-        {filters.map((value) => (
-          <FilterButton
-            key={value}
-            value={value}
-            label={labels[value]}
-            count={counts[value]}
-            active={
-              value === "account_needed"
-                ? props.accountNeededActive
-                : !props.temporaryScopeActive && props.filter === value
-            }
-            language={language}
-            disabled={props.isBusy}
-            onChange={(tab) => {
-              if (tab === "account_needed") props.onAccountNeededPress();
-              else props.onFilterChange(tab);
-            }}
-          />
-        ))}
+        {filters
+          .filter(
+            (value) =>
+              value !== "account_needed" || props.accountNeededCount > 0
+          )
+          .map((value) => (
+            <FilterButton
+              key={value}
+              value={value}
+              label={labels[value]}
+              count={counts[value]}
+              active={
+                value === "account_needed"
+                  ? props.accountNeededActive
+                  : !props.temporaryScopeActive && props.filter === value
+              }
+              language={language}
+              disabled={props.isBusy}
+              onChange={(tab) => {
+                if (tab === "account_needed") props.onAccountNeededPress();
+                else props.onFilterChange(tab);
+              }}
+            />
+          ))}
       </View>
     </ScrollView>
   );
@@ -416,7 +421,13 @@ function ReviewDetails(props: AccountReviewPanelProps): React.JSX.Element {
 export function AccountReviewPanel(
   props: AccountReviewPanelProps
 ): React.JSX.Element {
-  const { t } = useTranslation("transactions");
+  const { accountNeededActive, accountNeededCount, isBusy, onFilterChange } =
+    props;
+  useEffect(() => {
+    if (accountNeededActive && accountNeededCount === 0 && !isBusy) {
+      onFilterChange("all");
+    }
+  }, [accountNeededActive, accountNeededCount, isBusy, onFilterChange]);
   return (
     <View testID="account-review-panel" className="w-full gap-3 px-5">
       <ReviewDetails {...props} />
@@ -439,14 +450,6 @@ export function AccountReviewPanel(
           onSelectReady={props.onSelectReady}
           onClearSelection={props.onClearSelection}
         />
-      ) : null}
-      {props.accountNeededActive && props.accountNeededCount === 0 ? (
-        <Text
-          testID="account-review-account-needed-empty"
-          className="text-sm text-text-secondary dark:text-text-secondary-dark"
-        >
-          {t("compact_review_account_needed_empty")}
-        </Text>
       ) : null}
       {!props.temporaryScopeActive &&
       props.filter !== "all" &&

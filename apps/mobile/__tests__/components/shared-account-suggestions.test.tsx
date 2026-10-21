@@ -419,7 +419,7 @@ describe("#395 compact inline account groups — parent callbacks only", () => {
     expect(screen.queryByTestId("account-review-group-all-sheet")).toBeNull();
   });
 
-  it("default-only and clean states have reviewed collapsed summary, no invented groups", () => {
+  it("default-only and initially clean states do not claim accounts were reviewed", () => {
     for (const id of ["r3-default-only", "r3-clean"] as const) {
       const view = makeSharedPresentation(id);
       const rendered = render(
@@ -430,9 +430,8 @@ describe("#395 compact inline account groups — parent callbacks only", () => {
           {...makeActions()}
         />
       );
-      expect(screen.getByTestId("account-review-details-panel")).toBeTruthy();
-      expect(screen.getByText("Accounts reviewed")).toBeTruthy();
-      openDetails();
+      expect(screen.queryByTestId("account-review-details-panel")).toBeNull();
+      expect(screen.queryByText("Accounts reviewed")).toBeNull();
       expect(
         screen.queryByTestId("account-review-group-inline-menu")
       ).toBeNull();

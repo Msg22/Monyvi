@@ -126,7 +126,7 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
     >
       <View
         testID="account-review-account-name-and-pencil"
-        className={"min-w-0 max-w-full items-center gap-x-1 " + ordering}
+        className={"min-w-0 max-w-full items-baseline gap-x-1 " + ordering}
       >
         {hasIcon ? (
           <View className="h-8 w-7 shrink-0 items-center justify-center">
@@ -139,15 +139,25 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
               size="metadata"
               testID="account-review-account-type-icon"
               fallback={
-                <Ionicons
-                  name={accountTypeIcon(
-                    source.accountIdentity?.type ?? source.accountType
-                  )}
-                  color={palette.slate[500]}
-                  size={20}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                />
+                <View
+                  className={
+                    // Optical correction belongs only to the wallet fallback glyph.
+                    (source.accountIdentity?.type ?? source.accountType) ===
+                    "DIGITAL_WALLET"
+                      ? "translate-y-0.5"
+                      : ""
+                  }
+                >
+                  <Ionicons
+                    name={accountTypeIcon(
+                      source.accountIdentity?.type ?? source.accountType
+                    )}
+                    color={palette.slate[500]}
+                    size={20}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                </View>
               }
             />
           </View>
@@ -184,13 +194,13 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
               source.onChooseAccount(source.rowId);
             }}
             className={
-              "h-[48px] w-[48px] shrink-0 justify-center " +
+              "h-fit w-fit shrink-0 justify-center " +
               (rtl ? "items-end" : "items-start")
             }
           >
             <View
               pointerEvents="none"
-              className="h-[32px] w-[32px] items-center justify-center"
+              className="h-fit w-fit items-center justify-center"
             >
               <Ionicons
                 name="create-outline"
@@ -265,7 +275,7 @@ export function AccountReviewRowPresentation({
     <View testID="account-review-row-presentation" className="mt-0 gap-1">
       <View
         testID="account-review-row-metadata"
-        className={"flex-wrap items-start gap-x-2 gap-y-1 " + ordering}
+        className={"flex-wrap items-baseline gap-x-2 gap-y-1 " + ordering}
       >
         {accountName !== null ||
         source.accountActionLabel !== null ||
@@ -280,14 +290,14 @@ export function AccountReviewRowPresentation({
           >
             <View
               testID="account-review-category-name-and-pencil"
-              className={"min-w-0 max-w-full items-center gap-x-1 " + ordering}
+              className={"min-w-0 max-w-full items-start gap-x-1 " + ordering}
             >
-              <View className="h-8 w-7 shrink-0 items-center justify-center">
+              <View className="h-fit w-fit shrink-0 items-center justify-center">
                 <CategoryIcon
                   iconName={categoryIcon.iconName}
                   iconLibrary={categoryIcon.iconLibrary}
                   color={categoryIcon.iconColor}
-                  size={18}
+                  size={17}
                 />
               </View>
               <Text
@@ -317,13 +327,13 @@ export function AccountReviewRowPresentation({
                     source.onEditCategory?.(source.rowId);
                   }}
                   className={
-                    "h-[48px] w-[48px] shrink-0 justify-center " +
+                    "h-fit w-fit shrink-0 justify-center " +
                     (rtl ? "items-end" : "items-start")
                   }
                 >
                   <View
                     pointerEvents="none"
-                    className="h-[32px] w-[32px] items-center justify-center"
+                    className="h-fit w-fit items-center justify-center"
                   >
                     <Ionicons
                       name="create-outline"

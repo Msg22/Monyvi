@@ -119,6 +119,27 @@ afterEach(async (): Promise<void> => {
 });
 
 describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
+  it("hides the whole chooser description while scrolling and restores it at the top", () => {
+    renderAccounts();
+    expect(
+      screen.getByTestId("account-review-choice-description")
+    ).toHaveTextContent("3 accounts match this transaction.");
+    const list = screen.UNSAFE_getByType(ScrollView);
+    fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 1 } } });
+    expect(
+      screen.queryByTestId("account-review-choice-description")
+    ).toBeNull();
+    expect(screen.queryByText(ROW_CONTEXT_EN)).toBeNull();
+    expect(screen.getAllByTestId("account-review-account-option")).toHaveLength(
+      3
+    );
+    fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 0 } } });
+    expect(screen.getByText(ROW_CONTEXT_EN)).toBeTruthy();
+    expect(
+      screen.getByTestId("account-review-choice-description")
+    ).toBeTruthy();
+  });
+
   it("distinguishes two real catalogue roles from one UI-only third QNB option", () => {
     const options = makeQnbChoiceCandidates();
     expect(options).toHaveLength(3);

@@ -1,7 +1,13 @@
 /** #395 compact Voice transcript preview within the review scroll content. */
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  Text,
+  TouchableOpacity,
+  View,
+  type NativeSyntheticEvent,
+  type TextLayoutEventData,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useLocale } from "@/context/LocaleContext";
 import { palette } from "@/constants/colors";
@@ -18,9 +24,30 @@ export function CompactReviewTranscript({
   const { t } = useTranslation("transactions");
   const { language } = useLocale();
   const [expanded, setExpanded] = useState(false);
+  const [measurement, setMeasurement] = useState<{
+    readonly text: string;
+    readonly overflows: boolean;
+  } | null>(null);
+  const onTextLayout = useCallback(
+    (event: NativeSyntheticEvent<TextLayoutEventData>): void => {
+      const overflows = event.nativeEvent.lines.length > 2;
+      setMeasurement((previous) =>
+        previous?.text === text && previous.overflows === overflows
+          ? previous
+          : { text, overflows }
+      );
+    },
+    [text]
+  );
   if (!text.trim()) return null;
+  const canExpand = measurement?.text === text && measurement.overflows;
+  const showingFullText = canExpand && expanded;
   const isTranscriptRtl = detectedLanguage.toUpperCase().startsWith("AR");
   const rtl = language === "ar";
+  const textClassName =
+    "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+    (isTranscriptRtl ? "text-right" : "text-left");
+  const writingDirection = isTranscriptRtl ? "rtl" : "ltr";
   return (
     <View
       testID="voice-review-transcript"
@@ -28,15 +55,25 @@ export function CompactReviewTranscript({
     >
       <TouchableOpacity
         testID="voice-review-transcript-toggle"
-        accessibilityRole="button"
-        accessibilityLabel={t(
-          expanded
-            ? "compact_review_transcript_collapse"
-            : "compact_review_transcript_expand"
-        )}
-        accessibilityState={{ expanded }}
+        accessible={Boolean(canExpand)}
+        accessibilityRole={canExpand ? "button" : undefined}
+        accessibilityLabel={
+          canExpand
+            ? t(
+                showingFullText
+                  ? "compact_review_transcript_collapse"
+                  : "compact_review_transcript_expand"
+              )
+            : undefined
+        }
+        accessibilityState={
+          canExpand ? { expanded: showingFullText } : undefined
+        }
+        disabled={!canExpand}
         activeOpacity={0.8}
-        onPress={() => setExpanded((value) => !value)}
+        onPress={() => {
+          if (canExpand) setExpanded((value) => !value);
+        }}
         className={
           "min-h-11 items-center gap-2 " +
           (rtl ? "flex-row-reverse" : "flex-row")
@@ -60,26 +97,41 @@ export function CompactReviewTranscript({
         <Text className="text-xs font-semibold text-text-secondary dark:text-text-secondary-dark">
           {detectedLanguage}
         </Text>
-        <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={18}
-          color={palette.slate[500]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+        {canExpand ? (
+          <Ionicons
+            testID="voice-review-transcript-chevron"
+            name={showingFullText ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={palette.slate[500]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        ) : null}
       </TouchableOpacity>
-      <Text
-        testID="voice-review-transcript-text"
-        numberOfLines={expanded ? undefined : 2}
-        ellipsizeMode="tail"
-        style={{ writingDirection: isTranscriptRtl ? "rtl" : "ltr" }}
-        className={
-          "mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-          (isTranscriptRtl ? "text-right" : "text-left")
-        }
-      >
-        {text}
-      </Text>
+      <View className="relative mt-1">
+        {/* Measure native wrapping without the visible preview's line limit. */}
+        <Text
+          testID="voice-review-transcript-measure"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          pointerEvents="none"
+          onTextLayout={onTextLayout}
+          style={{ writingDirection }}
+          className={"absolute inset-x-0 top-0 opacity-0 " + textClassName}
+        >
+          {text}
+        </Text>
+        <Text
+          testID="voice-review-transcript-text"
+          numberOfLines={showingFullText ? undefined : 2}
+          ellipsizeMode="tail"
+          style={{ writingDirection }}
+          className={textClassName}
+        >
+          {text}
+        </Text>
+      </View>
     </View>
   );
 }

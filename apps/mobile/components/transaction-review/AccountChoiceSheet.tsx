@@ -339,16 +339,6 @@ function AccountChoices({
           ))}
         </View>
       ) : null}
-      {eligibleCount > 0 ? (
-        <Text
-          className={
-            "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
-            (rtl ? "text-right" : "text-left")
-          }
-        >
-          {accountMatchCopy(eligibleCount, language)}
-        </Text>
-      ) : null}
       <AccountCandidateList source={source} language={language} />
       {source.explicitCurrencyChoice &&
       source.candidateOptions.some(
@@ -672,6 +662,14 @@ export function AccountChoiceSheet(
     setDraftCurrency(checked.success ? checked.data : null);
     setEditingDraft(true);
   };
+  const eligibleCount = props.candidateOptions.filter(
+    (option) => option.isEligible
+  ).length;
+  // The chooser hides its complete description while its account list scrolls.
+  const choiceDescription =
+    !editingDraft && eligibleCount > 0
+      ? accountMatchCopy(eligibleCount, language)
+      : undefined;
   const footer = editingDraft ? (
     <View
       className={
@@ -713,6 +711,8 @@ export function AccountChoiceSheet(
         testID="account-review-account-choice-sheet"
         title={props.title}
         contextSubtitle={props.contextSubtitle}
+        description={choiceDescription}
+        hideDescriptionOnScroll={!editingDraft}
         closeAccessibilityLabel={
           language === "ar" ? "إغلاق اختيار الحساب" : "Close account chooser"
         }

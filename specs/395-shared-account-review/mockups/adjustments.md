@@ -1,5 +1,12 @@
 # Owner-approved adjustments to existing mockups
 
+**Currency scope superseded, owner clarification 2026-10-21:** The dated
+currency-confirmation entry below is historical. Current review uses one final
+account-and-currency acceptance; the shared CurrencyPicker is used within new
+account forms, with no independent currency-only correction screen. Historical
+image bytes and approval receipts remain unchanged.
+
+
 Recorded: 2026-10-14. No further images will be generated.
 
 ## Existing currency modal — mandatory reuse
