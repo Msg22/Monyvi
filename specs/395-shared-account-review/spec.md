@@ -32,20 +32,33 @@ that form. Earlier currency-screen clarifications, image approvals and retained
 domain commands are historical/technical records, not a requirement to restore a
 currency-only UI. FR-011 and User Story 3 below reflect this current rule.
 
+## Current three-tab review navigation — owner approval, 2026-10-21
+
+The visible horizontal tabs are exactly **All / Needs review / Selected** (with
+RTL mirroring and horizontal overflow retained). Missing-account and
+uncertain-currency rows remain in **Needs review**, with actual counts and
+per-row **Choose an account** resolution. There is no visible **Account needed**
+tab, even when its underlying reason count is positive. Keep the existing
+account/currency reasons, inline linked-transaction expansion, manual selection
+and selected-only Save unchanged. The 2026-10-20 interactive HTML's fourth tab
+is superseded for navigation only; its other approved design remains valid.
+
 ## Current visibility and linked-preview rules — owner clarification, 2026-10-21
 
 Initially clean or automatically matched/default-only accounts do not show
 Accounts reviewed. Show that feedback only after explicit account review in the
-current session. Hide Account needed at zero; resolving its last row while
-active returns to All. What I heard offers expansion only when its native text
-layout exceeds two lines. View linked transactions expands previews inside the
-suggested account group, without replacing the main list or adding a linked
-filter banner. The account chooser hides its whole description while scrolling
-down and restores it at the top; its title and close action remain visible.
+current session. Missing-account issues remain in Needs review; resolving their
+final blocker updates the actual review count, without adding or removing tabs.
+An already-active legacy temporary account scope still recovers to All. What I
+heard offers expansion only when its native text layout exceeds two lines. View
+linked transactions expands previews inside the suggested account group, without
+replacing the main list or adding a linked filter banner. The account chooser
+hides its whole description while scrolling down and restores it at the top; its
+title and close action remain visible.
 
-These rules supersede older unconditional summary/tab visibility and linked
-full-list-filter wording. See the compact review UI contract for current
-details.
+These rules supersede older unconditional summary/tab visibility, the earlier
+fourth-tab HTML navigation and linked full-list-filter wording. See the compact
+review UI contract for current details.
 
 ## Context and scope
 
@@ -466,22 +479,23 @@ and account-form rules remain authoritative.
 **Supplemental user journey:** transactions appear early; the transcript is
 collapsed to two lines but expandable; Review details starts collapsed, expands
 suggested groups inline with explicit independent Confirm and contextual
-three-dot actions (not View all or nested modals). Account needed gathers
-unresolved rows wherever they occur in source order; linked-group drilldown and
-chooser disclose exactly affected rows and have Show all. Keep compact editable
-account/category pencil-square icons with accessible 44/48dp hits,
-real-container/font-scaled reflow, full names/amounts/currency and native
-EN/AR/dark/safe-inset patterns. One account chooser shows candidate currency and
-an explicit `Use account — EGP/USD` confirmation with no numeric conversion;
-draft name/type/currency stay in the same form, materialized only upon selected
-final Save. A removed suggestion leaves session-local Undo/Discard ghost;
-Discard actually revokes Undo without deleting transactions. Initial and newly
-ready rows automatically select unless manually unselected; Select ready
-deliberately reselects. In the compact UI, tapping a pending-group checkbox
-**does not implicitly confirm** the group: it reveals the inline confirmation
-route. The guarded legacy `confirmForClick` API remains protected for older
-callers and is not a requirement to remove. Page feedback stays sticky below
-header, no new toast.
+three-dot actions (not View all or nested modals). Needs review includes
+unresolved account/currency rows wherever they occur in source order; linked
+group transactions expand inline, and the chooser discloses only affected rows.
+An existing in-flight temporary account scope can still exit with Show all, but
+has no visible tab. Keep compact editable account/category pencil-square icons
+with accessible 44/48dp hits, real-container/font-scaled reflow, full
+names/amounts/currency and native EN/AR/dark/safe-inset patterns. One account
+chooser shows candidate currency and an explicit `Use account — EGP/USD`
+confirmation with no numeric conversion; draft name/type/currency stay in the
+same form, materialized only upon selected final Save. A removed suggestion
+leaves session-local Undo/Discard ghost; Discard actually revokes Undo without
+deleting transactions. Initial and newly ready rows automatically select unless
+manually unselected; Select ready deliberately reselects. In the compact UI,
+tapping a pending-group checkbox **does not implicitly confirm** the group: it
+reveals the inline confirmation route. The guarded legacy `confirmForClick` API
+remains protected for older callers and is not a requirement to remove. Page
+feedback stays sticky below header, no new toast.
 
 **Supersession for this compact surface:** original US4/FR-014 View all is
 replaced by inline expansion; US2/FR-007's selection-unchanged statement is

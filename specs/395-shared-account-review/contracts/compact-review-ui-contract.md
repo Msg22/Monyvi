@@ -40,20 +40,30 @@ approved or preserve it as a new authority.
 
 ## Current owner clarifications (2026-10-21)
 
+**Later 2026-10-21 tab correction:** Exactly **All / Needs review / Selected**
+are visible, with retained horizontal overflow and RTL handling. Unresolved
+account/currency rows remain in Needs review with actual counts and direct row
+account choice. The fourth Account needed tab shown in immutable 2026-10-20
+interactive HTML is superseded for navigation only; no new reference/sidecar or
+design-approval cycle is required.
+
 - Initially exact-matched or default-only accounts do not show an Accounts
   reviewed section. That feedback requires an explicit account review in this
   session; automatic matching is not a user confirmation.
 - The account summary has a chevron/button only when groups or helper content
   actually exist. An account-needed-only status without details is static;
-  resolving that issue remains available through its tab and row account action.
+  resolving that issue remains available through the Needs review row account
+  action.
 - What I heard shows its chevron and expand action only when native text layout
   exceeds the two-line preview at the current available width and font size.
-- Hide Account needed when its count is zero. Resolving its last row while that
-  tab is active returns to All; selection and final Save scope remain unchanged.
+- There is no visible Account needed tab at any count. The canonical Needs
+  review tab includes missing-account/currency rows; an already-active legacy
+  temporary account scope returns to All when its last blocker is resolved.
+  Selection and final Save scope remain unchanged.
 - View linked transactions expands a compact preview inside its account group,
   aligned with the account name. It does not replace the main transaction list
-  with a separate linked-filter banner. Account needed remains a temporary
-  filter.
+  with a separate linked-filter banner. Legacy account-needed transient scope
+  remains internal recovery state, not a visible filter tab.
 - Choose an account hides its entire description while scrolling down and
   restores it at the top. Keep title, close and footer actions reachable.
 - Separate suggestions from the two shared help messages with one divider;
@@ -69,7 +79,7 @@ visibility and linked full-list-filter wording in historical assets or records.
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Summary/transcript    | Transactions visible early; What I heard defaults to 2 lines with expand/collapse only for overflowing text; **Review details default collapsed**, expands account proposals inline. Show **Accounts reviewed** only after explicit account review in this session and all relevant pending groups and account-needed rows resolve, never as global save-ready claim if other blockers remain.                                                                                                                                                                                                      | `voice-review.tsx` / `TransactionReview.tsx`, `AccountReviewPanel.tsx`, `SharedAccountSuggestions.tsx` |
 | Groups/menu           | Pending suggestions need **explicit Confirm**. All group rows accessible inline without View all or its sheet; ellipsis expands in-place edit/use-existing/remove, with a single active edit/choice overlay. Status, type/currency, linked count and name remain visible; show a dot only when status+count share a physical line. One common account-created-at-final-Save explanation.                                                                                                                                                                                                            | `SharedAccountSuggestions.tsx`, `SharedAccountGroupRow.tsx`, `shared-account-presentation.tsx`         |
-| Scope/filter          | Account needed is temporary and contains unresolved account/currency-needed rows from **any source-list position**; Show all restores full list. View linked transactions expands a compact preview within its account group without changing the main list or tabs. Choosing an account for an entire group lists those specific transaction names/amounts before Use. Neither drilldown changes canonical Save scope.                                                                                                                                                                             | `account-review-row-filter.ts`, `account-review-filter-header.tsx`, canonical container                |
+| Scope/filter          | Show exactly **All / Needs review / Selected** in the horizontal, RTL-aware tab bar. Needs review includes unresolved account/currency rows from **any source-list position** with truthful counts. A legacy in-flight temporary account scope can exit via Show all but is not a visible tab. Linked transactions expand inside their account group without changing the main list or tabs; the group account chooser lists affected names/amounts before Use. Neither changes canonical selected-only Save scope.                                                                                 | `AccountReviewPanel.tsx`, `account-review-row-filter.ts`, canonical container                          |
 | Row                   | Checkbox/title/signed amount + currency remain intact. Account identity and category show compact pencil-in-square edit icons next to labels, rather than giant outlined chrome; only the account icon opens its picker (account name/scroll surface inert), while category quick edit remains direct. Full cash/wallet/bank identity slot preserved for stacked #405; do not import #405 logos. Reserve 44/48dp accessibility **hit areas**, reflow flexibly with actual container fit/font scale and long names.                                                                                  | `TransactionItem.tsx` and the **owner-edited** `account-review-row-presentation.tsx`                   |
 | One account chooser   | Eligible account name, currency, provider context and radio selection; explicit **Use account — EGP/USD** applies chosen currency with **no numeric amount conversion**. No separate Confirm account-and-currency or Confirm currency overlay for that choice. No standalone currency-only correction action. New account forms reuse the existing CurrencyPicker inside that form; never stack two sheets.                                                                                                                                                                                         | `AccountChoiceSheet.tsx` / `account-review-choice-presentation.tsx` and canonical overlay owner        |
 | Draft                 | **Authored and integrated locally:** `EditSuggestedAccountSheet` now preselects canonical group currency and edits name/type/currency in **one sheet**; a single Confirm sends `edit_group.identity.currency` (optional for legacy callers) under `reconfirm: true` and unchanged owner/session/review/group CAS guards. No preview command, additional currency modal, numeric conversion or early persisted account. Precision, duplicate-group and SMS ATM incompatibilities remain reducer refusals with existing modal inline feedback. Final selected Save alone creates applicable accounts. | `EditSuggestedAccountSheet.tsx`, `account-review-choice-controller.ts`, guarded `reducer-groups.ts`    |
@@ -126,7 +136,8 @@ second selected-row state, Save scope or financial command is introduced.
   `useTemporaryAccountNeededFilter(session, readModel.groupSummaries)`
   implements transient `showAccountNeeded`, `showLinkedGroup(groupId)`, and
   `showAll`. Read-model live row IDs, canonical group/row state and source order
-  govern membership. No View-all group modal, persistent new filter, or
+  govern membership. `showAccountNeeded` remains legacy internal recovery, not a
+  fourth visible tab. No View-all group modal, persistent new filter, or
   Save-scope change.
 - **UI-only callbacks:** `SharedAccountSuggestions` consumes
   `onViewLinked(groupId)`, `onDiscardRemoved(groupId)`, and `revealGroupsKey`.

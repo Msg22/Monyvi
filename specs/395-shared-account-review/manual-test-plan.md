@@ -1,5 +1,17 @@
 # Manual test plan and automation mapping
 
+## Current three-tab correction — owner approval, 2026-10-21
+
+Show exactly **All / Needs review / Selected** as the visible, horizontally
+scrollable tabs (RTL mirrored). Missing-account and uncertain-currency rows are
+still included in **Needs review** with accurate counts and their per-row
+**Choose an account** recovery. Never show an Account needed tab, even when the
+missing-account count is positive. Keep linked previews inline, genuine SMS ATM
+Cash blockers, manual selections and selected-only Save unchanged. An
+already-active legacy account-specific temporary scope can still return to All
+when resolved. The 2026-10-20 four-tab expectation below is historical and
+superseded only for visible navigation.
+
 ## Owner-confirmed label follow-up — 2026-10-21
 
 On the Metro-connected Samsung SM-A546E (Android 16), the owner confirmed that
@@ -14,14 +26,16 @@ separate manual checks.
 ## Current owner regression cases — 2026-10-21
 
 1. Open a short, exact-account Voice fixture without taking any account action.
-   Expect no Accounts reviewed section, no Account needed (0) tab, and no
-   transcript chevron when the native preview fits within two lines.
+   Expect no Accounts reviewed section, only All / Needs review / Selected tabs,
+   and no transcript chevron when the native preview fits two lines.
 2. Open a long transcript at a narrow width. Expand and collapse it; increase
    usable width or reduce font size until it fits. Expect the chevron only while
    expansion is useful, with no missing text when expanded.
-3. Open Account needed, resolve its last transaction's account, and return.
-   Expect the tab to disappear and All to become active; manual selection
-   remains intact. Explicitly reviewed accounts may now show Accounts reviewed.
+3. Open Needs review with a missing-account transaction, choose its account from
+   the row, then return. Expect the review count to update, and that row to
+   leave Needs review once all its blockers resolve. The three tabs stay visible
+   and All remains available; manual selection remains intact. Explicitly
+   reviewed accounts may now show Accounts reviewed.
 4. Open Choose an account with enough candidates to scroll. Scroll to the bottom
    and back. Expect the whole description to hide as soon as the list scrolls
    down and return at the top; title, close and footer actions stay reachable.
@@ -85,19 +99,18 @@ preserved.
   integration and validation are tracked independently; do not infer logo device
   acceptance from the compact-review tests.
 
-## CURRENT owner UI and execution-status update — 2026-10-20
+## Earlier owner UI and execution-status update — 2026-10-20 (tab navigation superseded)
 
-**Use this update ahead of conflicting instructions in the older ACTIVE handoff
-and historical M01–M20/automation entries preserved below.** The owner's latest
-approved review has a **fourth Account needed tab**, backed by the temporary
-**distinct source-row union** of account/currency blockers (including
-nonadjacent rows and genuine SMS ATM Cash destinations). This is **not** a new
-canonical session filter; All/Needs review/Selected remain unchanged. The
-Account needed tab and linked-group drilldown must retain original row order,
-truthful selected counts and global selected-only Save scope. `Show all` exits
-the temporary view. The collapsed/expanded Review details card no longer repeats
-a redundant account/currency-needed action row; pending suggested groups still
-need **explicit Confirm**.
+**This historical four-tab navigation is superseded by the 2026-10-21 owner
+correction above.** The earlier presentation exposed Account needed as a
+temporary distinct source-row union for account/currency blockers, including
+nonadjacent rows and genuine SMS ATM Cash destinations. That fourth tab is no
+longer visible: these blockers belong to canonical **Needs review**. All / Needs
+review / Selected remain the only visible tabs and canonical filters. An
+in-flight internal account scope can still exit via `Show all`. Preserve
+original row order, linked previews, truthful selected counts and global
+selected-only Save. The Review details card still avoids redundant
+account/currency-needed actions; pending groups require **explicit Confirm**.
 
 **Account creation and group edits:** The visible controls say **Create
 account** and **New account** (not Draft), but their local identities still do
@@ -179,18 +192,18 @@ TEST data. This exercises real UI/reducer/financial writer when Save is tapped
 but **never invokes a microphone, speech transcription, Gemini or an SMS
 provider**. Confirm current page, selected-only CIB/Game with QNB pending,
 collapsed account summary, two-line expandable transcript, pending versus
-`Accounts reviewed`, and source-order Account needed/linked temporary filters
-with `Show all`. Groups expose independent **explicit Confirm** and inline
-three-dot actions—no `View all`, nested action menu or row-selection implicit
-group confirmation. One active overlay at a time. Test amount-preserving
-`Use account — EGP/USD` with candidate account/type/ currency preselection and
-**no second Confirm Currency modal**. Draft name/type/currency belong to one
-form and create nothing until actual final selected Save. Remove leaves ghost
-Undo/Discard, where Discard must **revoke the real session Undo lease**, not
-only hide its button. Initially/newly ready rows auto-select; manual deselection
-persists, while `Select ready` expressly reselects eligible rows within the
-active filter. Check native 44/48dp hit targets distinct from small painted
-account/category icons, measured available-width text/reflow, long
+`Accounts reviewed`, and missing-account rows in Needs review, with inline
+linked previews and no fourth tab. Groups expose independent **explicit
+Confirm** and inline three-dot actions—no `View all`, nested action menu or
+row-selection implicit group confirmation. One active overlay at a time. Test
+amount-preserving `Use account — EGP/USD` with candidate account/type/ currency
+preselection and **no second Confirm Currency modal**. Draft name/type/currency
+belong to one form and create nothing until actual final selected Save. Remove
+leaves ghost Undo/Discard, where Discard must **revoke the real session Undo
+lease**, not only hide its button. Initially/newly ready rows auto-select;
+manual deselection persists, while `Select ready` expressly reselects eligible
+rows within the active filter. Check native 44/48dp hit targets distinct from
+small painted account/category icons, measured available-width text/reflow, long
 account/category names, dot only inline with status+count, and no final orphan
 divider. Light/dark readable information, EN/AR RTL, fixed safe footer/keyboard,
 sticky dismissible feedback below header/outside scroll and modal-only inline

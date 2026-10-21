@@ -8,16 +8,25 @@ runnable design is the primary compact UI reference. Earlier R1–R3 image
 bindings remain intact. The unapproved compact binding draft is withdrawn; **no
 second design approval or sidecar is required**.
 
+**2026-10-21 owner override:** The immutable 2026-10-20 interactive HTML still
+depicts a fourth Account needed tab. That navigation is superseded: native
+review must show exactly **All / Needs review / Selected** (horizontal/RTL
+behavior unchanged). Missing-account and currency-blocked rows remain in Needs
+review and are resolved via each row's **Choose an account**. Inline linked
+previews, accurate counts, selection and Save scope remain approved. Keep all
+reference HTML/provenance bytes unchanged; no new binding or approval gate is
+needed.
+
 ## Open and try
 
 Open [`index.html`](index.html) in a browser, or serve that exact file over
 local HTTP. Set **320 CSS px** to revisit the owner-tested narrow view; the
 width control supports **320–430 px**, text scale **1.00–1.25**, and a
 long-account-name toggle. Explore the collapsed/expanded summary and two-line
-transcript, inline groups and linked rows, Account needed/Show all, one
-currency-labelled account chooser, ready selection, and removed-suggestion
-Undo/Discard. This is a simulation: it does **not** save real accounts or
-transactions.
+transcript, inline groups and linked rows, the historical fourth-tab preview
+(superseded by the three native tabs), one currency-labelled account chooser,
+ready selection, and removed-suggestion Undo/Discard. This is a simulation: it
+does **not** save real accounts or transactions.
 
 ## Reference files
 
