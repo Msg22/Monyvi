@@ -140,6 +140,14 @@ jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
 
 jest.mock("@/context/CategoriesContext", () => ({
   useAllCategories: () => ({ categories: [], isLoading: false }),
+  useCategoryCatalogueSnapshot: () => ({
+    status: "ready",
+    origin: "https://project.supabase.co",
+    ownerId: "user-1",
+    selectedSystemIds: new Set<string>(),
+    acceptedAt: 1_700_000_000_000,
+    error: null,
+  }),
 }));
 
 jest.mock("@/context/SmsScanContext", () => ({

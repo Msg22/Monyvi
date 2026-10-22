@@ -23,6 +23,25 @@ jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: false } => ({ isDark: false }),
 }));
 
+// Match the category selector's catalogue boundary without loading native DB.
+jest.mock("@/context/CategoriesContext", () => ({
+  useOptionalCategoryCatalogue: () => ({
+    catalogue: {
+      status: "ready",
+      origin: "https://project.supabase.co",
+      ownerId: "user-1",
+      selectedSystemIds: new Set<string>(),
+      acceptedAt: 1_700_000_000_000,
+      error: null,
+    },
+    reloadCatalogue: (): Promise<void> => Promise.resolve(),
+  }),
+}));
+
+jest.mock("@/utils/category-catalogue-retry", () => ({
+  requestCatalogueSync: (): Promise<void> => Promise.resolve(),
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
     t: (key: string): string => key,

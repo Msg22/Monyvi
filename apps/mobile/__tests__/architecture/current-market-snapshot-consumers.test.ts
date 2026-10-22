@@ -227,12 +227,14 @@ describe("issue #302 current-rate consumer bypass guard", () => {
     expect(syncEntryPoint).toContain(
       "export const syncDatabase = mainSync.syncDatabase"
     );
-    expect(protectedHost).toContain(
-      'import { pullChanges } from "./atomic-pull-strategies"'
+    const atomicPullImport = protectedHost.match(
+      /import\s*\{([^}]*)\}\s*from\s*"\.\/atomic-pull-strategies"/
     );
+    expect(atomicPullImport).not.toBeNull();
+    expect(atomicPullImport?.[1]).toMatch(/(?:^|,)\s*pullChanges\s*(?:,|$)/);
     expect(protectedHost).toContain("pull: pullChanges");
-    expect(protectedHost).toContain(
-      "host.pull(forceFull ? null : lastPulledAt, userId, database)"
+    expect(protectedHost).toMatch(
+      /host\.pull\(\s*forceFull\s*\?\s*null\s*:\s*lastPulledAt\s*,\s*userId\s*,\s*database\s*\)/
     );
 
     // Complete market root and observation pages share one frozen watermark,
