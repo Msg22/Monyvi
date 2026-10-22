@@ -210,13 +210,46 @@ describe("issue #302 current-rate consumer bypass guard", () => {
     });
   }
 
-  it("routes the production sync entry point through the atomic pull orchestrator", () => {
+  it("routes protected production sync through the atomic complete-snapshot pull", () => {
     const syncEntryPoint = source("services/sync.ts");
+    const protectedHost = source("services/sync/protected-historical-sync.ts");
     const atomicPull = source("services/sync/atomic-pull-strategies.ts");
+    const marketPull = source("services/sync/market-rate-snapshot-pull.ts");
 
-    expect(syncEntryPoint).toContain('from "./sync/atomic-pull-strategies"');
-    expect(atomicPull).toContain("pullMarketRateSnapshots");
+    // The Main composition still uses the real #395 SDK writer; the
+    // historical host forwards its very same pull through the atomic wrapper.
+    expect(syncEntryPoint).toContain(
+      'import { createProtectedHistoricalSync } from "./sync/protected-historical-sync"'
+    );
+    expect(syncEntryPoint).toContain(
+      "synchronize: synchronizeWithProtectedAccountActions"
+    );
+    expect(syncEntryPoint).toContain(
+      "export const syncDatabase = mainSync.syncDatabase"
+    );
+    const atomicPullImport = protectedHost.match(
+      /import\s*\{([^}]*)\}\s*from\s*"\.\/atomic-pull-strategies"/
+    );
+    expect(atomicPullImport).not.toBeNull();
+    expect(atomicPullImport?.[1]).toMatch(/(?:^|,)\s*pullChanges\s*(?:,|$)/);
+    expect(protectedHost).toContain("pull: pullChanges");
+    expect(protectedHost).toMatch(
+      /host\.pull\(\s*forceFull\s*\?\s*null\s*:\s*lastPulledAt\s*,\s*userId\s*,\s*database\s*\)/
+    );
+
+    // Complete market root and observation pages share one frozen watermark,
+    // never an independent current-rate fetch on normal sync.
+    expect(atomicPull).toContain(
+      'import { pullMarketRateSnapshots } from "./market-rate-snapshot-pull"'
+    );
+    expect(atomicPull).toContain("pullMarketRateSnapshots(marketStart)");
     expect(atomicPull).toContain("market_rate_observations");
+    expect(atomicPull).toContain(
+      "market_rate_observations: marketPull.changes.market_rate_observations"
+    );
+    expect(marketPull).toContain(
+      'const MARKET_RATE_SNAPSHOT_RPC = "pull_market_rate_snapshots_page_v2"'
+    );
   });
 
   it("uses one selected snapshot stream for all current React consumers", () => {

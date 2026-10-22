@@ -1,5 +1,50 @@
 # monyvi - Project Instructions
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+- **Global dropdown/picker selected state (owner-approved 2026-10-20):** Reuse
+  shared `Dropdown`, `CurrencyPicker`, and existing selection primitives rather
+  than copying bespoke menus. When opened, the current option MUST have an
+  obvious filled Nile-green selected background with WHITE readable option text
+  in light and dark themes; any selected check/icon MUST contrast in white,
+  never green on green. Preserve the real selected/checked accessibility state,
+  including EN/AR and RTL. Cover the opened selected option with a focused
+  source/render-contract test; visual dark-mode contrast needs actual rendered
+  evidence, not just class-name/string checks.
+- **Global form keyboard reachability:** Every text input, including the last
+  field in a sheet/modal/form, MUST stay visible and reachable above the soft
+  keyboard on Android and iOS, small usable viewports, landscape and enlarged
+  fonts. Reuse shared text fields and keyboard-aware/scrollable form surfaces;
+  determine the ACTUAL available keyboard-adjusted viewport and header/footer/
+  safe-area space from runtime layout measurements, not nominal screen height,
+  guessed keyboard offsets or doubled insets. Scroll the focused field and its
+  label/error into view; keep completion and dismissal reachable. Add focused
+  source/render-contract coverage where deterministic and explicitly obtain
+  native/manual keyboard, font-scale and RTL evidence before claiming device QA.
+  Shared primitive enforcement is being developed separately; apply these
+  standards to new/touched forms and audit older bespoke uses incrementally. Do
+  not claim an app-wide migration or introduce a new mockup/approval or
+  tests-first gate for this established standard.
+
+## Typography and native text diagnosis (2026-10-21)
+
+Use the loaded locale fonts from `constants/typography.ts` for new/touched UI
+text; a weight class such as `font-semibold` does not select the font family.
+Keep icon fonts intact. When a last word disappears but its space remains,
+compare actual text content, native line metrics and device rendering before
+changing gaps. Android 15+ OEM-font measurement/painting can disagree; do not
+add fake trailing spaces, disable font scaling or claim a layout test proves
+pixels. Apply the existing font contract locally; untouched screens remain an
+incremental audit, not an unrequested app-wide migration.
+
 ## Project Context
 
 monyvi is a personal financial app — a frictionless financial companion that
@@ -12,7 +57,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/389-sync-pagination/plan.md`
+Active Speckit plan: `specs/395-shared-account-review/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -241,7 +286,10 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
 - **i18n**: In functional components, use the `useTranslation` hook
   (`const { t } = useTranslation("namespace")`). In class components or
   non-component files, use the named import `import { t } from "i18next"` —
-  never `i18next.t()`.
+  never `i18next.t()`. For new/changed visible labels, confirm the **exact
+  namespaced key resolves to human-readable text in both EN and AR**. A `t(key)`
+  call or a source assertion does not prove the key exists; a raw key shown in
+  the app is a localization defect.
 - Translate only user-visible strings. Internal-only checks, sentinel values,
   error-code comparisons, and control-flow decisions MUST stay language-neutral
   (for example booleans, enums, or stable English codes), then translate only
@@ -259,6 +307,17 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   context with the intended audience. Prefer familiar words over internal domain
   terms; keep the same concept named consistently across screens, actions, and
   summaries. Put any proposed terminology change in the mockup for approval.
+- **New/changed app feedback (prospective):** Do not introduce toasts for
+  errors, warnings or successes. Use a persistent, user-dismissible, page-scoped
+  inline notice directly below the header and **outside the scrolling content**.
+  Feedback from an active modal appears at the top **inside that modal**.
+  Dismissal or actual issue resolution, not a toast timer, controls visibility.
+  Retain existing legacy toast infrastructure and migrate untouched screens
+  gradually, not as an app-wide rewrite. Informational text in dark mode needs
+  readable semantic primary/secondary contrast, not disabled/muted styling.
+  Preserve approved selected/warning fills and only use a transparent dark
+  information-icon backdrop where the approved mockup calls for one. An unknown
+  or rejected financial outcome must never display success.
 - Permission flows MUST use Monyvi custom explanatory/recovery UI before
   triggering any native permission request. Do not use Android native rationale
   dialogs or `Alert.alert()` as the app-level explanation. The OS permission
@@ -297,6 +356,17 @@ the true domain model.
 
 ## Styling Rules
 
+- **Interactive-first UI designs (approved 2026-10-20):** Every future
+  meaningful UI proposal from any model/worker must use a runnable interactive
+  artifact stored under its feature `mockups/` folder, not an image-only or
+  tool-only proposal. Follow
+  [the interactive design workflow](docs/design/interactive-design-workflow.md)
+  for a runnable design owning its layout/styling, short README with
+  version/run/scenarios/native-only limits, and **one** owner approval of the
+  reviewed revision. No binding sidecar, metadata/hash tuple or second approval
+  for future interactive designs. Historical image bindings stay frozen; the
+  sprint-issue micro-UI exception remains.
+
 - For GitHub sprint issues that meaningfully affect visible UI or design, follow
   the visual mockup approval gate in `.agent/workflows/sprint-issue.md` before
   coding. The workflow's narrowly defined micro-UI exception may be used for
@@ -307,18 +377,40 @@ the true domain model.
   pattern, icon, placement, size, and accessibility behavior unless the approved
   mockup explicitly calls for a difference. Check both visible and empty states.
 
-- **Responsive mockup implementation**: Treat the approved mockup as the
-  normal-width composition, then validate it at compact-phone, ordinary-phone,
-  tablet, orientation, RTL, and enlarged-font sizes before shipping. Keep
-  controls and related metrics on the approved row whenever the shared layout
-  contract fits; stack only when measured space or text scale requires it. Use
-  the centralized `apps/mobile/constants/ui.ts` responsive breakpoints and
-  helpers instead of component-specific device-width magic numbers. Add focused
-  layout tests for the ordinary phone and compact-phone breakpoints, and never
-  optimize for one handset at the expense of other supported devices.
+- **Responsive mockup implementation**: Preserve the approved runnable design at
+  its reviewed comparison context and its semantic hierarchy everywhere else (or
+  the original binding context for a historical approved image). Size layouts
+  from the **actual available component/container space**, not a blanket
+  viewport-width cutoff; centralized `apps/mobile/constants/ui.ts` breakpoints
+  are hints, not mandatory wrap decisions or permission to add device lists.
+  Reserve stable 44/48 dp action **hit areas** first, then give identity/labels
+  bounded, shrinkable, readable space. Use **actual container and localized text
+  fit**, not character-count width estimates or fixed visual button chrome;
+  small visual padding/icon/gap changes may preserve the full touch hitbox. For
+  approved quiet pencil/icon actions, the visible affordance can be small and
+  unbordered while the **effective** touch target meets 44/48 dp through layout
+  and in-bounds `hitSlop`; never add a visible 48 dp border/fill box solely for
+  touch size. Touch extensions cannot escape parent bounds or overlap adjacent
+  actions. Keep shared-account status and linked count inline when they really
+  fit; if wrapped, put separators with their adjoining text so no line starts
+  with an orphan dot. Use the same shared group renderer in the overview and
+  View all: adapt presentation to space, not identity, status or action scope.
+  When space is tight, use modest approved typography/icon/control/spacing
+  variants (without disabling font scaling or hiding financial identity); stack
+  only when the real content cannot fit or accessibility scaling requires it.
+  Respect RTL, theme, rotation, keyboard, scrolling and safe-area insets. Run
+  existing applicable checks; owner manually reviews representative
+  small/ordinary/wide widths and enlarged text (plus relevant RTL/keyboard
+  states). Do not add cosmetic className/breakpoint test matrices or claim a
+  visual pass without rendered evidence.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
+  Prefer supported JSX in `.tsx` for NativeWind-styled elements. Raw
+  `React.createElement(...)` in a `.ts` render helper can bypass the configured
+  JSX/NativeWind transform; do not rely on its `className` without verifying the
+  actual interop path. A `className` assertion proves authored props, not Babel
+  transformation, applied native styles, or visual fidelity.
 - **Colors via Tailwind config**: All palette colors are registered in
   `tailwind.config.js`. Use NativeWind classes (`bg-slate-800`,
   `text-nileGreen-500`, `border-slate-300`) — never use inline
@@ -753,6 +845,12 @@ actions. After three failed fixes, stop and name the doubtful assumption. If the
 request is ambiguous, ask one short question.
 
 ## Active Technologies
+
+- TypeScript ~5.9.2 strict; Node engine >=22 <23; existing Edge Deno runtime;
+  Expo ~55.0.27, React 19.2.0, React Native 0.83.6
+  (codex/395-shared-account-review)
+- WatermelonDB accounts/financial records and existing SMS draft JSON;
+  (codex/395-shared-account-review)
 
 - TypeScript strict mode; React Native Expo mobile app + Expo Router, React
   Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next

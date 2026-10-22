@@ -43,13 +43,16 @@ specific decision rather than choosing one.
 
 1. Map every existing balance writer and generic account sync path before a
    protocol change. Confirm ownership, authenticated scope, and failure path.
-2. Write focused failing tests before production edits. They must prove one
-   action ID and payload hash apply at most once, an expected revision protects
-   the account, and a failed pull or push cannot advance sync state.
+2. Follow the direct-implementation delivery policy for the smallest approved
+   change, with batched tests after implementation and owner feedback where
+   applicable. Before merge, focused safety tests must prove one action ID and
+   payload hash apply at most once, expected revisions protect accounts, and
+   failed pull/push never advances sync state. Do not fabricate a pre-source Red
+   run to satisfy an obsolete tests-first gate.
 3. Implement repository migration files using the established sequence, then
    update WatermelonDB migration/schema and generated artifacts through the
-   approved local workflow. Do not execute schema SQL through a dashboard or
-   MCP tool.
+   approved local workflow. Do not execute schema SQL through a dashboard or MCP
+   tool.
 4. Ensure metadata synchronization cannot overwrite protected financial balance
    or revision fields, and reconciliation is restart-safe and idempotent.
 5. Run focused unit/integration tests and required migration generation before
@@ -67,5 +70,7 @@ conflicts with affected records and recovery consequences.
 ## Required Handoff
 
 Report migration files and generated artifacts, changed writer/sync boundaries,
-Red and Green evidence, unautomated recovery cases, compatibility assumptions,
-and required database/security review. Never self-approve high-risk changes.
+actual failing/passing test results, unautomated recovery cases, compatibility
+assumptions, and required independent database/security review. Preserve the
+owner/CAS, local SQL migration/approval, and pre-merge safety gates; never
+self-approve high-risk changes.

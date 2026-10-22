@@ -16,4 +16,9 @@ description: when working on mobile app that uses tailwindcss
 - Use Tailwind's JIT mode for faster builds and on-demand styles.
 - Create custom utility classes for frequently used styles.
 - Organize styles in a consistent manner to improve maintainability.
-- Utilize Tailwind's responsive utilities to ensure mobile-first design.
+- For mobile responsiveness, use the **actual container and intrinsic label
+  fit** before breakpoint utilities; do not force stacking or hide scalable
+  financial text based only on screen width. Reserve 44/48 dp touch areas while
+  keeping visual chrome compact. Follow `AGENTS.md`,
+  `docs/design/design-system.md`, and `.agent/rules/styling-rules.md` for
+  approved dark/RTL, keyboard and new page/modal feedback behavior.

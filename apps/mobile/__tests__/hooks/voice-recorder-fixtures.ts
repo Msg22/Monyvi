@@ -6,7 +6,7 @@
  *
  * Mock Strategy:
  *   - expo-audio: mocked entirely to avoid native module dependencies
- *   - expo-file-system: mocked for temp file cleanup testing
+ *   - expo-file-system: synchronous File API mocked for temp cleanup testing
  *   - React Native Testing Library renderHook for lifecycle assertions
  */
 
@@ -43,8 +43,8 @@ const mockGetPermissions = jest
   .fn<Promise<{ granted: boolean; canAskAgain?: boolean }>, []>()
   .mockResolvedValue({ granted: false, canAskAgain: true });
 const mockSetAudioModeAsync = jest.fn().mockResolvedValue(undefined);
-const mockDeleteAsync = jest.fn().mockResolvedValue(undefined);
-const mockGetInfoAsync = jest.fn().mockResolvedValue({ exists: true });
+const mockFileExists = jest.fn<boolean, [uri: string]>(() => true);
+const mockFileDelete = jest.fn<void, [uri: string]>();
 
 const mockRecorder = {
   record: mockRecord,
@@ -91,10 +91,21 @@ jest.mock("expo-audio", () => ({
 }));
 
 jest.mock("expo-file-system", () => ({
-  deleteAsync: (...args: unknown[]): Promise<unknown> =>
-    mockDeleteAsync(...args) as Promise<unknown>,
-  getInfoAsync: (...args: unknown[]): Promise<unknown> =>
-    mockGetInfoAsync(...args) as Promise<unknown>,
+  File: jest.fn().mockImplementation((uri: string) => ({
+    uri,
+    get exists(): boolean {
+      return mockFileExists(uri);
+    },
+    delete: (): void => {
+      mockFileDelete(uri);
+    },
+  })),
+  getInfoAsync: (): never => {
+    throw new Error("Deprecated root FileSystem.getInfoAsync was called");
+  },
+  deleteAsync: (): never => {
+    throw new Error("Deprecated root FileSystem.deleteAsync was called");
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -215,8 +226,8 @@ export {
   mockRequestPermissions,
   mockGetPermissions,
   mockSetAudioModeAsync,
-  mockDeleteAsync,
-  mockGetInfoAsync,
+  mockFileExists,
+  mockFileDelete,
   mountedUnmounts,
   unwrap,
   renderHook,

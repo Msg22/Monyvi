@@ -59,21 +59,39 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("@nozbe/watermelondb/sync", () => ({
-  synchronize: (args: unknown): Promise<unknown> =>
-    mockSynchronize(args) as Promise<unknown>,
-}));
-
-jest.mock("@nozbe/watermelondb", () => ({
-  Q: {
-    unsafeSqlQuery: (sql: string, values: unknown): unknown => ({
-      sql,
-      values,
-    }),
-    notEq: (value: unknown): unknown => mockWatermelonNotEq(value),
-    where: (column: string, value: unknown): unknown =>
-      mockWatermelonWhere(column, value),
+  MONYVI_SYNC_WRITER_GUARDS: "monyvi/watermelon-sync-writer-guards/0.28.0/v1",
+  synchronize: (args: unknown): Promise<unknown> => {
+    // This transport-only mock must receive every protected SDK writer hook.
+    expect(args).toEqual(
+      expect.objectContaining<Record<string, unknown>>({
+        beforeApplyRemoteChangesInWriter: expect.any(Function),
+        beforePullCheckpointInWriter: expect.any(Function),
+        beforeMarkLocalChangesAsSyncedInWriter: expect.any(Function),
+        conflictResolver: expect.any(Function),
+      })
+    );
+    return mockSynchronize(args) as Promise<unknown>;
   },
 }));
+
+jest.mock("@nozbe/watermelondb", () => {
+  const actual = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  return {
+    ...actual,
+    Q: {
+      ...actual.Q,
+      unsafeSqlQuery: (sql: string, values: unknown): unknown => ({
+        sql,
+        values,
+      }),
+      notEq: (value: unknown): unknown => mockWatermelonNotEq(value),
+      where: (column: string, value: unknown): unknown =>
+        mockWatermelonWhere(column, value),
+    },
+  };
+});
 
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string | null> =>
@@ -94,6 +112,7 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 import { syncDatabase } from "../../services/sync";
+import { registerSmsProvenanceSyncCases } from "./sync-sms-provenance-test-cases";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
 
 function getSelectResult(table?: string): SupabaseResult {
@@ -173,7 +192,13 @@ beforeEach(() => {
     unsafeFetchRaw: mockOwnedTombstonesFetch,
   });
   mockOwnedTombstonesFetch.mockResolvedValue([]);
-  mockDatabaseGet.mockReturnValue({ query: mockProfileQuery });
+  mockDatabaseGet.mockImplementation((table: string) => ({
+    // Parent/tombstone rows are not canonical financial-action roots.
+    query:
+      table === "financial_action_groups"
+        ? () => ({ fetch: (): Promise<never[]> => Promise.resolve([]) })
+        : mockProfileQuery,
+  }));
   mockDatabaseWrite.mockImplementation((writer: () => Promise<void>) =>
     writer()
   );
@@ -839,123 +864,11 @@ describe("syncDatabase", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
-  it("pushes SMS-created transactions with sms_fingerprint and without the old sms_body_hash field", async () => {
-    mockUpsert.mockResolvedValue({ error: null });
-    mockSynchronize.mockImplementation(
-      async (args: {
-        pushChanges: (input: {
-          changes: Record<string, unknown>;
-          lastPulledAt: number | null;
-        }) => Promise<unknown>;
-      }) => {
-        await args.pushChanges({
-          changes: {
-            transactions: {
-              created: [
-                {
-                  id: "transaction-1",
-                  user_id: "current-user",
-                  amount: 850,
-                  type: "EXPENSE",
-                  date: Date.UTC(2026, 0, 15),
-                  created_at: Date.UTC(2026, 0, 15, 10),
-                  updated_at: Date.UTC(2026, 0, 15, 10),
-                  sms_fingerprint: "sms-fingerprint-transaction-1",
-                  sms_body_hash: "legacy-hash-should-not-sync",
-                },
-              ],
-              updated: [],
-              deleted: [],
-            },
-          },
-          lastPulledAt: null,
-        });
-      }
-    );
-
-    await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
-
-    expect(mockFrom).toHaveBeenCalledWith("transactions");
-    expect(mockUpsert).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({
-          id: "transaction-1",
-          user_id: "current-user",
-          sms_fingerprint: "sms-fingerprint-transaction-1",
-          date: "2026-01-15",
-          created_at: "2026-01-15T10:00:00.000Z",
-          updated_at: "2026-01-15T10:00:00.000Z",
-        }),
-      ],
-      { onConflict: "id" }
-    );
-
-    const insertCalls: ReadonlyArray<
-      readonly [ReadonlyArray<Record<string, unknown>>, { onConflict: "id" }]
-    > = mockUpsert.mock.calls;
-    const [insertedRows] = insertCalls[0];
-    const [insertedRow] = insertedRows;
-    expect(insertedRow).not.toHaveProperty("sms_body_hash");
-  });
-
-  it("pushes SMS-created transfers with sms_fingerprint and without the old sms_body_hash field", async () => {
-    mockUpsert.mockResolvedValue({ error: null });
-    mockSynchronize.mockImplementation(
-      async (args: {
-        pushChanges: (input: {
-          changes: Record<string, unknown>;
-          lastPulledAt: number | null;
-        }) => Promise<unknown>;
-      }) => {
-        await args.pushChanges({
-          changes: {
-            transfers: {
-              created: [
-                {
-                  id: "transfer-1",
-                  user_id: "current-user",
-                  from_account_id: "cash-account",
-                  to_account_id: "bank-account",
-                  amount: 1000,
-                  date: Date.UTC(2026, 0, 16),
-                  created_at: Date.UTC(2026, 0, 16, 12),
-                  updated_at: Date.UTC(2026, 0, 16, 12),
-                  sms_fingerprint: "sms-fingerprint-transfer-1",
-                  sms_body_hash: "legacy-transfer-hash-should-not-sync",
-                },
-              ],
-              updated: [],
-              deleted: [],
-            },
-          },
-          lastPulledAt: null,
-        });
-      }
-    );
-
-    await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
-
-    expect(mockFrom).toHaveBeenCalledWith("transfers");
-    expect(mockUpsert).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({
-          id: "transfer-1",
-          user_id: "current-user",
-          sms_fingerprint: "sms-fingerprint-transfer-1",
-          date: "2026-01-16",
-          created_at: "2026-01-16T12:00:00.000Z",
-          updated_at: "2026-01-16T12:00:00.000Z",
-        }),
-      ],
-      { onConflict: "id" }
-    );
-
-    const insertCalls: ReadonlyArray<
-      readonly [ReadonlyArray<Record<string, unknown>>, { onConflict: "id" }]
-    > = mockUpsert.mock.calls;
-    const [insertedRows] = insertCalls[0];
-    const [insertedRow] = insertedRows;
-    expect(insertedRow).not.toHaveProperty("sms_body_hash");
+  registerSmsProvenanceSyncCases({
+    mockSynchronize,
+    mockFrom,
+    mockUpsert,
+    runSync: () => syncDatabase(mockDatabase),
   });
 });
 jest.mock("../../services/legacy-metal-add-repair-service", () => ({

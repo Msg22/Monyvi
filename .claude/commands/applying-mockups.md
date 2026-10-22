@@ -4,6 +4,36 @@ description: apply mockups guidelines
 
 # 🎯 Implementation Requirement — Pixel-Perfect UI
 
+## Shared selection and keyboard standards (2026-10-20)
+
+### Global form/selector contract (existing owner-approved standard)
+
+Reuse shared `Dropdown`, `CurrencyPicker`, `TextField` and keyboard-aware
+form/sheet infrastructure. An opened list's CURRENT selection must have a
+**filled Nile-green background**, **WHITE legible selected text** in light and
+dark modes and a **WHITE contrasting check/icon** (never green on green or a
+tint-only signal); expose the true selected/checked accessibility state, with
+EN/AR RTL. Verify the real selected source/render contract, not guessed default
+or source-string matching.
+
+All focused text fields, including last fields in modal/sheets, must stay
+scroll-visible above Android/iOS keyboards on compact screens and enlarged
+fonts. Measure the ACTUAL keyboard-adjusted viewport, header/footer space and
+safe-area insets, scroll-to-focus, and preserve reachable submit/cancel; avoid
+hardcoded offsets, clipping or double padding. Record native/manual
+keyboard/font/RTL/dark evidence separately from source tests and mark unexecuted
+native checks NOT RUN. Shared enforcement is ongoing; audit older bespoke
+selectors/fields gradually, not as proof of full-app migration. This adds no
+extra mockup, binding approval or tests-first gate.
+
+Use the up-to-date `.agent/workflows/applying-mockups.md`, `AGENTS.md`,
+`docs/design/design-system.md` and owner-approved business decisions. Absolute
+fidelity applies to the **approved binding context**; an approved scoped
+responsive/state amendment may use intrinsic content fit, 44/48 dp targets,
+readable scaled labels and natural wrapping without changing frozen binding
+bytes. New/changed feedback uses sticky dismissible page notices below headers
+outside scrolling, or the top of an active modal—not new toasts.
+
 ## Approved Binding Gate
 
 Before consuming an approved mockup, load its matching binding sidecar and run
@@ -27,7 +57,8 @@ approved combined `Binding approval revision` must all verify. Follow
 
 ## 🚫 Constraints
 
-- **Do not deviate** from the mockups in any way.
+- **Do not deviate** from the approved binding at its declared context, except
+  where the owner explicitly approved a scoped subsequent treatment.
 - Do not introduce:
   - Alternative layouts
   - Different spacing or alignment

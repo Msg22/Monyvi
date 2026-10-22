@@ -4,15 +4,18 @@ description:
   in tasks.md
 ---
 
-## Approved Mockup Binding Gate
+## Prospective interactive design and historical image bindings
 
-When this workflow consumes an approved mockup or sidecar, run
-`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
-binding facts, rendered evidence, or approval status. Require exit status zero:
-current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
-revisions, and approval evidence for the approved combined
-`Binding approval revision` must all verify. A failed verifier blocks governed
-UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+For future meaningful UI, the **once-approved runnable design revision** and
+short README (version/run, relevant scenarios, native-only adaptations) are the
+design authority. Do not invent a future HTML sidecar, duplicate normative
+layout description, hash/combined revision or metadata approval. See
+`docs/design/interactive-design-workflow.md`.
+
+For historically approved **image** mockups on their original governed surfaces
+only, preserve their original sidecars, approval evidence and the unchanged
+`scripts/verify-mockup-binding.js` gate. That verifier is not a prerequisite for
+new interactive HTML.
 
 ## User Input
 
@@ -69,27 +72,15 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read contracts/ for API specifications and test requirements
    - **IF EXISTS**: Read research.md for technical decisions and constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
-   - **IF mockup-backed UI is in scope**: locate the approved references through
-     the selected spec/design paths and load each matching
-     `<mockup-basename>.binding.md` sidecar defined by
-     `.agent/workflows/mockup-implementation.md`. Before any governed production
-     implementation begins, verify that the sidecar records
-     `Binding metadata approval: APPROVED` and the explicit approval
-     evidence/reference required by that workflow. Recompute its current
-     fingerprint, verify `Approved binding metadata revision` equals
-     `Binding metadata revision`, verify `Approved binding approval revision`
-     equals `Binding approval revision`, and verify the approval
-     evidence/reference identifies the approved combined
-     `Approved binding approval revision`. A missing sidecar, failed revision
-     check, sidecar still marked `PENDING`, missing approval reference, or
-     sidecar materially changed after approval is not authoritative and MUST
-     block governed UI implementation until explicit approval is restored. If an
-     approved reference predates the sidecar rule and has no sidecar, follow
-     that workflow's **Legacy Approved Mockup Metadata Migration** procedure or
-     require its generated prerequisite task to complete; the migrated sidecar
-     must also reach explicit `APPROVED` status before implementation. Treat
-     fidelity-affecting `UNKNOWN` metadata as a pre-implementation blocker
-     rather than guessing.
+   - **IF mockup-backed UI is in scope**: For a future interactive design, open
+     the approved runnable entry and its short README (not a fragment), identify
+     the once-reviewed revision and exercise relevant state/width/
+     content/font/theme/locale scenarios. The design itself owns the visual and
+     responsive facts; do not require sidecar/Binding Facts/hash checks or a
+     second approval. Implement real RN/Expo, not browser HTML/CSS. For
+     historical image-governed surfaces, load original approved sidecars, run
+     the unchanged verifier and preserve legacy migration gates. Treat
+     pending/invalid **historical** bindings as blockers only there.
 
 4. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
@@ -196,28 +187,27 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Check that implemented features match the original specification
    - Validate that tests pass and coverage meets requirements
    - Confirm the implementation follows the technical plan
-   - For any changed UI governed by an approved mockup, re-verify that its
-     binding sidecar is still authoritative:
-     `Binding metadata approval: APPROVED` is present with its explicit approval
-     evidence/reference, its recomputed current fingerprint is valid,
-     `Approved binding metadata revision` equals `Binding metadata revision`,
-     `Approved binding approval revision` equals `Binding approval revision`,
-     and the approval evidence/reference identifies the approved combined
-     `Approved binding approval revision`. If this check fails, keep the
-     governed UI blocked rather than accepting evidence against stale or
-     unapproved metadata.
+   - For changed UI governed by a prospective interactive design, verify the
+     **owner-approved reviewed artifact version** and short README exist; no new
+     sidecar, hash verifier or duplicate design approval is required. For a
+     historical approved image surface only, verify its original authoritative
+     sidecar and existing hash/approval evidence with the unchanged legacy
+     verifier.
    - For any changed UI governed by an approved mockup, verify the required
      visual-evidence tasks generated by `/speckit.tasks` are present and marked
      complete. Source inspection or a passing test suite does not substitute for
      rendered evidence.
-   - For every such mockup-backed UI surface, require a rendered baseline
-     side-by-side or overlay comparison against the approved reference at the
-     declared viewport/component context, plus rendered evidence for every
-     responsive, theme, RTL/Arabic, and enlarged-text variant in scope under the
-     binding sidecar or feature requirements.
-   - If a required baseline/variant rendering or evidence reference is missing,
-     keep **visual fidelity status** incomplete/blocked and do not report the
-     feature as visually complete. State the blocker explicitly.
+   - For every such mockup-backed UI surface, require actual **native app**
+     screenshot evidence, side-by-side or overlaid with the rendered approved
+     interactive entry (or historical image) at the reviewed product context,
+     plus native rendered evidence for the relevant responsive, theme,
+     RTL/Arabic and enlarged-text variants in the approved interactive
+     scenarios/README or original historical binding/feature requirements.
+   - If a required native baseline/variant rendering or evidence reference is
+     missing, keep **visual fidelity status** incomplete/blocked and do not
+     report the feature as visually complete. Mark deferred or unauthorized
+     device/render verification `NOT RUN`; Mohamed owns device/manual QA unless
+     execution is explicitly authorized. State the blocker explicitly.
    - When a governed story requires accessibility labels or semantics, verify
      that the separate accessibility-evidence task generated by `/speckit.tasks`
      is present and complete. Inspect accessibility-tree, screen-reader, or
@@ -235,11 +225,13 @@ You **MUST** consider the user input before proceeding (if not empty).
      implementation contains no changed UI governed by those requirements.
    - Report final status with summary of completed work
 
-The constitution's **Visual completion evidence** principle is authoritative;
-`.agent/workflows/mockup-implementation.md` is authoritative for binding-sidecar
-approval and legacy migration; `.agent/workflows/sprint-issue.md` defines the
-corresponding sprint visual gate. Accessibility labels and semantics require
-separate non-visual proof under the project's review contract; do not substitute
+The constitution's **Visual completion evidence** principle remains
+authoritative; `docs/design/interactive-design-workflow.md` governs future
+once-approved runnable designs, while
+`.agent/workflows/mockup-implementation.md` retains historical image-sidecar
+migration and verification only. `.agent/workflows/sprint-issue.md` defines the
+sprint visual gate. Accessibility labels and semantics require separate
+non-visual proof under the project's review contract; do not substitute
 screenshot evidence.
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If

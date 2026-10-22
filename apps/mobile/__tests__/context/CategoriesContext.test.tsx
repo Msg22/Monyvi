@@ -65,6 +65,8 @@ jest.mock("@/hooks/useCurrentUser", () => ({
 
 jest.mock("@/utils/logger", () => ({
   logger: {
+    debug: jest.fn(),
+    warn: jest.fn(),
     error: (...args: readonly unknown[]): void => {
       mockLoggerError(...args);
     },

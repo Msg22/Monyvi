@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "date": "2026-10-14",
+  "revision": "r1",
+  "status": "APPROVED_SCOPES_BINDINGS_PENDING",
+  "imageCount": 5,
+  "approvalEvidence": "../../provenance/r2/approval-2026-10-14.json",
+  "sourceManifest": "../../provenance/r1/manifest.json",
+  "images": [
+    {
+      "id": "03-multiple-matches-en",
+      "title": "Multiple existing matches: compact chooser and account sheet",
+      "file": "03-multiple-matches-en.png",
+      "bytes": 1358942,
+      "sha256": "f0d49b61e744bba1041f8ccad30a0106fa1c010b2b3be001781306f235002480",
+      "width": 852,
+      "height": 1846,
+      "generator": "image_gen.imagegen",
+      "sourceFile": "exec-24abce23-59c9-4bef-8dfc-d9fce07d7019.png",
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Existing-account chooser concept"
+    },
+    {
+      "id": "07-edit-shared-draft-en",
+      "title": "Edit the shared account for all linked transactions",
+      "file": "07-edit-shared-draft-en.png",
+      "bytes": 1385069,
+      "sha256": "0d814b8f3d163581e1ac0196d0acece661ad52898fe242482cc2cf032742969b",
+      "width": 852,
+      "height": 1846,
+      "generator": "image_gen.imagegen",
+      "sourceFile": "exec-1fda116c-5e03-4d88-b644-f5c935b28551.png",
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Foreground shared-draft edit sheet; background superseded by R2"
+    },
+    {
+      "id": "08-account-helper-en",
+      "title": "Default-account explanation in the account form",
+      "file": "08-account-helper-en.png",
+      "bytes": 1504013,
+      "sha256": "4625f88d83441bd5ecb90dade10265ad318c176503d765f8cdb06af07da65f57",
+      "width": 852,
+      "height": 1846,
+      "generator": "image_gen.imagegen",
+      "sourceFile": "exec-3ce15c30-323f-402c-97ef-4782760ddd4d.png",
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Default-account helper; surrounding Edit form contextual; Add placement unresolved"
+    },
+    {
+      "id": "11-currency-confirm-en",
+      "title": "Confirm conflicting currency before account selection",
+      "file": "11-currency-confirm-en.png",
+      "bytes": 1535513,
+      "sha256": "48a52ee5bf582e3a3d44d4a97f2a679e844c4ff8fbc6973cf2d4df8ff84d4d55",
+      "width": 853,
+      "height": 1844,
+      "generator": "image_gen.imagegen",
+      "sourceFile": "exec-75832c60-9dea-41ef-bec5-b528e14e5148.png",
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Foreground currency confirmation sheet; background superseded by R2"
+    },
+    {
+      "id": "12-multiple-matches-ar",
+      "title": "Arabic RTL matching-account picker",
+      "file": "12-multiple-matches-ar.png",
+      "bytes": 1417273,
+      "sha256": "9f848ba5595931a2f4c767b62237f49e4f18a4ed5c4ca9f7585ddc1d2cf5de23",
+      "width": 853,
+      "height": 1844,
+      "generator": "image_gen.imagegen",
+      "sourceFile": "exec-aeda45a6-eda1-4946-90d1-7031a053aff8.png",
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Existing-account chooser concept and Arabic copy"
+    }
+  ]
+}

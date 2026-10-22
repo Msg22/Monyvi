@@ -7,7 +7,7 @@
 
 import type { Category, TransactionType } from "@monyvi/db";
 import { useMemo } from "react";
-import { useAllCategories } from "../context/CategoriesContext";
+import { useSelectableCategories } from "./useSelectableCategories";
 
 interface UseCategoryChildrenResult {
   /** Child categories of the given parent */
@@ -25,7 +25,7 @@ export function useCategoryChildren(
   parentId: string | null,
   type?: TransactionType
 ): UseCategoryChildrenResult {
-  const { categories, isLoading } = useAllCategories();
+  const { categories, isLoading } = useSelectableCategories();
 
   const children = useMemo(() => {
     if (!parentId) return [];

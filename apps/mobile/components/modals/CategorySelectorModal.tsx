@@ -6,6 +6,7 @@ import {
 import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
+import { useOptionalCategoryCatalogue } from "@/context/CategoriesContext";
 import { useCategoryChildren } from "@/hooks/useCategoryChildren";
 import { useCategoriesWithChildren } from "@/hooks/useCategoriesWithChildren";
 import {
@@ -33,6 +34,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { requestCatalogueSync } from "@/utils/category-catalogue-retry";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -58,6 +60,8 @@ interface CategorySelectorModalProps {
   readonly onSelect: (id: string) => void;
   /** Close the modal */
   readonly onClose: () => void;
+  /** Optional caller-owned feedback below the fixed header, outside the list. */
+  readonly inlineNotice?: React.ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,11 +83,29 @@ export function CategorySelectorModal({
   type,
   onSelect,
   onClose,
+  inlineNotice,
 }: CategorySelectorModalProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { width, height } = useWindowDimensions();
   const bottomInset = useModalBottomInset();
   const { t } = useTranslation("common");
+  const [noticeHeight, setNoticeHeight] = React.useState(0);
+  const catalogueState = useOptionalCategoryCatalogue();
+  const catalogue = catalogueState?.catalogue ?? null;
+  const handleCatalogueRetry = useCallback(async (): Promise<void> => {
+    // A local read cannot create a missing manifest: the retry requests the
+    // ordinary protected sync and then re-reads the accepted manifest.
+    try {
+      await requestCatalogueSync();
+    } catch {
+      // The sync failure is reported by the sync layer; the catalogue stays
+      // unavailable and the picker keeps offering a retry.
+    }
+    if (catalogueState) await catalogueState.reloadCatalogue();
+  }, [catalogueState]);
+  useEffect(() => {
+    if (!inlineNotice) setNoticeHeight(0);
+  }, [inlineNotice]);
 
   // Navigation state machine
   const navigation = useCategoryNavigation();
@@ -102,7 +124,10 @@ export function CategorySelectorModal({
 
   // Approximate height reserved for header (~68px), breadcrumb (~42px), search (~48px), padding
   const HEADER_AREA_HEIGHT = depth > 0 ? 180 : 140;
-  const listMaxHeight = height * 0.8 - HEADER_AREA_HEIGHT;
+  const listMaxHeight = Math.max(
+    0,
+    height * 0.8 - HEADER_AREA_HEIGHT - (inlineNotice ? noticeHeight : 0)
+  );
 
   // Fetch children for the current parent (null at root → returns [])
   const parentId = currentLevel.category?.id ?? null;
@@ -248,6 +273,23 @@ export function CategorySelectorModal({
                 </TouchableOpacity>
               </View>
 
+              {inlineNotice ? (
+                <View
+                  testID="category-selector-inline-notice-region"
+                  onLayout={(event) => {
+                    const measured = Math.max(
+                      0,
+                      event.nativeEvent.layout.height
+                    );
+                    setNoticeHeight((previous) =>
+                      previous === measured ? previous : measured
+                    );
+                  }}
+                >
+                  {inlineNotice}
+                </View>
+              ) : null}
+
               {/* Breadcrumb (only when drilled in) */}
               {depth > 0 && (
                 <Breadcrumb
@@ -266,9 +308,32 @@ export function CategorySelectorModal({
 
               {/* Category list with slide animation */}
               <Animated.View
+                testID="category-selector-list-viewport"
                 style={[animatedStyle, { maxHeight: listMaxHeight }]}
               >
-                {isLoading && depth > 0 ? (
+                {catalogue?.status === "loading" ? (
+                  <View className="items-center justify-center py-12">
+                    <Text className="text-sm text-slate-400 dark:text-slate-500">
+                      {t("loading")}
+                    </Text>
+                  </View>
+                ) : catalogue?.status === "unavailable" ? (
+                  <View className="items-center justify-center py-12 px-6">
+                    <Text className="text-sm text-center text-slate-500 dark:text-slate-400">
+                      {t("categories_unavailable")}
+                    </Text>
+                    <TouchableOpacity
+                      testID="category-catalogue-retry"
+                      onPress={handleCatalogueRetry}
+                      activeOpacity={0.7}
+                      className="mt-3 rounded-full border border-slate-300 dark:border-slate-600 px-4 py-2"
+                    >
+                      <Text className="text-sm font-medium text-nileGreen-600 dark:text-nileGreen-400">
+                        {t("retry")}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : isLoading && depth > 0 ? (
                   <View className="items-center justify-center py-12">
                     <ActivityIndicator
                       size="small"

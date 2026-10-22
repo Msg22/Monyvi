@@ -43,7 +43,11 @@ function PreviewLogo({ accountType, logo }: PreviewLogoProps): JSX.Element {
         <Ionicons
           name={getAccountPreviewFallbackIcon(accountType)}
           size={24}
-          color={palette.nileGreen[700]}
+          // The Cash card renders on the dark green gradient, so its fallback
+          // icon needs the light surface colour to stay readable.
+          color={
+            accountType === "CASH" ? palette.slate[25] : palette.nileGreen[700]
+          }
         />
       }
     />

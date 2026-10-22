@@ -98,7 +98,10 @@ Every feature should have tests covering these axes where applicable:
 
 ### Error paths
 
-- [ ] User-triggered error has a visible Alert/toast/inline message
+- [ ] User-triggered error in new/changed UI has a persistent dismissible notice
+      directly below PageHeader outside scrolling, or at the top of its active
+      modal; no new error/warning/success toast. Legacy screens migrate
+      gradually under current `AGENTS.md` / design-system policy.
 - [ ] Silent failures are actually tested to be loud (or explicitly allowed by
       spec)
 - [ ] Network timeout, 4xx, 5xx, malformed response all handled

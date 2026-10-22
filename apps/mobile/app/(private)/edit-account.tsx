@@ -15,6 +15,10 @@
  */
 
 import { AccountPreviewCard } from "@/components/add-account/AccountPreviewCard";
+import {
+  AccountDefaultField,
+  AccountDefaultRecoveryNotice,
+} from "@/components/accounts/AccountDefaultField";
 import { InstitutionProviderSection } from "@/components/add-account/InstitutionProviderSection";
 import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection";
 import { BalanceChangedSheet } from "@/components/edit-account/BalanceChangedSheet";
@@ -31,6 +35,7 @@ import { useAccountById, UseAccountByIdResult } from "@/hooks/useAccountById";
 import { useAccountDisplayName } from "@/hooks/useAccountDisplayNames";
 import { useDeleteAccount } from "@/hooks/useDeleteAccount";
 import { useEditAccountForm } from "@/hooks/useEditAccountForm";
+import { useOwnedAccountDefaultState } from "@/hooks/useOwnedAccountDefaultState";
 import { useUpdateAccount } from "@/hooks/useUpdateAccount";
 import type { UpdateAccountData } from "@/services/edit-account-service";
 import { safeNotificationHaptic } from "@/utils/haptics";
@@ -166,6 +171,27 @@ function EditAccountForm({
     toggleDefault,
     validate,
   } = useEditAccountForm(account, bankDetails);
+  const { state: defaultState, retry: retryDefaultState } =
+    useOwnedAccountDefaultState();
+  // Readiness is decided by the owned default snapshot alone: the edited
+  // account must be one of the owner's active accounts. The previous
+  // comparison against the live `account.isDefault` compared two independent
+  // observations (the snapshot observer and the row read) and could lag after
+  // a successful save, which flashed the generic recovery notice for a state
+  // that was in fact consistent. The pending default intent lives in the
+  // form, not in the readiness check.
+  const defaultReady =
+    defaultState.status === "ready" &&
+    defaultState.snapshot.activeAccountIds.includes(account.id);
+  // The replacement hint names the account that would lose the default flag.
+  // It is only meaningful for a ready snapshot whose current default is a
+  // different account than the one being edited.
+  const previousDefaultName =
+    defaultState.status === "ready" &&
+    defaultState.snapshot.defaultAccount !== null &&
+    defaultState.snapshot.defaultAccount.accountId !== account.id
+      ? defaultState.defaultAccountName
+      : null;
   const { isEligible: isKnownProviderEligible } =
     useEgyptianInstitutionEligibility();
 
@@ -291,7 +317,7 @@ function EditAccountForm({
    * and either saves directly or shows the BalanceChangedSheet.
    */
   const handleSave = useCallback((): void => {
-    if (isSubmitting || !isDirty) return;
+    if (isSubmitting || !isDirty || !defaultReady) return;
     if (!validate()) return;
 
     const data = buildUpdateData();
@@ -327,6 +353,7 @@ function EditAccountForm({
   }, [
     isSubmitting,
     isDirty,
+    defaultReady,
     validate,
     buildUpdateData,
     originalBalance,
@@ -341,6 +368,7 @@ function EditAccountForm({
    */
   const handleBalanceSheetConfirm = useCallback(
     (option: "silent" | "tracked"): void => {
+      if (!defaultReady) return;
       setShowBalanceSheet(false);
 
       const data = buildUpdateData();
@@ -358,7 +386,7 @@ function EditAccountForm({
         logger.error("[EditAccount] Save failed", err)
       );
     },
-    [buildUpdateData, currency, account.id, performUpdate]
+    [buildUpdateData, currency, account.id, performUpdate, defaultReady]
   );
 
   const handleProviderDisplayNameChange = useCallback(
@@ -387,7 +415,12 @@ function EditAccountForm({
             handleSave();
           },
           loading: isSubmitting,
-          disabled: !isDirty || !isValid || isCheckingUniqueness,
+          disabled:
+            !isDirty ||
+            !isValid ||
+            isCheckingUniqueness ||
+            isSubmitting ||
+            !defaultReady,
         }}
       />
 
@@ -470,55 +503,28 @@ function EditAccountForm({
             />
           </View>
 
-          {/* Default Account Toggle */}
-          <TouchableOpacity
-            onPress={toggleDefault}
-            activeOpacity={0.7}
-            className="flex-row items-center justify-between py-4 px-1 mb-3"
+          <View
+            testID={
+              "account-default-state-" +
+              (defaultReady
+                ? "ready"
+                : defaultState.status === "loading"
+                  ? "loading"
+                  : "recovery")
+            }
           >
-            <View className="flex-row items-center flex-1">
-              <Ionicons
-                name={isDefault ? "star" : "star-outline"}
-                size={22}
-                color={
-                  isDefault
-                    ? palette.nileGreen[500]
-                    : isDark
-                      ? palette.slate[400]
-                      : palette.slate[500]
-                }
-              />
-              <View className="ms-3 flex-1">
-                <Text className="text-base font-semibold text-slate-800 dark:text-white">
-                  {t("default_account")}
-                </Text>
-                <Text className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                  {t("default_account_description")}
-                </Text>
-              </View>
-            </View>
-            <View
-              className={`w-12 h-7 rounded-full justify-center px-0.5 ${
-                isDefault
-                  ? "bg-nileGreen-500"
-                  : "bg-slate-200 dark:bg-slate-700"
-              }`}
-            >
-              <View
-                className={`w-6 h-6 rounded-full bg-white ${
-                  isDefault ? "self-end" : "self-start"
-                }`}
-                // eslint-disable-next-line react-native/no-inline-styles
-                style={{
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 2,
-                  elevation: 2,
-                }}
-              />
-            </View>
-          </TouchableOpacity>
+            <AccountDefaultField
+              accountType={accountType}
+              checked={isDefault}
+              disabled={!defaultReady || isSubmitting}
+              previousDefaultName={previousDefaultName}
+              onChange={toggleDefault}
+            />
+            {defaultState.status === "recovery" ||
+            (defaultState.status === "ready" && !defaultReady) ? (
+              <AccountDefaultRecoveryNotice onRetry={retryDefaultState} />
+            ) : null}
+          </View>
 
           <View ref={smsMatchingSectionRef}>
             <SmsMatchingSection

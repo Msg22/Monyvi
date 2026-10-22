@@ -21,6 +21,7 @@ import {
   type SmsScanProgress,
   type SmsScanResult,
 } from "@/services/sms-sync-service";
+import { loadAccountReviewAccountSnapshots } from "@/services/account-review-read-model-service";
 import type { ParsedSmsTransaction, SmsScanKind } from "@monyvi/logic";
 import { useCallback, useRef, useState } from "react";
 import { logger } from "@/utils/logger";
@@ -96,10 +97,32 @@ export function useSmsScan(): UseSmsScanResult {
       setError(null);
 
       try {
+        if (options.abortSignal?.aborted) {
+          setStatus("idle");
+          return;
+        }
+
+        const reviewAccountSnapshots =
+          await loadAccountReviewAccountSnapshots();
+
+        if (options.abortSignal?.aborted) {
+          setStatus("idle");
+          return;
+        }
+
+        if (!reviewAccountSnapshots) {
+          throw new Error("ACCOUNT_REVIEW_SNAPSHOTS_UNAVAILABLE");
+        }
+
+        const enrichedAiContext: ParseSmsContext = {
+          ...options.aiContext,
+          reviewAccountSnapshots,
+        };
+
         const scanResult = await scanAndParseSms(
           {
             scanKind: options.scanKind,
-            aiContext: options.aiContext,
+            aiContext: enrichedAiContext,
             abortSignal: options.abortSignal,
           },
           (p) => {

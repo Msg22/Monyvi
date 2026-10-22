@@ -25,6 +25,10 @@ jest.mock("@/components/navigation/PageHeader", () => ({
   },
 }));
 
+jest.mock("@/context/CategoriesContext", () => ({
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
+}));
+
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
 }));
@@ -35,6 +39,14 @@ jest.mock("@/hooks/useAccountDisplayNames", () => ({
 
 jest.mock("@/utils/transaction-review-provider", () => ({
   resolveTransactionReviewProvider: (): null => null,
+}));
+
+// The legacy transaction-review layout must not mount the canonical V2
+// owner/namespace facade. Fail if this presentation test enters that workflow.
+jest.mock("@/hooks/useAccountReview", () => ({
+  useAccountReview: (): never => {
+    throw new Error("unexpected_canonical_review_in_legacy_layout_test");
+  },
 }));
 
 jest.mock("@/hooks/useTransactionReviewState", () => ({

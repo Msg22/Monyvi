@@ -9,6 +9,8 @@ import type {
   Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
 import type { CurrentUserDataScope } from "./user-data-access";
+import type { AccountReviewLocalSaveSnapshot } from "../../../packages/logic/src/financial-actions/review-local-recovery";
+import type { AccountCreateDefaultLocalSaveSnapshot } from "../../../packages/logic/src/financial-actions/account-create-default-local-recovery";
 
 export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
   AUTH_SCOPE_CHANGED: "financial_action_auth_scope_changed",
@@ -47,6 +49,12 @@ export interface FinancialActionLinkedOperationPlan {
   readonly assertPreparedOwnership: (
     input: FinancialActionLinkedOperationPreparedOwnershipInput
   ) => Promise<void>;
+  /** Device-only; absent for all existing non-review actions. */
+  readonly buildLocalRecoverySnapshot?: (
+    input: FinancialActionLinkedOperationPreparedOwnershipInput
+  ) => Promise<
+    AccountReviewLocalSaveSnapshot | AccountCreateDefaultLocalSaveSnapshot
+  >;
 }
 
 export type FinancialActionLinkedExistingOperation =
@@ -83,6 +91,7 @@ export interface FinancialActionLinkedOperationPreparedOwnershipInput {
   readonly userId: string;
   readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
   readonly preparedPostimages: readonly FinancialActionLinkedOperationPostimage[];
+  readonly payloadHash?: string;
 }
 
 export interface CommitFinancialActionGroupLocallyInput extends CreateFinancialActionGroupInput {

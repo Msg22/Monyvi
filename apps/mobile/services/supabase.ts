@@ -24,6 +24,19 @@ import {
   isAuthSessionMutationQuarantinedError,
   type CancellableMutation,
 } from "@/services/auth-session-mutation-coordinator";
+import { normalizeCatalogueOrigin } from "@/utils/category-catalogue-source";
+
+/**
+ * Runtime backend identity of the live Supabase client.
+ *
+ * Returns the normalized origin only (scheme + host + port + path prefix).
+ * No key, token or user identifier is returned or logged.
+ */
+export function getSupabaseClientOrigin(): string | null {
+  return supabaseUrl === undefined
+    ? null
+    : normalizeCatalogueOrigin(supabaseUrl);
+}
 
 function readPublicEnvironmentVariable(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;

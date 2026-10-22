@@ -18,9 +18,12 @@ Read `../../personas/financial-domain-engineer.md` completely before work.
 - Define plain input/output interfaces and deterministic fixtures. Keep money,
   quantities, purity, and rates in Decimal.js; never use a `number` intermediate
   for a financial calculation.
-- Write and run focused tests Red before production code. Cover boundary
-  rounding, zero/negative/large values, purity conversion, stale or missing
-  rates, and P/L allocation that the assigned contract requires.
+- Implement the smallest approved pure-logic change first, then write/run
+  focused deterministic regressions in the batched validation stage. Cover
+  boundary rounding, zero/negative/large values, purity conversion, stale or
+  missing rates, and P/L allocation required by the contract. Capture genuine
+  failing baselines if observed; do not manufacture Red as a source-edit gate.
+  Financial safety tests and independent review remain mandatory before merge.
 - Keep work inside `packages/logic` unless the brief explicitly expands it. No
   DB models, writes, migrations, services, hooks, routes, or UI.
 - Follow [delivery policy](../../../docs/development-workflow.md); financial

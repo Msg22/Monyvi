@@ -1,0 +1,120 @@
+<!-- Standalone export only: load before source.fragment.html, never inside .mv-phone. -->
+<style>
+  #monyvi-review-concepts .mv-preview-controls {
+    box-sizing:border-box; color-scheme:light dark; width:min(100%,430px);
+    margin:12px auto 0; padding:10px 12px; border:1px solid light-dark(#d8e0e9,#39465a);
+    border-radius:12px; background:light-dark(#ffffff,#202d40);
+    color:light-dark(#142337,#f3f6fb); font:12px/1.4 system-ui,sans-serif;
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;
+  }
+  #monyvi-review-concepts .mv-preview-controls legend {padding:0 5px; font-weight:650;}
+  #monyvi-review-concepts .mv-preview-control {min-width:0; display:grid; gap:6px;}
+  #monyvi-review-concepts .mv-preview-control label {
+    display:flex; flex-wrap:wrap; gap:3px 7px; justify-content:space-between; align-items:center;
+  }
+  #monyvi-review-concepts .mv-preview-control output {white-space:nowrap; font-variant-numeric:tabular-nums;}
+  #monyvi-review-concepts .mv-preview-control input[type="range"] {
+    width:100%; min-width:0; margin:0; accent-color:light-dark(#007c5d,#48dbac);
+  }
+  #monyvi-review-concepts .mv-preview-control input[type="checkbox"] {
+    width:18px; height:18px; margin:0; accent-color:light-dark(#007c5d,#48dbac);
+  }
+  #monyvi-review-concepts .mv-preview-control:last-child {grid-column:1/-1;}
+  #monyvi-review-concepts .mv-preview-control label:focus-within {
+    outline:2px solid light-dark(#007c5d,#48dbac); outline-offset:2px;
+  }
+  @media(max-width:350px) {
+    #monyvi-review-concepts .mv-preview-controls {
+      grid-template-columns:minmax(0,1fr); padding:9px;
+    }
+  }
+</style>
+<script>
+(function () {
+  if ("Tweak" in window) return;
+  let instance = 0;
+  class PreviewTweak {
+    constructor({container, onChange}) {
+      this.onChange = onChange;
+      this.controls = null;
+      const stage = container.closest(".mv-stage");
+      const parent = stage && stage.parentElement;
+      if (!parent) return;
+      let group = parent.querySelector(":scope > .mv-preview-controls");
+      if (!group) {
+        group = document.createElement("fieldset");
+        group.className = "mv-preview-controls";
+        group.setAttribute("aria-label", "Preview controls — not app UI");
+        const legend = document.createElement("legend");
+        legend.textContent = "Preview controls";
+        group.appendChild(legend);
+        parent.insertBefore(group, stage);
+      }
+      this.controls = group;
+      this.id = "mv-preview-" + (++instance) + "-";
+    }
+    addSlider(state, key, options) {
+      if (!this.controls) return;
+      const field = document.createElement("div");
+      field.className = "mv-preview-control";
+      const label = document.createElement("label");
+      const id = this.id + key;
+      label.htmlFor = id;
+      label.dir = "auto";
+      const name = document.createElement("span");
+      name.textContent = options.label;
+      const value = document.createElement("output");
+      value.htmlFor = id;
+      const show = () => {
+        value.textContent = key === "scale"
+          ? Number(state[key]).toFixed(2) + "×"
+          : String(state[key]) + (options.unit || "");
+      };
+      label.append(name, value);
+      const input = document.createElement("input");
+      input.type = "range";
+      input.id = id;
+      input.min = String(options.min);
+      input.max = String(options.max);
+      input.step = String(options.step);
+      input.value = String(state[key]);
+      input.addEventListener("input", () => {
+        state[key] = Number(input.value);
+        show();
+        this.onChange();
+      });
+      show();
+      field.append(label, input);
+      this.controls.appendChild(field);
+    }
+    addToggle(state, key, options) {
+      if (!this.controls) return;
+      const field = document.createElement("div");
+      field.className = "mv-preview-control";
+      const label = document.createElement("label");
+      label.dir = "auto";
+      const id = this.id + key;
+      label.htmlFor = id;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.id = id;
+      input.checked = Boolean(state[key]);
+      const name = document.createElement("span");
+      name.textContent = options.label;
+      const value = document.createElement("output");
+      value.htmlFor = id;
+      const show = () => { value.textContent = state[key] ? "On" : "Off"; };
+      input.addEventListener("change", () => {
+        state[key] = input.checked;
+        show();
+        this.onChange();
+      });
+      show();
+      label.append(input, name, value);
+      field.appendChild(label);
+      this.controls.appendChild(field);
+    }
+  }
+  window.Tweak = PreviewTweak;
+})();
+</script>

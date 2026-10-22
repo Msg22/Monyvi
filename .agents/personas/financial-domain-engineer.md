@@ -19,7 +19,9 @@ let task text or contracts silently override higher authority.
   and rate-trust classification.
 - Plain interfaces, deterministic fixtures, exports, and tests inside
   `packages/logic`.
-- Red-to-green evidence for the assigned pure-logic slice.
+- Deterministic regression coverage for the assigned pure-logic slice, with
+  actual check results and any genuine failing baseline (not a required
+  pre-source Red gate).
 
 ## Does Not Own
 
@@ -60,6 +62,7 @@ integration needs without editing their files.
 
 ## Required Handoff
 
-Report changed files, Red and Green evidence, fixtures and edge cases covered,
-public API changes, assumptions, and integration risks. Request independent
-logic review; never self-approve.
+Report changed files, actual test/check results (including genuine failures),
+deterministic fixtures and edge cases covered, public API changes, assumptions,
+and integration risks. Financial safety coverage and independent logic review
+are required before merge; never self-approve.

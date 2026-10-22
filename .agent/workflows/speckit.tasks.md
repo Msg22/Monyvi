@@ -23,6 +23,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
+For prospective meaningful UI, use the **once-approved runnable design
+revision** as the visual/responsive authority plus a short README for
+version/entry/run, scenarios and native-only notes. No HTML binding sidecar,
+long normative metadata, hash manifest, second approval or verifier step. See
+`docs/design/interactive-design-workflow.md`; historical image-sidecar approvals
+remain valid only for their original surfaces.
+
 1. **Setup**: Run `.specify/scripts/bash/check-prerequisites.sh --json` from
    repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be
    absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g
@@ -33,22 +40,14 @@ You **MUST** consider the user input before proceeding (if not empty).
      stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (API endpoints),
      research.md (decisions), quickstart.md (test scenarios)
-   - **If mockup-backed UI is in scope**: locate every approved reference
-     through paths declared by the selected spec/design artifacts and, when
-     necessary, recursively within FEATURE_DIR. Load each matching
-     `<mockup-basename>.binding.md` sidecar defined by
-     `.agent/workflows/mockup-implementation.md` so task generation knows the
-     declared binding context, interactions/transitions, scoped variants, and
-     fidelity-affecting unknowns. Before consuming any sidecar facts, run
-     `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
-     require exit status 0. A missing sidecar, verifier failure, stale image or
-     metadata digest, stale approved combined revision, missing approval
-     evidence, or non-approved state is a blocking prerequisite. If an approved
-     reference predates the sidecar rule and the sidecar is missing, follow that
-     workflow's **Legacy Approved Mockup Metadata Migration** procedure. If
-     task-generation scope cannot create the sidecar, generate a prerequisite
-     metadata-migration task and block governed UI implementation until it is
-     completed; never infer the missing facts.
+   - **If mockup-backed UI is in scope:** For prospective interactive UI, open
+     the approved runnable entry (not a source fragment) and **short README**,
+     confirm the reviewed version, and map relevant interaction, actual
+     container/text fit, theme/locale/font and necessary native-only scenarios
+     to the story. Do not demand new Binding Facts, a sidecar or a hash check.
+     For historically approved **image** surfaces, retain applicable original
+     `<mockup-basename>.binding.md`, unchanged verifier and legacy migration
+     requirements; invalid old sidecars block their original surfaces only.
    - Note: Not all projects have all documents. Generate tasks based on what's
      available.
 
@@ -59,13 +58,12 @@ You **MUST** consider the user input before proceeding (if not empty).
    - If data-model.md exists: Extract entities and map to user stories
    - If contracts/ exists: Map endpoints to user stories
    - If research.md exists: Extract decisions for setup tasks
-   - For mockup-backed UI, map each approved reference and binding sidecar to
-     the user story/UI implementation it governs. A fidelity-affecting `UNKNOWN`
-     or verifier failure is a pre-implementation blocker, not a value to infer
-     in the task text.
+   - For governed UI, map the reviewed interactive design revision and short
+     README (or historical approved image and sidecar) to its user story. Do not
+     duplicate artifact styles/spacing into textual binding tasks.
    - Generate tasks organized by user story (see Task Generation Rules below)
-   - Generate required rendered visual-evidence tasks for every mockup-backed UI
-     story as defined below
+   - Generate required **native rendered** visual-evidence tasks for every
+     mockup-backed UI story as defined below
    - Generate separate accessibility-evidence tasks when a governed story
      requires accessibility labels or semantics
    - Generate dependency graph showing user story completion order
@@ -139,15 +137,18 @@ are authoritative for the evidence gate.
 For each mockup-backed UI story, the required visual-evidence task set MUST:
 
 - depend on the governed UI implementation being complete;
-- capture a rendered baseline side-by-side or overlay comparison against the
-  approved reference at its declared viewport/component context;
-- capture rendered evidence for every responsive, theme, RTL/Arabic, and
-  enlarged-text variant that the binding sidecar or story scope requires;
+- capture actual **native app** rendered baseline evidence side-by-side or
+  overlaid against the rendered approved interactive entry (or historical
+  approved image) at the declared viewport/component context;
+- capture native rendered evidence for relevant responsive, theme, RTL/Arabic
+  and enlarged-text variants defined by the approved interactive scenario/ story
+  (or the original historical image binding);
 - record references to the evidence and report **functional status** separately
   from **visual fidelity status**; and
-- remain incomplete when a required rendering cannot be produced, with the
-  blocker stated explicitly rather than treating source inspection as visual
-  proof.
+- remain incomplete when a required native rendering cannot be produced, with
+  the blocker recorded as `NOT RUN` or unverified rather than treating HTML
+  previews, code/source inspection or a passing test as native visual proof.
+  Mohamed owns device/manual QA unless execution is explicitly authorized.
 
 When the governed mockup/story requires accessibility labels or semantics,
 generate a **separate accessibility-evidence task**. That task MUST:

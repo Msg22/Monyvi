@@ -11,6 +11,15 @@ safeguards.
 
 # Code Review & Fix Workflow
 
+Apply the current `.agent/workflows/code-review.md`, `AGENTS.md`,
+`docs/development-workflow.md`, `docs/design/design-system.md` and
+`.agent/rules/styling-rules.md` before interpreting older examples here. For
+changed UI, review actual content fit and scaling, accessible hit areas,
+semantic dark contrast and keyboard/inset reachability. Reject new
+error/warning/success toasts: feedback belongs below the page header outside
+scroll or at the top of its active modal. Existing unrelated legacy toasts
+migrate gradually. This introduces no additional QA/approval ritual.
+
 This workflow guides the agent to perform an expert-level code review on the
 user's active branch or Pull Request, provide specific feedback, and then
 automatically create a new PR containing the proposed fixes targeting the user's

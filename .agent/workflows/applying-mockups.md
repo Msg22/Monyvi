@@ -2,76 +2,73 @@
 description: apply mockups guidelines
 ---
 
-# 🎯 Implementation Requirement — Pixel-Perfect UI
+# UI implementation against approved designs
 
-## Approved Binding Context
+## Shared selection and keyboard standards (2026-10-20)
 
-Before implementation, load the approved reference image and its matching
-`<mockup-basename>.binding.md` sidecar produced by
-`.agent/workflows/mockup-implementation.md`. The constitution's **Approved
-mockup binding** principle is authoritative.
+### Global form/selector contract (existing owner-approved standard)
 
-The sidecar MUST record `Binding metadata approval: APPROVED` together with the
-explicit approval evidence/reference required by
-`.agent/workflows/mockup-implementation.md`. Its current
-`Binding metadata revision` and `Binding approval revision` MUST be valid; each
-matching approved revision field MUST equal its current revision; and approval
-evidence/reference MUST identify the approved combined
-`Binding approval revision`. Before consuming any binding fact, run:
+Reuse shared `Dropdown`, `CurrencyPicker`, `TextField` and keyboard-aware
+form/sheet infrastructure. An opened list's CURRENT selection must have a
+**filled Nile-green background**, **WHITE legible selected text** in light and
+dark modes and a **WHITE contrasting check/icon** (never green on green or a
+tint-only signal); expose the true selected/checked accessibility state, with
+EN/AR RTL. Verify the real selected source/render contract, not guessed default
+or source-string matching.
 
-`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>`
+All focused text fields, including last fields in modal/sheets, must stay
+scroll-visible above Android/iOS keyboards on compact screens and enlarged
+fonts. Measure the ACTUAL keyboard-adjusted viewport, header/footer space and
+safe-area insets, scroll-to-focus, and preserve reachable submit/cancel; avoid
+hardcoded offsets, clipping or double padding. Record native/manual
+keyboard/font/RTL/dark evidence separately from source tests and mark unexecuted
+native checks NOT RUN. Shared enforcement is ongoing; audit older bespoke
+selectors/fields gradually, not as proof of full-app migration. This adds no
+extra mockup, binding approval or tests-first gate.
 
-The verifier MUST exit zero. A sidecar that fails any approval, image, metadata,
-or combined-revision check is not authoritative and MUST NOT drive
-implementation until explicitly renewed and approved.
+## Prospective interactive design (default)
 
-If an approved reference predates the binding-sidecar rule and has no sidecar,
-first follow the **Legacy Approved Mockup Metadata Migration** procedure in
-`.agent/workflows/mockup-implementation.md`. Missing metadata alone does not
-invalidate a previously approved legacy reference, but implementation MUST NOT
-begin until the evidence-based sidecar exists **and its reconstructed binding
-metadata has received explicit approval**. If migration leaves a
-fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
+For meaningful new UI, open the **owner-approved runnable design** and its short
+README under the feature's `mockups/`; open the documented working browser
+entry, **not** an isolated source fragment. Confirm the reviewed version and
+applicable scenario controls. The running design **itself** is the visual,
+layout, responsive and interaction reference. No new binding sidecar, duplicate
+textual measurements, Binding Facts, hash tuple, mandatory verifier, or separate
+README/metadata approval is needed. See
+`docs/design/interactive-design-workflow.md`.
 
-- Implement the **binding product UI surface** at the declared viewport or
-  component context.
-- Presentation-only phone hardware, device frame, outer canvas, browser chrome,
-  export padding, and background outside the UI surface are **not product UI**
-  unless the binding sidecar explicitly marks them as binding.
-- Use the sidecar's known spacing, sizing, color/theme, typography, state,
-  interaction, and transition facts as implementation facts.
-- Do not infer product rules from export framing or unrecorded pixel
-  measurements.
-- If a non-legacy binding sidecar is missing, its binding context is ambiguous,
-  its approval record is missing/invalid, or a fidelity-affecting required fact
-  remains `UNKNOWN`, pause before implementation and obtain clarification.
+Implement the UI in **real React Native/Expo**, reusing existing components,
+NativeWind tokens and platform accessibility semantics rather than browser
+DOM/CSS. Exercise relevant width/container fit, long localized names, font
+scaling, light/dark, EN/AR RTL and interactive states in the design; make
+necessary native-only adjustments from its brief README and actual platform
+constraints. Browser previews do not prove native insets, keyboard, hit targets
+or rendered fidelity.
 
-Every mockup-backed implementation MUST compare each required state, shared
-component treatment, and icon identity against the approved Binding Facts and
-later rendered evidence. When the approved feature handoff defines an active
-state-to-surface/shared-component/icon manifest or map, consume it alongside
-verified sidecars and confirm each state/locale uses its intended immutable
-reference. That manifest/map is an implementation/index aid only: it MUST NOT
-override approved Binding Facts, replace the binding verifier, or create a
-second approval gate. When no feature-specific manifest exists, do not invent
-one solely for workflow compliance; use the approved sidecars/handoff directly.
-Resolve missing or ambiguous fidelity facts through the normal binding
-clarification/approval workflow before implementation. If owner explicitly
-defers device/render/accessibility execution, keep those checks NOT RUN and hand
-complete manual plan to owner. This does not establish visual completion or
-waive the separate evidence acceptance boundary.
+## Historical image binding (original governed surfaces only)
 
-Format draft metadata before requesting approval and computing the approval
-revision. Never autoformat approved Binding Facts: any byte change invalidates
-the exact approved tuple and requires renewed approval. Protect active approved
-sidecars with exact .prettierignore entries; the binding verifier remains
-authoritative even when formatting is skipped.
+When implementing a historically approved **image** reference, consume its
+original approved `<mockup-basename>.binding.md` and follow
+`.agent/workflows/mockup-implementation.md`'s legacy migration rules where
+required. Run the unchanged `scripts/verify-mockup-binding.js` for those
+historical sidecars before using their Binding Facts. Preserve the exact
+historical hashes, approval evidence and frozen image/sidecar bytes. A missing
+or invalid historical binding remains a blocker for **that historical governed
+surface**, not for a new interactive HTML design.
+
+For both reference types, compare only the actual approved product UI; preview
+canvas, browser chrome, decorative phone frames and export padding are not app
+UI unless expressly part of the reviewed design. Do not invent unapproved
+product/financial behavior or deviate materially without asking for approval of
+the **new changed design revision once**. If owner defers
+device/render/accessibility checks, record **NOT RUN**, owner manual steps and
+separate functional, native visual and accessibility status.
 
 ## Requirements
 
-- Implement the binding UI **exactly as defined by the approved mockup
-  handoff**.
-- The final result must be **pixel-perfect** at the declared binding context,
+- Implement the binding UI **exactly as defined by the approved runnable design
+  (or original historical image handoff)**.
+- The final result must be **pixel-perfect** at the reviewed comparison context,
   matching the mockup in:
   - Layout and spacing
   - Typography (sizes, weights, alignment)
@@ -86,11 +83,13 @@ authoritative even when formatting is skipped.
 - **Do not deviate** from the binding UI surface at the declared reference
   context.
 - Do not reproduce explicitly non-binding framing as application UI.
-- At other supported contexts, preserve the approved composition, hierarchy,
-  semantics, and material styling. Controlled reflow, including stacking or
-  spacing changes, is allowed only when measured space or text scale requires it
-  to keep content usable and readable. Follow the centralized responsive
-  breakpoints and validation contract in `AGENTS.md`.
+- At other supported contexts, preserve the approved hierarchy and semantics.
+  Use actual component/container space, readable shrinkable labels and stable
+  44/48 dp action hit areas. Modest typography, icon, control and spacing token
+  adaptations can precede stacking; never disable font scaling or hide financial
+  identity. Shared viewport breakpoints are hints, not forced layout switches.
+  Follow the responsive rule in `AGENTS.md`, with existing checks and owner
+  visual review rather than cosmetic viewport/className test matrices.
 - Do not introduce at the declared reference context, or as an unrequired design
   change elsewhere:
   - Alternative layouts or reflow
@@ -105,9 +104,9 @@ authoritative even when formatting is skipped.
 ## ❓ Clarifications & Blockers
 
 - If you encounter:
-  - Missing or unapproved binding metadata that cannot be resolved through the
-    legacy migration/approval path
-  - Missing details
+  - Missing or invalid **historical image** binding metadata on its original
+    surface
+  - Missing essential native-only behavior or product decisions
   - Conflicting designs
   - Technical limitations
 
@@ -119,12 +118,15 @@ authoritative even when formatting is skipped.
 
 Before declaring visual completion for the governed UI:
 
-- Capture a rendered baseline side-by-side or overlay comparison against the
-  approved reference at its declared viewport/component context.
+- Capture a rendered **native app** baseline side-by-side or overlay comparison
+  against the **rendered** approved interactive reference (or historical image)
+  at its reviewed viewport/component context. Browser-only or source-level
+  comparisons are not native visual evidence.
 - Capture rendered evidence for every responsive context, theme state,
-  RTL/Arabic state, and enlarged-text variant that is in scope under the binding
-  sidecar or feature requirements. This includes compact/ordinary phone, tablet,
-  or orientation variants when those contexts are in scope.
+  RTL/Arabic state, and enlarged-text variant that is in scope under the
+  approved runnable design/README, historical binding sidecar, or feature
+  requirements. This includes compact/ordinary phone, tablet, or orientation
+  variants when those contexts are in scope.
 - Record the evidence references and report **functional status** separately
   from **visual fidelity status**. A functionally complete change may still be
   visually incomplete.
@@ -143,13 +145,13 @@ review workflows are authoritative for evidence and final acceptance.
 
 ## ✅ Success Criteria
 
-- The implemented binding UI should visually match the approved mockup **exactly
+- The implemented product UI should visually match the approved design **exactly
   at its declared context**, with no noticeable differences.
-- Presentation-only framing excluded by the binding handoff must remain absent
-  from product UI.
+- Presentation-only framing excluded by the design/README or legacy binding must
+  remain absent from product UI.
 - The mandatory baseline and all scoped visual-variant evidence are complete,
   with functional and visual fidelity statuses reported separately.
 - Any required accessibility evidence is complete and recorded separately from
   screenshot evidence.
-- Any deviation from the binding UI must be **explicitly approved** before being
-  implemented.
+- Any material redesign must receive **one** approval of the changed design
+  revision before being implemented.

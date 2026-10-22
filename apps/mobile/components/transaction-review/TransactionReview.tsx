@@ -1,5 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  AccountReviewSession,
+  ReviewableTransaction,
+} from "@monyvi/logic";
+import type { UseAccountReviewInput } from "@/hooks/useAccountReview";
 import React, { useCallback, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -30,9 +34,27 @@ import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguar
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
 import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
+import { CanonicalAccountReview } from "./CanonicalTransactionReview";
+import { ReviewInlineNotice } from "./ReviewInlineNotice";
+import {
+  CompactReviewTranscript,
+  type CompactReviewTranscriptProps,
+} from "./CompactReviewTranscript";
+import type { ReviewFeedbackBoundary } from "@/hooks/useReviewNotice";
+
+export interface AccountReviewRuntimeBoundary {
+  readonly input: UseAccountReviewInput;
+  readonly onSaveSelected: (session: AccountReviewSession) => Promise<void>;
+  readonly onSessionChange?: (session: AccountReviewSession | null) => void;
+}
 
 export interface TransactionReviewProps {
+  /** Owner-scoped local notice transport; Canonical uses it in page/modals. */
+  readonly reviewFeedback?: ReviewFeedbackBoundary;
+  /** Canonical v2 only; absence preserves the original V1 review component. */
+  readonly accountReview?: AccountReviewRuntimeBoundary;
   readonly transactions: readonly ReviewableTransaction[];
+  readonly reviewTranscript?: CompactReviewTranscriptProps;
   readonly onSave: (
     selected: readonly ReviewableTransaction[],
     transactionAccountMap: ReadonlyMap<number, string>,
@@ -87,7 +109,24 @@ export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
   windowSize: 3,
 } as const;
 
-export function TransactionReview({
+export type TransactionReviewListConfig =
+  typeof TRANSACTION_REVIEW_LIST_RENDER_CONFIG;
+
+export function TransactionReview(
+  props: TransactionReviewProps
+): React.JSX.Element {
+  return props.accountReview ? (
+    <CanonicalAccountReview
+      {...props}
+      boundary={props.accountReview}
+      renderConfig={TRANSACTION_REVIEW_LIST_RENDER_CONFIG}
+    />
+  ) : (
+    <LegacyTransactionReview {...props} />
+  );
+}
+
+function LegacyTransactionReview({
   transactions,
   onSave,
   onDiscard,
@@ -105,6 +144,8 @@ export function TransactionReview({
   onDiscardItem,
   onReviewLater,
   undoBanner,
+  reviewFeedback,
+  reviewTranscript,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -275,6 +316,13 @@ export function TransactionReview({
           backAccessibilityLabel={t("back")}
         />
       )}
+      {title && reviewFeedback ? (
+        <ReviewInlineNotice
+          notice={reviewFeedback.pageNotice}
+          surface="page"
+          onDismiss={() => reviewFeedback.dismiss("page")}
+        />
+      ) : null}
 
       <FlatList
         data={state.listItems}
@@ -286,6 +334,11 @@ export function TransactionReview({
             entering={FadeInDown.delay(100)}
             className="px-5 pb-3 pt-3"
           >
+            {reviewTranscript ? (
+              <View className="-mx-5">
+                <CompactReviewTranscript {...reviewTranscript} />
+              </View>
+            ) : null}
             <View
               testID="review-summary-card"
               className="min-h-20 flex-row items-center rounded-lg border border-border bg-background px-3 py-2 dark:border-border-dark dark:bg-background-dark"
@@ -550,6 +603,16 @@ export function TransactionReview({
         isSaving={isSaving}
         isReviewMetadataReady={state.isReviewMetadataReady}
         onSave={state.handleSave}
+        onUnhandledSaveError={
+          reviewFeedback
+            ? (error) =>
+                reviewFeedback.reportFailure({
+                  stage: "footer_unhandled",
+                  surface: "page",
+                  error,
+                })
+            : undefined
+        }
         onDiscard={onDiscard}
         isSmsWorkspace={isSmsWorkspace}
         onReviewLater={onReviewLater}

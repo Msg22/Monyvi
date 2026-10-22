@@ -1,4 +1,14 @@
-import { encodeSmsReviewDraft, type ParsedSmsTransaction } from "@monyvi/logic";
+import { encodeSmsReviewDraft } from "@monyvi/logic";
+import {
+  FakeRecord,
+  FakeCollection,
+  mockCollections,
+  mockBatch,
+  seedRecord,
+  createTransaction,
+  resetFakeCollections,
+  type QueryCondition,
+} from "./sms-review-draft-repository-fakes";
 
 import {
   deleteExpiredSmsReviewDrafts,
@@ -15,112 +25,11 @@ import {
   updateSmsReviewDraftSelections,
 } from "@/services/sms-review-draft-repository";
 
-interface QueryCondition {
-  readonly kind: "where" | "sort";
-  readonly column: string;
-  readonly value: unknown;
-}
-
-interface FakeQuery {
-  readonly fetch: () => Promise<FakeRecord[]>;
-  readonly fetchCount: () => Promise<number>;
-  readonly observe: () => null;
-}
-
-class FakeRecord {
-  public constructor(table: string, id: string) {
-    this.table = table;
-    this.id = id;
-  }
-
-  public readonly id: string;
-  public readonly table: string;
-  public userId = "";
-  public queueId = "";
-  public smsFingerprint = "";
-  public payloadVersion = 1;
-  public payloadJson = "";
-  public selectionOverride: boolean | null = null;
-  public position = 0;
-  public parsedAt = new Date(0);
-  public updatedAt = new Date(0);
-  public deleted = false;
-  public operation: "create" | "update" | "destroy" = "create";
-
-  public prepareUpdate(updater: (record: FakeRecord) => void): FakeRecord {
-    updater(this);
-    this.operation = "update";
-    return this;
-  }
-
-  public prepareDestroyPermanently(): FakeRecord {
-    this.operation = "destroy";
-    return this;
-  }
-}
-
-class FakeCollection {
-  public constructor(table: string) {
-    this.table = table;
-  }
-
-  public readonly table: string;
-  public records: FakeRecord[] = [];
-  private nextId = 1;
-
-  public find(id: string): Promise<FakeRecord> {
-    const record = this.records.find((candidate) => candidate.id === id);
-    return record
-      ? Promise.resolve(record)
-      : Promise.reject(new Error(`Missing record ${this.table}:${id}`));
-  }
-
-  public query(...conditions: readonly QueryCondition[]): FakeQuery {
-    const fetchRecords = (): FakeRecord[] => {
-      let result = [...this.records];
-      for (const condition of conditions) {
-        if (condition.kind === "where") {
-          const property = toPropertyName(condition.column);
-          result = result.filter((record) => {
-            const actual = record[property as keyof FakeRecord];
-            if (
-              typeof condition.value === "object" &&
-              condition.value !== null &&
-              "lte" in condition.value
-            ) {
-              const comparable =
-                actual instanceof Date ? actual.getTime() : actual;
-              return (
-                typeof comparable === "number" &&
-                comparable <= Number(condition.value.lte)
-              );
-            }
-            return actual === condition.value;
-          });
-        }
-      }
-      return result;
-    };
-    return {
-      fetch: (): Promise<FakeRecord[]> => Promise.resolve(fetchRecords()),
-      fetchCount: (): Promise<number> => Promise.resolve(fetchRecords().length),
-      observe: (): null => null,
-    };
-  }
-
-  public prepareCreate(updater: (record: FakeRecord) => void): FakeRecord {
-    const record = new FakeRecord(this.table, `${this.table}-${this.nextId++}`);
-    updater(record);
-    return record;
-  }
-}
-
 interface FakeCachedModelSnapshot {
   readonly model: FakeRecord;
   readonly values: Partial<FakeRecord>;
 }
 
-const mockCollections = new Map<string, FakeCollection>();
 const mockCaptureCachedModelSnapshot = jest.fn<
   FakeCachedModelSnapshot,
   [FakeRecord]
@@ -129,24 +38,7 @@ const mockRestoreCachedModelSnapshot = jest.fn<
   void,
   [FakeCachedModelSnapshot]
 >();
-const mockBatch = jest.fn(
-  (operations: readonly FakeRecord[]): Promise<void> => {
-    for (const operation of operations) {
-      const collection = mockCollections.get(operation.table);
-      if (!collection) throw new Error(`Missing collection ${operation.table}`);
-      if (operation.operation === "destroy") {
-        collection.records = collection.records.filter(
-          (record) => record.id !== operation.id
-        );
-      } else if (
-        !collection.records.some((record) => record.id === operation.id)
-      ) {
-        collection.records.push(operation);
-      }
-    }
-    return Promise.resolve();
-  }
-);
+
 let mockCurrentUserId = "user-1";
 const mockAssertExpectedCurrentUser = jest.fn(
   (expectedUserId: string): Promise<void> => {
@@ -157,46 +49,50 @@ const mockAssertExpectedCurrentUser = jest.fn(
   }
 );
 
-function toPropertyName(column: string): string {
-  return column.replace(/_([a-z])/g, (_, letter: string) =>
-    letter.toUpperCase()
+jest.mock("@monyvi/db", () => {
+  const { fakeDatabase } = jest.requireActual<
+    typeof import("./sms-review-draft-repository-fakes")
+  >("./sms-review-draft-repository-fakes");
+  return {
+    database: fakeDatabase,
+    SmsReviewQueue: class SmsReviewQueue {},
+    SmsReviewDraftItem: class SmsReviewDraftItem {},
+    DismissedSmsFingerprint: class DismissedSmsFingerprint {},
+    Transaction: class Transaction {},
+    Transfer: class Transfer {},
+  };
+});
+
+jest.mock("@nozbe/watermelondb", () => {
+  // The physical-protection reader validates against actual column metadata,
+  // not a hand-maintained fake SMS schema.
+  const actual = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
   );
-}
-
-jest.mock("@monyvi/db", () => ({
-  database: {
-    get: (table: string): FakeCollection => {
-      const collection = mockCollections.get(table);
-      if (!collection) throw new Error(`Missing collection ${table}`);
-      return collection;
+  return {
+    appSchema: actual.appSchema,
+    tableSchema: actual.tableSchema,
+    Q: {
+      asc: "asc",
+      lte: (value: number): { readonly lte: number } => ({ lte: value }),
+      where: (column: string, value: unknown): QueryCondition => ({
+        kind: "where",
+        column,
+        value,
+      }),
+      sortBy: (column: string, value: unknown): QueryCondition => ({
+        kind: "sort",
+        column,
+        value,
+      }),
+      unsafeSqlQuery: (sql: string, args: readonly unknown[]) => ({
+        kind: "unsafe_sql" as const,
+        sql,
+        args,
+      }),
     },
-    write: <T>(action: () => Promise<T>): Promise<T> => action(),
-    batch: (operations: readonly FakeRecord[]): Promise<void> =>
-      mockBatch(operations),
-  },
-  SmsReviewQueue: class SmsReviewQueue {},
-  SmsReviewDraftItem: class SmsReviewDraftItem {},
-  DismissedSmsFingerprint: class DismissedSmsFingerprint {},
-  Transaction: class Transaction {},
-  Transfer: class Transfer {},
-}));
-
-jest.mock("@nozbe/watermelondb", () => ({
-  Q: {
-    asc: "asc",
-    lte: (value: number): { readonly lte: number } => ({ lte: value }),
-    where: (column: string, value: unknown): QueryCondition => ({
-      kind: "where",
-      column,
-      value,
-    }),
-    sortBy: (column: string, value: unknown): QueryCondition => ({
-      kind: "sort",
-      column,
-      value,
-    }),
-  },
-}));
+  };
+});
 
 jest.mock("@/services/user-data-access", () => ({
   assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
@@ -227,37 +123,6 @@ jest.mock("@/services/watermelon-cache-snapshot", () => ({
     mockRestoreCachedModelSnapshot(snapshot),
 }));
 
-function createTransaction(
-  smsFingerprint: string,
-  amount = 100
-): ParsedSmsTransaction {
-  return {
-    amount,
-    currency: "EGP",
-    type: "EXPENSE",
-    counterparty: "Merchant",
-    date: new Date("2026-07-27T12:00:00.000Z"),
-    categoryId: "category-1",
-    categoryDisplayName: "Shopping",
-    confidence: 0.95,
-    originLabel: "QNB EGYPT",
-    source: "SMS",
-    smsFingerprint,
-    senderDisplayName: "QNB EGYPT",
-    rawSmsBody: "message",
-  };
-}
-
-function seedRecord(table: string, values: Partial<FakeRecord>): FakeRecord {
-  const record = new FakeRecord(
-    table,
-    `${table}-seed-${mockCollections.get(table)?.records.length ?? 0}`
-  );
-  Object.assign(record, values, { operation: "update" });
-  mockCollections.get(table)?.records.push(record);
-  return record;
-}
-
 describe("sms-review-draft-repository", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -287,21 +152,9 @@ describe("sms-review-draft-repository", () => {
         return Promise.resolve();
       }
     );
-    mockCollections.clear();
-    mockCollections.set(
-      "sms_review_queues",
-      new FakeCollection("sms_review_queues")
-    );
-    mockCollections.set(
-      "sms_review_draft_items",
-      new FakeCollection("sms_review_draft_items")
-    );
-    mockCollections.set(
-      "dismissed_sms_fingerprints",
-      new FakeCollection("dismissed_sms_fingerprints")
-    );
-    mockCollections.set("transactions", new FakeCollection("transactions"));
-    mockCollections.set("transfers", new FakeCollection("transfers"));
+    // The real retention lifecycle scans every owner-scoped financial root;
+    // the unit fixture starts without actions rather than bypassing it.
+    resetFakeCollections();
   });
 
   it("merges only unique unsuppressed fingerprints into one stable queue", async () => {
@@ -874,21 +727,24 @@ describe("sms-review-draft-repository", () => {
     expect(mockBatch).not.toHaveBeenCalled();
   });
 
-  it("deletes the final malformed draft and its queue in one batch", async () => {
+  it("holds an unreadable SMS draft and its current queue without a false cleanup", async () => {
     const queue = seedRecord("sms_review_queues", { userId: "user-1" });
-    seedRecord("sms_review_draft_items", {
+    const draft = seedRecord("sms_review_draft_items", {
       userId: "user-1",
       queueId: queue.id,
       smsFingerprint: "fp-malformed-final",
       payloadJson: "malformed-json",
     });
-
-    await expect(getSmsReviewDraftQueueSnapshot("user-1")).resolves.toBeNull();
-
-    expect(mockBatch).toHaveBeenCalledTimes(1);
-    expect(mockBatch.mock.calls[0]?.[0]).toHaveLength(2);
-    expect(mockCollections.get("sms_review_queues")?.records).toEqual([]);
-    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([]);
+    const queueBefore = { ...queue };
+    const draftBefore = { ...draft };
+    await expect(getSmsReviewDraftQueueSnapshot("user-1")).rejects.toThrow();
+    expect(mockBatch).not.toHaveBeenCalled();
+    expect(mockCollections.get("sms_review_queues")?.records).toContain(queue);
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
+    );
+    expect(queue).toMatchObject(queueBefore);
+    expect(draft).toMatchObject(draftBefore);
   });
 
   it("deletes the final expired draft and its queue in one batch", async () => {
@@ -966,7 +822,7 @@ describe("sms-review-draft-repository", () => {
     );
   });
 
-  it("does not delete a malformed draft that is repaired before cleanup commits", async () => {
+  it("retains unreadable data until an explicit correction makes the draft readable", async () => {
     await mergeSmsReviewDrafts({
       expectedUserId: "user-1",
       transactions: [createTransaction("fp-repaired")],
@@ -974,20 +830,30 @@ describe("sms-review-draft-repository", () => {
     const draft = mockCollections.get("sms_review_draft_items")?.records[0];
     if (!draft) throw new Error("Expected seeded draft");
     const validPayload = draft.payloadJson;
+    const originalQueue = mockCollections.get("sms_review_queues")?.records[0];
+    if (!originalQueue) throw new Error("Expected existing queue");
     draft.payloadJson = "malformed-json";
-    let assertionCount = 0;
-    mockAssertExpectedCurrentUser.mockImplementation(
-      (expectedUserId: string): Promise<void> => {
-        assertionCount += 1;
-        if (assertionCount === 4) draft.payloadJson = validPayload;
-        return expectedUserId === mockCurrentUserId
-          ? Promise.resolve()
-          : Promise.reject(new Error("sms_review_draft_user_scope_changed"));
-      }
+    mockBatch.mockClear();
+
+    await expect(getSmsReviewDraftQueueSnapshot("user-1")).rejects.toThrow();
+    expect(draft.payloadJson).toBe("malformed-json");
+    expect(mockBatch).not.toHaveBeenCalled();
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
+    );
+    expect(mockCollections.get("sms_review_queues")?.records).toContain(
+      originalQueue
     );
 
-    await expect(getSmsReviewDraftQueueSnapshot("user-1")).resolves.toBeNull();
-
+    // The user can still repair the same physical record; no silent reset.
+    draft.payloadJson = validPayload;
+    await expect(
+      getSmsReviewDraftQueueSnapshot("user-1")
+    ).resolves.toMatchObject({
+      queueId: originalQueue.id,
+      itemCount: 1,
+    });
+    expect(mockBatch).not.toHaveBeenCalled();
     expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
       draft
     );

@@ -57,8 +57,10 @@ describe("financial action generic sync exclusion", () => {
     expect(pushService).toContain("DEDICATED_SYNC_TABLES");
     expect(pushService).toContain("experimentalRejectedIds");
     expect(pushService).not.toContain("sync_dedicated_table_changes_pending");
+    expect(synchronizeSource).toContain("markLocalChangesAsSynced");
+    expect(synchronizeSource).toContain("pushResult.experimentalRejectedIds");
     expect(synchronizeSource).toContain(
-      "markLocalChangesAsSynced(database, localChanges, pushResult.experimentalRejectedIds)"
+      "beforeMarkLocalChangesAsSyncedInWriter"
     );
     expect(markAsSyncedSource).toContain("!rejectedIds.has(id)");
     expect(markAsSyncedSource).toContain(

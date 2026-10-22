@@ -4,6 +4,13 @@ trigger: always_on
 
 # You are an expert in TypeScript, React Native, Expo, and Mobile UI development
 
+Monyvi's `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md`, and `.agent/rules/styling-rules.md` supersede
+generic advice below. In particular, keep current approved intrinsic-fit, dark
+readability, keyboard/inset, accessible target and page/modal inline-feedback
+rules; do not introduce new error/warning/success toasts into changed UI or a
+mandatory cosmetic test matrix.
+
 Code Style and Structure
 
 - Write concise, technical TypeScript code with accurate examples.
@@ -42,8 +49,9 @@ Code Style and Structure
   UI and Styling
 
 - Use Expo's built-in components for common UI patterns and layouts.
-- Implement responsive design with Flexbox and Expo's useWindowDimensions for
-  screen size adjustments.
+- Implement responsive design with Flexbox and **actual container/intrinsic text
+  fit** first; use `useWindowDimensions` for viewport context, not as an
+  arbitrary forced-stacking rule. Keep system font scaling and 44/48 dp targets.
 - Use styled-components or Tailwind CSS for component styling.
 - Implement dark mode support using Expo's useColorScheme.
 - Ensure high accessibility (a11y) standards using ARIA roles and native

@@ -1,0 +1,347 @@
+/**
+ * #395 T053 TESTS FIRST: dedicated owned-root pull/upsert path.
+ *
+ * This file intentionally imports the MISSING production owner-scoped
+ * financial root pull seam. It is a module-creation Red, not an executable
+ * Green or a JSON-only sanitizer test. Every scenario requires real SQLite.
+ */
+import type { Database, Model } from "@nozbe/watermelondb";
+import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
+import type { FinancialActionGroup } from "@monyvi/db";
+import {
+  hashFinancialActionEnvelope,
+  parseFinancialActionEnvelopeJson,
+} from "../../../../packages/logic/src/financial-actions";
+import { createAccountReviewFinancialRegistry } from "../../services/account-review-financial-command-service";
+import { applyOwnedFinancialActionRootPull } from "../../services/sync/financial-action-root-pull";
+import {
+  ACTION,
+  FOREIGN_OWNER,
+  OWNER,
+  makeSaveFixture,
+  testUuid,
+} from "./account-review-save-test-fixtures";
+import {
+  cloneRecoverySqlite,
+  hashProvider,
+  readPrivateOwnedRoot,
+  requireActionRoot,
+  resetRecoverySqlite,
+  saveReview,
+  seedBoundSmsReview,
+  ownedPhysicalRows,
+} from "./account-review-local-recovery-test-harness";
+import { physicalSaveLedgerSnapshot } from "./account-review-save-sqlite-test-helpers";
+import { physicalSmsSnapshot } from "./account-review-all-dedup-physical-test-helpers";
+import { clearAcceptedAccountReviewPrivateEvidence } from "../../services/account-review-retention-terminal";
+import { sql090ReviewAcceptedReceipt } from "./financial-action-root-pull-test-receipts";
+
+// Register real Node SQLite BEFORE Jest evaluates production service imports.
+// This is the same per-suite mock boundary as the passing Save SQLite suites.
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const models = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models").LEDGER_MODEL_CLASSES;
+  const adapter = new Adapter({ schema });
+  const database = new wm.Database({ adapter, modelClasses: models });
+  return {
+    database,
+    __adapter: adapter,
+    schema,
+    Q: wm.Q,
+    ...Object.fromEntries(models.map((model) => [model.name, model])),
+  };
+});
+
+// The production pull validates the REAL canonical envelope SHA-256 through
+// Expo Crypto. jest-expo's native crypto stub has no matching Node digest.
+// Implement only that native boundary using Node's actual SHA-256 algorithm.
+jest.mock("expo-crypto", () => {
+  const nodeCrypto =
+    jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, input: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        throw new Error("unexpected_test_digest_algorithm");
+      return Promise.resolve(
+        nodeCrypto.createHash("sha256").update(input, "utf8").digest("hex")
+      );
+    },
+    randomUUID: (): string => nodeCrypto.randomUUID(),
+  };
+});
+
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("018f0c7a-1234-4abc-8def-000000000001"),
+  supabase: {},
+}));
+
+const FOREIGN_PRIVATE = '{"untrusted":"raw-private-SMS-exfiltration"}';
+const CLOUD_OWNED_ID = testUuid(480);
+
+function fromActualRoot(
+  root: FinancialActionGroup,
+  overrides: Readonly<Record<string, unknown>> = {}
+): Record<string, unknown> {
+  const publicRaw: Record<string, unknown> = {};
+  for (const [column, rawValue] of Object.entries(root._raw)) {
+    if (
+      column === "local_recovery_snapshot_json" ||
+      column === "_status" ||
+      column === "_changed"
+    )
+      continue;
+    const value: unknown = rawValue;
+    publicRaw[column] = value;
+  }
+  return { ...publicRaw, ...overrides };
+}
+
+function updatedCloudRoot(
+  root: FinancialActionGroup,
+  overrides: Readonly<Record<string, unknown>> = {}
+): SyncTableChangeSet {
+  return {
+    created: [],
+    updated: [fromActualRoot(root, overrides)],
+    deleted: [],
+  };
+}
+
+async function physicalPull(
+  db: Database,
+  changes: SyncTableChangeSet,
+  owner = OWNER
+): Promise<void> {
+  await applyOwnedFinancialActionRootPull({
+    database: db,
+    expectedOwnerId: owner,
+    changes,
+  });
+}
+
+async function seededRoot(): Promise<{
+  readonly db: Database;
+  readonly root: FinancialActionGroup;
+  readonly localBytes: string;
+}> {
+  const fixture = makeSaveFixture("sms-new-bank");
+  await seedBoundSmsReview(fixture);
+  await expect(saveReview(fixture)).resolves.toMatchObject({
+    kind: "committed",
+  });
+  const db = await cloneRecoverySqlite();
+  const root = await requireActionRoot(db);
+  const localBytes = root.localRecoverySnapshotJson;
+  if (typeof localBytes !== "string")
+    throw new Error("missing_actual_private_root_for_pull");
+  readPrivateOwnedRoot(root);
+  return { db, root, localBytes };
+}
+
+async function reloadedRoot(db: Database): Promise<FinancialActionGroup> {
+  const rows = await db
+    .get<FinancialActionGroup>("financial_action_groups")
+    .query()
+    .fetch();
+  if (rows.length !== 1 || !rows[0])
+    throw new Error("expected_exact_physical_root_after_pull");
+  return rows[0];
+}
+
+beforeEach(async (): Promise<void> => {
+  await resetRecoverySqlite();
+});
+
+describe("#395 T053 actual dedicated owned financial-root SQLite pull", () => {
+  it("P01 exact owner/action/immutable envelope retains unresolved private evidence on cloud refresh", async () => {
+    const { db, root, localBytes } = await seededRoot();
+    const before = await physicalSaveLedgerSnapshot(db);
+    await physicalPull(
+      db,
+      updatedCloudRoot(root, {
+        id: CLOUD_OWNED_ID,
+        updated_at: root.updatedAt.getTime() + 1000,
+        state: "sync_pending",
+      })
+    );
+    const persisted = await reloadedRoot(db);
+    expect(persisted.id).toBe(root.id);
+    expect(persisted.actionId).toBe(ACTION);
+    expect(persisted.localRecoverySnapshotJson).toBe(localBytes);
+    expect(readPrivateOwnedRoot(persisted).ownerId).toBe(OWNER);
+    const after = await physicalSaveLedgerSnapshot(db);
+    expect(
+      after.filter((table) => table.table !== "financial_action_groups")
+    ).toEqual(
+      before.filter((table) => table.table !== "financial_action_groups")
+    );
+  });
+
+  it("P02 a malicious remote private column cannot replace local evidence or reach other owners", async () => {
+    const { db, root, localBytes } = await seededRoot();
+    await physicalPull(
+      db,
+      updatedCloudRoot(root, {
+        local_recovery_snapshot_json: FOREIGN_PRIVATE,
+      })
+    );
+    const persisted = await reloadedRoot(db);
+    expect(persisted.localRecoverySnapshotJson).toBe(localBytes);
+    expect(persisted.localRecoverySnapshotJson).not.toBe(FOREIGN_PRIVATE);
+    expect(readPrivateOwnedRoot(persisted).actionId).toBe(ACTION);
+  });
+
+  it("P03 accepted SMS retains sealed original/private proof until verified terminal cleanup", async () => {
+    const { db, root, localBytes } = await seededRoot();
+    const original = readPrivateOwnedRoot(root);
+    expect(original.queuePreimage?.disposition).toBe("pruned_empty");
+    expect(original.smsDrafts.length).toBeGreaterThan(0);
+    expect(
+      original.smsDrafts.every((draft) => draft.retentionState === "available")
+    ).toBe(true);
+    const smsBefore = await physicalSmsSnapshot(db);
+    expect(smsBefore.queues.some((row) => row._status === "deleted")).toBe(
+      true
+    );
+    expect(smsBefore.drafts.some((row) => row._status === "deleted")).toBe(
+      true
+    );
+    const before = await ownedPhysicalRows(db, "account_financial_effects");
+    // Exact six-field, registered SQL090 acceptance receipt: no invented
+    // state-only JSON may authorize private recovery erasure.
+    const receipt = sql090ReviewAcceptedReceipt(root);
+    await physicalPull(
+      db,
+      updatedCloudRoot(root, {
+        state: "accepted",
+        server_outcome: "accepted",
+        outcome_json: JSON.stringify(receipt),
+        rejection_code: null,
+      })
+    );
+    const persisted = await reloadedRoot(db);
+    expect(persisted.state).toBe("accepted");
+    expect(persisted.localRecoverySnapshotJson).toBe(localBytes);
+    expect(readPrivateOwnedRoot(persisted)).toEqual(original);
+    expect(await physicalSmsSnapshot(db)).toEqual(smsBefore);
+    expect(
+      (await ownedPhysicalRows(db, "account_financial_effects")).map(
+        (effect: Model) => JSON.stringify(effect._raw)
+      )
+    ).toEqual(before.map((effect) => JSON.stringify(effect._raw)));
+
+    // Only the existing owner-bound cleanup may jointly consume the proven
+    // deleted SMS originals and remove the private carrier after acceptance.
+    await clearAcceptedAccountReviewPrivateEvidence({
+      database: db,
+      actionId: root.actionId,
+    });
+    const terminal = await reloadedRoot(db);
+    expect(terminal.state).toBe("accepted");
+    expect(terminal.localRecoverySnapshotJson).toBeNull();
+    expect(await physicalSmsSnapshot(db)).toEqual({ queues: [], drafts: [] });
+    expect(
+      (await ownedPhysicalRows(db, "account_financial_effects")).map(
+        (effect: Model) => JSON.stringify(effect._raw)
+      )
+    ).toEqual(before.map((effect) => JSON.stringify(effect._raw)));
+  });
+
+  it("P04 foreign owner data never copies or reveals local private bytes", async () => {
+    const { db, root, localBytes } = await seededRoot();
+    const foreign = updatedCloudRoot(root, {
+      user_id: FOREIGN_OWNER,
+      local_recovery_snapshot_json: FOREIGN_PRIVATE,
+    });
+    await expect(physicalPull(db, foreign)).rejects.toThrow();
+    const persisted = await reloadedRoot(db);
+    expect(persisted.userId).toBe(OWNER);
+    expect(persisted.localRecoverySnapshotJson).toBe(localBytes);
+    expect(persisted.localRecoverySnapshotJson).not.toBe(FOREIGN_PRIVATE);
+  });
+
+  it("P05 action-id reuse with a mismatched immutable hash never retains recovery under substituted authority", async () => {
+    const { db, root } = await seededRoot();
+    const forged = updatedCloudRoot(root, {
+      payload_hash: "b".repeat(64),
+      payload_json: '{"schemaVersion":"forged"}',
+    });
+    await expect(physicalPull(db, forged)).rejects.toThrow();
+    const local = await reloadedRoot(db);
+    expect(local.payloadHash).toBe(root.payloadHash);
+    expect(local.payloadJson).toBe(root.payloadJson);
+    // A mismatch must not be silently treated as a matching canonical root.
+    expect(local.state).not.toBe("accepted");
+  });
+
+  it("P06 an unrelated new cloud action never inherits an older private snapshot", async () => {
+    const { db, root, localBytes } = await seededRoot();
+    const registry = createAccountReviewFinancialRegistry();
+    const canonical = parseFinancialActionEnvelopeJson(
+      root.payloadJson,
+      registry
+    );
+    const separateAction = {
+      ...canonical,
+      actionId: testUuid(481),
+      // domainReferenceId is the minimum ORIGINAL created financial row UUID,
+      // not a newly invented root identity. P06 varies only action identity.
+      domainReferenceId: canonical.domainReferenceId,
+    };
+    const hashed = await hashFinancialActionEnvelope(
+      separateAction,
+      hashProvider,
+      registry
+    );
+    const unrelated = updatedCloudRoot(root, {
+      id: CLOUD_OWNED_ID,
+      action_id: separateAction.actionId,
+      domain_reference_id: separateAction.domainReferenceId,
+      payload_json: hashed.canonicalText,
+      payload_hash: hashed.payloadHash,
+    });
+    await physicalPull(db, unrelated);
+    const roots = await db
+      .get<FinancialActionGroup>("financial_action_groups")
+      .query()
+      .fetch();
+    const introduced = roots.find((item) => item.actionId === testUuid(481));
+    expect(introduced).toBeDefined();
+    expect(introduced?.localRecoverySnapshotJson).toBeNull();
+    expect(
+      roots.find((item) => item.actionId === ACTION)?.localRecoverySnapshotJson
+    ).toBe(localBytes);
+  });
+
+  it("P07 a failed dedicated pull leaves the already stored SQLite root and private evidence unchanged", async () => {
+    const { db, root } = await seededRoot();
+    const before = await physicalSaveLedgerSnapshot(db);
+    await expect(
+      physicalPull(
+        db,
+        updatedCloudRoot(root, {
+          action_id: null,
+          local_recovery_snapshot_json: FOREIGN_PRIVATE,
+        })
+      )
+    ).rejects.toThrow();
+    expect(await physicalSaveLedgerSnapshot(db)).toEqual(before);
+  });
+});

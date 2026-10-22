@@ -135,7 +135,13 @@ this in the output.
 
 ### Always Load (regardless of tier)
 
-Monyvi rulebook — these are the spine of every style review:
+Monyvi rulebook — these are the spine of every style review. Also follow current
+`AGENTS.md`, `docs/development-workflow.md`, `docs/design/design-system.md` and
+`.agent/rules/styling-rules.md`. For touched UI, flag character-count width
+guesses, clipped scaled financial names, undersized targets, unreadable dark
+explanation, repeated row treatments, keyboard/inset collisions and new toast
+feedback instead of sticky page/modal notices. Do not invent a cosmetic test
+matrix or override owner approval gates.
 
 ```
 CLAUDE.md                                       — project rules of the road

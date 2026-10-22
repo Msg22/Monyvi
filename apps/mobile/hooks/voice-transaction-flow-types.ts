@@ -4,7 +4,10 @@ import type {
   VoiceAvailabilitySnapshot,
 } from "@monyvi/logic";
 import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
+import type { AccountReviewAccountSnapshots } from "@/services/account-review-read-model-service";
 import type { MicrophonePermissionStatus } from "./useMicrophonePermission";
+
+export type { AccountReviewAccountSnapshots };
 
 /**
  * Public and private types used by useVoiceTransactionFlow.
@@ -46,6 +49,7 @@ export interface ParserContextSnapshot {
     readonly currency: string;
   }>;
   readonly categoryRecords: readonly Category[];
+  readonly reviewAccountSnapshots?: AccountReviewAccountSnapshots;
 }
 export interface RetainedSubmission extends ParserContextSnapshot {
   readonly ownerUserId: string;

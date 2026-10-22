@@ -16,26 +16,18 @@ user's active branch or Pull Request, provide specific feedback, and then
 automatically create a new PR containing the proposed fixes targeting the user's
 original work.
 
-## Approved Mockup Binding Gate
+## Prospective design authority and historical image verifier
 
-When this workflow consumes an approved mockup or sidecar, run
-`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
-binding facts, rendered evidence, or approval status. Require exit status zero:
-current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
-revisions, and approval evidence for the approved combined
-`Binding approval revision` must all verify. A failed verifier blocks governed
-UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+For future governed UI, consume the **one owner-approved runnable interactive
+design revision** and its short README under the feature's `mockups/`. The
+runnable artifact itself defines visual/responsive facts. No new HTML binding
+sidecar, Binding Facts copy, content-hash manifest, combined approval, separate
+metadata approval or verifier run is required.
 
-> [!CAUTION] **EVERY SECTION IN THIS WORKFLOW IS MANDATORY. SKIPPING ANY SECTION
-> IS A CRITICAL FAILURE. The agent MUST execute EVERY numbered step, EVERY
-> sub-step, and EVERY check listed below. If a section does not apply, the agent
-> MUST explicitly state "N/A — [reason]" in the output. Silence is NOT
-> acceptable.**
->
-> **FAILURE TO FOLLOW THIS WORKFLOW EXACTLY WILL RESULT IN AN INCOMPLETE
-> REVIEW.**
-
----
+**Only** for previously approved static/image references on their original
+governed UI surfaces, retain original `<mockup-basename>.binding.md` approval
+rules and the unchanged `scripts/verify-mockup-binding.js` gate. See
+`docs/design/interactive-design-workflow.md` for the two paths.
 
 ## 1. Context Gathering (MANDATORY — DO NOT SKIP)
 
@@ -140,6 +132,11 @@ For **EVERY** change in the PR, the agent MUST:
    - No hardcoded colors (use palette constants)
    - No `isDark` misuse
    - UI strictly matches schema
+   - For changed UI, apply `AGENTS.md`, `docs/design/design-system.md` and
+     `.agent/rules/styling-rules.md`: actual intrinsic fit, 44/48 dp hits,
+     scaled/RTL labels without orphan separators, semantic dark readability, and
+     new page/modal inline feedback (no new toasts). Check keyboard/footer
+     reachability and single inset where relevant; no cosmetic test matrix.
 
 6. **Monorepo Boundaries**
    - No invalid cross-package imports
@@ -337,199 +334,83 @@ The agent MUST ensure consistency across:
 
 ---
 
-### 🎨 2.5 Mockups Compliance (MANDATORY — DO NOT SKIP UNDER ANY CIRCUMSTANCES)
+### 🎨 2.5 Approved Design Compliance (governed UI only)
 
-Always include this section in the review report. First determine whether the
-target diff changes visual UI governed by an approved scoped mockup. If it does
-not, report `N/A — no governed visual UI change`, skip the per-mockup evidence
-steps below, and do not block the PR merely because the feature folder contains
-mockup assets.
+Always include a design review status, but apply per-reference comparison **only
+when the changed diff touches UI governed by a reviewed design**. Otherwise
+report `N/A — no governed visual UI change`. Scope reference discovery through
+the feature spec/issue/README; do not compare unrelated mockups or require a
+screenshot for an untouched screen.
 
-> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
-> agent MUST load ALL approved mockup images that govern changed visual UI,
-> compare them against the implementation, and produce DETAILED findings. "I
-> loaded the mockups" without producing findings is a FAILURE.**
+**Future interactive UI:**
 
-When applicable, the agent MUST validate that the changed implementation
-**visually and structurally matches the approved mockups**.
+- Locate the exact **once-approved runnable design version** in the feature's
+  `mockups/` and its **short README** (entry/run, scenarios, native-only
+  adaptations/limits). Open the runnable entry, not a raw fragment; exercise
+  task-relevant interactions, state, container width, long content, font
+  scaling, light/dark and EN/AR RTL. The artifact itself is the visual
+  reference; its styles, layout and adaptive behavior must **not** be duplicated
+  into normative binding text.
+- **Do not request a new sidecar, SHA-256 tuple, metadata manifest, second
+  approval or run the legacy binding verifier** for interactive HTML. If the
+  claimed version or owner design approval cannot be identified, mark that
+  changed UI's design authority unresolved; do not invent approval.
 
----
+**Historical approved image UI only:**
 
-#### 📂 2.5.1 Locate Mockups
+- Use original approved image plus its original approved sidecar/evidence for
+  the **specific surface it already governs**. Apply the unchanged
+  `scripts/verify-mockup-binding.js` and historical migration rules as
+  applicable. A failed historical verification blocks that historical reference;
+  never extend the gate to new interactive designs.
+- Preserve all frozen image, Binding Facts, revision and approval bytes.
 
-- Identify the current branch name
-- Locate the corresponding spec folder: `specs/<branch-name>/`
-- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
-  README files
-- Recursively discover candidate mockup assets in the selected feature folder,
-  including nested paths such as `design/mockups/`
-- Identify changed visual UI files and surfaces from the target diff.
-- Load candidate sidecar metadata, but not candidate images. Before using a
-  sidecar to include or exclude a reference, verify it records
-  `Binding metadata approval: APPROVED`, has a valid recomputed current
-  fingerprint, has matching current and approved revisions, and has approval
-  evidence that identifies that revision.
-- Use declared traceability and only authoritative candidate sidecars to map
-  references to changed governed surfaces before loading images or entering any
-  per-mockup loop. A candidate linked by declared traceability to changed UI but
-  missing an authoritative sidecar remains a blocker; do not silently exclude
-  it.
-- Exclude references for unrelated or unchanged surfaces. They remain governed
-  for their own future changes but are not review targets for this diff.
-- **Load only the approved mockup images mapped to changed governed visual UI**
-  and their matching `<mockup-basename>.binding.md` sidecars from
-  `.agent/workflows/mockup-implementation.md`.
-- When no candidate assets exist, state `No mockups found — N/A`. When
-  candidates exist but none map to changed governed visual UI, state
-  `N/A — no governed visual UI change` and skip every per-mockup loop.
-- Before using the mapped sidecar's viewport/component context or continuing
-  governed visual review, confirm its approval evidence/reference satisfies the
-  same-revision requirements in `.agent/workflows/mockup-implementation.md`.
-- If an approved reference predates the sidecar rule, complete the workflow's
-  **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
-  before using reconstructed metadata for review.
-- A missing sidecar, a sidecar still marked `PENDING`, a missing approval
-  reference, or a sidecar materially changed after approval is
-  non-authoritative. Mark the binding context unverified and the governed UI
-  **NOT APPROVABLE**; never infer binding facts from the image/export.
+For each mapped reviewed UI surface, compare seven relevant categories:
 
----
+1. Layout and component hierarchy;
+2. Spacing and alignment;
+3. Typography/scale;
+4. Colors and theme;
+5. Component/icon identity;
+6. Applicable visible states;
+7. Approved interactions, transitions and native adaptations.
 
-#### 🔍 2.5.2 Compare Implementation vs Mockups
+Use the actual approved **product UI**, not preview controls, browser chrome,
+decorative device frame or outside canvas. Match the reviewed reference at its
+comparison context and preserve semantic hierarchy with actual native
+text/container fit elsewhere. Do not infer product/financial behavior from the
+browser preview. A material redesign requires **one** approval of the revised
+runnable design, not a metadata approval.
 
-For **EACH loaded mockup mapped to changed governed visual UI**, the agent MUST:
+**Visual proof:** Inspect **actual native rendered screenshots** compared
+side-by-side/overlaid with the **rendered approved reference** at comparable
+context, plus relevant scoped responsive/theme/RTL/font/state variants. Check
+safe area, keyboard reachability, effective touch targets and native
+accessibility semantics with appropriate separate evidence; a screenshot cannot
+prove screen-reader labels. HTML running successfully, test assertions and
+source inspection are not native rendering proof. If owner-authorized
+device/render/accessibility evidence is absent, report **NOT RUN / fidelity
+unverified** and do not mark visual work complete.
 
-- Identify which component/screen it corresponds to
-- Read the component code
-- Compare the implementation against the mockup **structurally and visually**
-- Use only the explicitly approved binding sidecar to identify the declared
-  binding UI viewport or component context
-- Ignore presentation-only device hardware, frame, outer canvas, browser chrome,
-  export padding, and background outside the UI surface unless explicitly marked
-  binding
-- Inspect rendered app screenshots; source inspection alone cannot prove visual
-  completion
-- Require side-by-side or overlay rendered evidence at the declared UI context
-- Require rendered evidence for every in-scope responsive, dark-mode,
-  RTL/Arabic, and enlarged-text variant
-- Require separate accessibility-tree, screen-reader, or automated accessibility
-  evidence for labels and semantics; screenshots alone do not prove
-  accessibility labels
-- Report functional readiness and visual fidelity separately
+For each governed UI surface, report:
 
-#### Validate ALL 7 (produce a finding for EACH):
-
-1. **Layout & Structure**
-   - Component hierarchy matches mockup
-   - Sections are present and correctly ordered
-
-2. **Spacing & Alignment**
-   - Padding, margins, and spacing are consistent
-   - Elements are aligned as in mockup
-
-3. **Typography**
-   - Font sizes, weights, and hierarchy match
-   - Text placement is correct
-
-4. **Colors & Theming**
-   - Colors match exactly (no deviations)
-   - No hardcoded or incorrect colors
-
-5. **Components & UI Elements**
-   - Buttons, inputs, cards match design
-   - Correct sizes, shapes, and positions
-
-6. **States**
-   - Loading, empty, error states (if shown in mockups)
-   - Disabled/active states
-
-7. **Interactions (if applicable)**
-   - Modal behavior, sheets, navigation flows
-
----
-
-#### 🚨 2.5.3 Detect Gaps
-
-The agent MUST identify:
-
-- Missing UI elements
-- Incorrect layouts
-- Styling deviations
-- Incomplete screens
-- Any visual inconsistency with mockups
-
----
-
-#### 📌 Output Format (MANDATORY — USE THIS EXACT FORMAT)
-
-For EACH loaded mockup mapped to changed governed visual UI:
-
-```
-#### Mockup: <filename>
-Corresponds to: <component/screen name>
-
-| Check | Status | Notes |
-|---|---|---|
-| Layout & Structure | ✅/❌ | ... |
-| Spacing & Alignment | ✅/❌ | ... |
-| Typography | ✅/❌ | ... |
-| Colors & Theming | ✅/❌ | ... |
-| Components & UI | ✅/❌ | ... |
-| States | ✅/❌ | ... |
-| Interactions | ✅/❌ | ... |
-| Binding UI Context | ✅/❌ | ... |
-| Rendered Comparison | ✅/❌ | ... |
-| Scoped Variants | ✅/❌ | ... |
-| Accessibility Evidence | ✅/❌ | ... |
+```text
+Reference/version: <approved runnable entry/version or historical image>
+Changed component(s): <paths>
+Layout/Spacing/Typography/Theme/Components/States/Interactions: PASS/FAIL/UNVERIFIED
+Native rendered comparison: PASS/FAIL/NOT RUN
+Scoped variants: PASS/FAIL/NOT RUN
+Accessibility evidence: PASS/FAIL/NOT RUN/N/A
+Functional readiness: <separate verdict>
+Visual fidelity: COMPLETE/INCOMPLETE
+Findings: <specific screen, state, evidence, discrepancy and fix>
 ```
 
-Violations:
-
-- ❌ Mockup Violation:
-  - 🖼️ Mockup: `<mockup file name>`
-  - 📍 Location: `<file + line>`
-  - 🧨 Issue: What differs from the mockup
-  - ✅ Fix: Exact change required to match the mockup
-
-- ⚠️ Improvement:
-  - 💡 Suggestion: Visual or UX enhancement aligned with mockups
-
----
-
-#### 🚨 Blocking Rule
-
-- For governed visual UI changes, if the authoritative approved binding sidecar
-  is missing/invalid, implementation does NOT match mockups, or required
-  rendered comparison or scoped-variant evidence is missing: → PR is **NOT
-  APPROVABLE**
-
----
-
-#### 🔧 Fix Requirements
-
-When creating the Fix PR:
-
-- Update the UI to match the mockups **pixel-perfect**
-- Do NOT introduce new design decisions
-- Do NOT "improve" the design unless explicitly instructed
-- Treat the approved mockup image plus its explicitly approved binding sidecar
-  as the **single source of truth for governed UI**
-
----
-
-#### ✅ Success Criteria
-
-- Approved binding sidecar is verified current and authoritative
-- Implementation visually matches mockups with **no noticeable differences**
-- All mockup screens are fully implemented
-- Side-by-side or overlay rendered evidence proves the match at the declared UI
-  context
-- Every in-scope responsive, dark-mode, RTL/Arabic, and enlarged-text variant
-  has rendered evidence
-- Accessibility labels and semantics have separate accessibility evidence
-- Functional readiness and visual fidelity are reported separately
-
----
+A missing approved interactive revision, invalid historical image authority, a
+material mismatch or required unperformed native proof prevents a governed UI
+visual-approval claim. Do not block a non-visual PR for unrelated feature
+mockups. Keep the existing code/issue/spec, financial, security and PR review
+gates unchanged.
 
 ### 🧠 2.6 General Best Practices (MANDATORY)
 
@@ -627,7 +508,8 @@ Avoid duplicate fixes.
 #### Visual Fidelity
 
 - Status: COMPLETE / INCOMPLETE / N/A
-- Binding UI context: declared viewport or component context, or N/A
+- Reviewed design UI context (historical image binding context when applicable),
+  or N/A
 
 #### Visual Evidence
 

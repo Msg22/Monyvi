@@ -161,6 +161,7 @@
   "search_categories": "Search categories...",
   "search_category_level": "Search {{label}}...",
   "no_categories_found": "No categories found",
+  "categories_unavailable": "Categories are unavailable right now. Please try again.",
   "no_categories_match_search": "No categories match your search",
   "vs_last_month": "vs Last Month",
   "last_updated": "Last updated",

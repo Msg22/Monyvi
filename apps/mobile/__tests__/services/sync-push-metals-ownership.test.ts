@@ -49,6 +49,8 @@ jest.mock("../../services/metal-reconciliation-service", () => ({
 }));
 
 import { pushChanges } from "../../services/sync/push-service";
+import { legacyPushDatabase } from "./sync-push-legacy-test-fixtures";
+import { createHash } from "node:crypto";
 
 type PushChangesDatabase = Parameters<typeof pushChanges>[0];
 type PushChangesArgs = Parameters<typeof pushChanges>[1];
@@ -66,16 +68,21 @@ function makeScopedDatabase(
   fetchedRoots: ReadonlyArray<Record<string, unknown>>
 ): PushChangesDatabase {
   const ownedAssets = fetchedRoots
-    .filter((root) => typeof root["domain_reference_id"] === "string")
-    .map((root) => ({ id: root["domain_reference_id"] }));
-  const get = jest.fn((table: string) => ({
-    query: jest.fn(() => ({
-      fetch: jest
-        .fn()
-        .mockResolvedValue(table === "assets" ? ownedAssets : fetchedRoots),
-    })),
-  }));
-  return { get } as unknown as PushChangesDatabase;
+    .filter(
+      (root) =>
+        typeof root.domain_reference_id === "string" && root.user_id === USER_ID
+    )
+    .map((root) => ({
+      id: root.domain_reference_id,
+      userId: USER_ID,
+      deleted: false,
+    }));
+  // Enforce the actual owner-filtered Q.where predicates in the catalog,
+  // terminal lookup, and asset-parent identity queries.
+  return legacyPushDatabase({
+    financial_action_groups: fetchedRoots,
+    assets: ownedAssets,
+  }).database;
 }
 
 describe("pushChanges Metals ownership scoping", () => {
@@ -90,6 +97,13 @@ describe("pushChanges Metals ownership scoping", () => {
   it("scopes a foreign Metal action out before the RPC while acknowledging only the owned action", async () => {
     const actionId = "10000000-0000-4000-8000-000000000021";
     const holdingId = "20000000-0000-4000-8000-000000000022";
+    const ownedPayloadJson = JSON.stringify({
+      actionId,
+      domainReferenceId: holdingId,
+      kind: "add",
+      payload: { holdingId, rateSnapshots: [] },
+      userId: USER_ID,
+    });
     const roots = [
       {
         id: actionId,
@@ -98,14 +112,11 @@ describe("pushChanges Metals ownership scoping", () => {
         domain_reference_id: holdingId,
         kind: "add",
         user_id: USER_ID,
-        payload_hash: "hash",
-        payload_json: JSON.stringify({
-          actionId,
-          domainReferenceId: holdingId,
-          kind: "add",
-          payload: { holdingId, rateSnapshots: [] },
-          userId: USER_ID,
-        }),
+        payload_hash: createHash("sha256")
+          .update(ownedPayloadJson, "utf8")
+          .digest("hex"),
+        payload_json: ownedPayloadJson,
+        account_guards_json: "[]",
       },
       {
         id: "foreign-metal-action",

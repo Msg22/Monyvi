@@ -14,7 +14,7 @@ import {
   createSmsEvaluationCaseViewModel,
   createSmsEvaluationSummaryViewModel,
 } from "@/services/dev/sms-provider-evaluation-read-model-service";
-import { useAllCategories } from "@/context/CategoriesContext";
+import { useSelectableCategories } from "@/hooks/useSelectableCategories";
 import { useAuth } from "@/context/AuthContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useSmsProviderEvaluation } from "@/hooks/use-sms-provider-evaluation";
@@ -25,8 +25,11 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
   const { t } = useTranslation("settings");
   const { user } = useAuth();
   const aiConsent = useAiProcessingConsent();
-  const { categories, isLoading: isCategoriesLoading, error: categoriesError } =
-    useAllCategories();
+  const {
+    categories,
+    isLoading: isCategoriesLoading,
+    error: categoriesError,
+  } = useSelectableCategories();
   const runtimeAvailable = isSmsProviderEvaluationRuntimeAvailable();
   const userId = user?.id ?? null;
   const categorySources = useMemo(
@@ -105,13 +108,14 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
     categoriesError === null &&
     !aiConsent.isLoading &&
     aiConsent.isConsented;
-  const startHelper = isCategoriesLoading || aiConsent.isLoading
-    ? t("sms_provider_evaluation.preparing_context")
-    : categoriesError !== null
-      ? t("sms_provider_evaluation.context_unavailable")
-      : !aiConsent.isConsented
-        ? t("sms_provider_evaluation.consent_required_helper")
-        : null;
+  const startHelper =
+    isCategoriesLoading || aiConsent.isLoading
+      ? t("sms_provider_evaluation.preparing_context")
+      : categoriesError !== null
+        ? t("sms_provider_evaluation.context_unavailable")
+        : !aiConsent.isConsented
+          ? t("sms_provider_evaluation.consent_required_helper")
+          : null;
 
   return (
     <SmsProviderEvaluationScreen

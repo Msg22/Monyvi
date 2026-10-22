@@ -1,0 +1,1869 @@
+# #395 — UI Wave 1, T006/T008 test-only publication receipt
+
+**Status: AUTHORED / PUBLISHED / WRITE OWNERSHIP RELEASED.** This is a bounded
+test handoff, not an implementation, passing test report or authorization for
+production behavior.
+
+| Authority / ref                                                    | Exact value                                                               |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Repository                                                         | `Msg22/Monyvi`                                                            |
+| Exclusive worker branch                                            | `codex/395-ui-worker`                                                     |
+| Immutable parent before this leaf                                  | `7e27eb55c642dccef44f4b977a8712ab320ecd18`                                |
+| Parent of that base                                                | `944cbafc7e7d9f36a13c75d20c0669204974db2b` (PR #396 planning head)        |
+| Trusted governing main                                             | `7838df64eb9b3828c6e8f1a02f590b008d5435fd`                                |
+| Frozen T004 wire source blob                                       | `b6c513eec986b93158be51002487e6a39c84361b`                                |
+| Approved B1 manifest                                               | `sha256:cf447362f73c91f975f97ecf2295bce1ed8300213f701f6caab181ee997059a0` |
+| Approved B1 receipt blob                                           | `f2fbd67fd350b08ed897995a7cca71f38940110b`                                |
+| Test-only content checkpoint HEAD before this final receipt update | `eb7a2db196b9af54e5fb513e48ab184624589504`                                |
+
+## 1. Branch creation and GitHub proof
+
+Immediately before creation, an exact `refs/heads/codex/395-ui-worker` GET
+returned GitHub 404 and a branch-name search returned an empty set. The GitHub
+connector successfully created the branch from the **exact** immutable base
+`7e27eb55c642dccef44f4b977a8712ab320ecd18`; a subsequent exact-ref read showed
+that same starting head.
+
+A first, durable checkpoint was published as this report at
+`f3a160564459a451ea7a21bd04ea779be373ed4d`. Test and fixture commits followed
+only on the new worker branch. No PR, issue, Page, main branch or other worker
+branch was mutated. No unpublished Core, native-wire, or root-local artifact was
+read or overwritten.
+
+Before the final receipt update, `compare_commits` against the immutable base
+returned **ahead, seven commits, exactly four changed repository paths**, all on
+the allowed list. The branch's final head is the successor commit holding this
+receipt; inspect `refs/heads/codex/395-ui-worker` for that self-referential
+final SHA.
+
+## 2. Exact writable path inventory and authored scope
+
+| Changed path                                                               | Git blob before the final report commit    | Actually authored                                                                                                                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/mobile/__tests__/services/account-review-read-model-service.test.ts` | `15d2ae924e426f9fe50320f12c0b73e97a26ec3d` | **T006**, seven behavior-focused Jest cases                                                                                                           |
+| `apps/mobile/__tests__/e2e/account-review-fixtures.test.ts`                | `87bb7d6970deb2f5ba9a972b88bb71f067d9b70a` | **T008**, fifteen direct Jest cases (seven descriptor / eight deferred runtime) plus eight individually parameterized B1 count cases (23 cases total) |
+| `apps/mobile/e2e/fixtures/shared-account-review.json`                      | `9c3520032cde8ee2659232dc9bd245280a18ad0e` | Synthetic, current-user-bound _descriptor_ catalogue; 15 scenes and M01–M20 mappings                                                                  |
+| `specs/395-shared-account-review/validation/ui-wave1.md`                   | updated in this final publication          | This report: actual access, authorship, checks, API seams and release                                                                                 |
+
+No production services, package exports, business logic, DB models, SQL,
+locales, account forms, Maestro YAML, shared test helpers, other specs, scripts
+or secrets were touched. The Core worker retains exclusive T005/T007 files.
+
+## 3. T006: owned account read-model tests
+
+The new `account-review-read-model-service.test.ts` specifies the frozen mobile
+API **`loadAccountReviewAccountSnapshots`**, expecting a privacy-safe context
+consistent with `accountReviewRequestContextSchema` from canonical
+`@monyvi/logic`. Tests use domain model `Pick<...>` fields rather than locally
+copied currency/account unions, `any`, or unsafe model casts. Source inspection
+of the actual base confirmed that the target service **does not yet exist** and
+the canonical schemas belong to the concurrent Core foundation wave.
+
+Seven tests cover:
+
+1. Owned active Bank/Cash/Wallet projections, preferred currency from the scoped
+   profile and canonical request-context fields, including numeric card suffix
+   `7 → "0007"`.
+2. Provider privacy: no balance, account number, soft-deleted bank child/sender,
+   foreign/deleted account or local default-metadata leakage.
+3. Exactly one scoped active-account query, one scoped profile query and at most
+   one batched child query per bank-details/sender table, without per-account
+   N+1 reads.
+4. Empty-account context preserves the current user's preferred currency without
+   synthesizing an account.
+5. Authenticated-user switching reloads data and does not leak a prior user's
+   accounts or currency.
+6. Missing owned profile fails closed rather than inventing a currency.
+7. Scoped child-query failure propagates instead of being converted into
+   apparently valid empty child metadata.
+
+Test doubles intercept `@monyvi/db`, WatermelonDB `Q` and approved user-scope
+methods. They do not access a live database, user records or credentials. The
+positive output shape is a **test expectation** for the T010 implementer to
+reconcile; the wire freezes the loader name and parser request schema but does
+not spell out the loader's full argument/return signature. Do not silently treat
+this test assumption as an approved API expansion.
+
+## 4. T008: deterministic, production-gated fixture tests
+
+The descriptor catalogue records **15 synthetic review scenes** with
+source-local response references, syntactically valid, stable UUIDv4
+row/session/group/account identifiers, and 14 distinct 64-hex synthetic SMS
+source fingerprints. Fingerprints are SHA-256 of fixture-specific synthetic seed
+labels; they are **not claimed** to be generated by the production SMS parser or
+proof that corresponding SMS has been delivered. The account catalogue is an
+approved **safe request-context shape**, not seeded WatermelonDB records or a
+real account owner. An owner binding must be resolved at runtime.
+
+The fixture catalogue is **not** an independently copied runtime review domain
+schema. It contains small descriptive `issueTags`, counts, source refs and
+fixture intention. T015 must hydrate and validate sessions through the canonical
+`accountReviewSessionSchema` and current-owned data read model; labels/tags are
+never financial commands, account identity authorization or parser provenance.
+No raw SMS body, full account number, account balance, password, provider
+credential, hosted test account or customer information is included.
+
+| Fixture scene                   | Expected total / needs review / actually selected                          |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `r3-combined-en` (R3-05)        | **7 / 5 / 2** — QNB3, CIB1, default2, one currency conflict                |
+| `r3-combined-ar` (R3-15)        | **7 / 5 / 2** — Arabic RTL semantic counterpart                            |
+| `r3-removed-undo` (R3-06)       | **4 / 3 / 1** — removed QNB2, pending CIB1, selected default1              |
+| `r3-default-only` (R3-07)       | **2 / 0 / 2**                                                              |
+| `r3-issues-only` (R3-08)        | **4 / 4 / 0** — account, currency, amount, category                        |
+| `r3-confirmed-feedback` (R3-09) | **4 / 0 / 1** — QNB/CIB confirmed, one selected                            |
+| `r3-clean` (R3-10)              | **2 / 0 / 2**                                                              |
+| `r3-selected-empty` (R3-11)     | **3 / 0 / 0**                                                              |
+| `voice-currency-omitted` (M03)  | **1 / 0 / 1** — proven omission uses EGP preferred, distinct from conflict |
+| `r1-account-chooser`            | **1 / 1 / 0** — no assumed selected account                                |
+| `r3-currency-conflict`          | **1 / 1 / 0** — EGP/USD unresolved; existing picker                        |
+| `r3-sms-save-failure`           | **2 / 1 / 1** — choices to retain; failure must be _injected elsewhere_    |
+| `sms-cash-ineligible`           | **1 / 1 / 0** — ordinary SMS cannot default to Cash                        |
+| `sms-review-restart`            | **1 / 1 / 0** — fingerprint/draft state only; real restart owner-run       |
+| `sms-atm-transfer`              | **1 / 0 / 1** — separate Bank source/Cash destination, unchanged amount    |
+
+All **M01–M20** IDs occur once in the separate coverage map, including cases
+that **must not pretend to be runnable via fixtures**. M12/M18 account-form
+changes, M14/M19 actual writer/SQL failures/CAS and retries, M15 device restart,
+M16 provider usage and M17 device visual/accessibility remain identified as
+separate service/pgTAP/component/owner-manual evidence. The JSON explicitly
+marks every scenario as authored-only and `maestroExecuted: false`.
+
+T008 static tests verify catalogue privacy and preferred-currency
+request-context shape, all 20 case mappings, exact B1 counts, stable unique
+UUID/group links, appropriate SMS fingerprints/null Voice fingerprints, Cash SMS
+exclusion versus ATM Cash destination, group-confirmation versus row-selection,
+removed suggestions, and proven currency omission versus uncertainty.
+
+The planned future T015 entry tests use
+**`loadAccountReviewFixtureSession(sceneId)`** as a proposed test-facing seam:
+explicit `EXPO_PUBLIC_MONYVI_TEST_MODE=e2e` and non-production runtime, current
+authenticated owner, canonical `accountReviewSessionSchema` hydration,
+Voice/session and SMS/fingerprint variants,
+signed-out/production/off-mode/unregistered-ID fail-closed behavior, and no
+test-only financial save shortcut. That function name/signature is **not**
+frozen by T004; the T015 owner/lead must reconcile this test-only seam before
+treating the tests as implementation-ready. Local SMS draft staging (if
+required) must go through the normal owner-scoped path; runtime financial saves
+must always use the approved complete writer rather than fixture-only
+persistence.
+
+## 5. Actually performed verification — evidence boundary
+
+- **GitHub branch absence:** VERIFIED twice, then created and exact-parent
+  checked.
+- **Immutable source reads:** VERIFIED at approved base/trusted governance.
+  Inspected existing account/profile/bank/sender model fields, user-data-access
+  helpers, test-mode configuration, SMS fixture parser, scoped read-model test
+  conventions, TDD guide, Maestro workflow, manual M01–M20 and B1 binding
+  authority. No unrelated or secret file reads.
+- **GitHub receipt readback:** VERIFIED for both tests and fixture JSON; current
+  fixture JSON parses successfully via the connected read and contains all
+  M01–M20 IDs.
+- **Static shape check (not Jest):** 15 scenes, 20 unique scenario IDs, 14
+  synthetic SMS source fingerprints, no scene count mismatches, allowed
+  four-file compare, no `any` or unsafe model casts in the new test sources.
+  These assertions were evaluated against the fetched/published data using an
+  isolated local tool script, **not the project's test runner**.
+- **Jest / TypeScript / ESLint / formatter / Red / Green:** **NOT RUN**.
+- **Maestro YAML authoring/execution:** **NOT AUTHORIZED in this leaf / NOT
+  RUN**.
+- **Android/iOS device, emulator, hosted Supabase, provider, UI rendered
+  comparison and accessibility:** **NOT RUN**.
+
+Both intended production target services
+(`account-review-read-model-service.ts`, `account-review-fixture-service.ts`)
+are absent at pinned base, so the tests are expected to remain Red/unresolvable
+before T010/T015. This is **not** a measured Red run; root owns the focused Red
+batch after the frozen Core+UI test handoffs and may need to reconcile API seam
+names before implementation. No test pass or shipped fixture capability is
+asserted.
+
+## 6. Blockers, ownership and frozen handoff
+
+- **Core dependency:** T005 canonical Zod schemas, type exports/barrel and T007
+  parser test contracts are separate, exclusively Core-owned work; do not copy
+  account/type/currency unions or modify Core files here.
+- **T010 contract seam:** The frozen contract names
+  `loadAccountReviewAccountSnapshots` and the canonical privacy-safe provider
+  context. This test suite expects a no-argument, current-owner scoped loader
+  returning that strict context. Lead/T010 implementer must explicitly accept or
+  reconcile this signature against the published T004 shape before production
+  authoring, without overriding financial identity protections.
+- **T015 contract seam:** Fixture service path is frozen, but export/function
+  signature is not. The proposed `loadAccountReviewFixtureSession(sceneId)` T008
+  entry contract needs lead/T015 acknowledgement; do not introduce a second
+  unapproved schema or invoke financial writes by bypass.
+- **Required later gates:** Root-led meaningful Red batch; T010/T015
+  implementation only on separate authorization, Green/integration checks later;
+  authorized Maestro static authoring separately; owner device, real provider,
+  keyboard, RTL, rendered and accessibility evidence remain independent. No
+  emulator, hosted reset/seed/deploy or new mockups.
+
+**Outcome: TEST AUTHORING COMPLETE / NO EXECUTED TEST RESULT / EXCLUSIVE WRITE
+SCOPE RELEASED.** All writes to `codex/395-ui-worker` and the four leaf files
+are **FROZEN** after this report commit. Normal ChatGPT → Antigravity →
+justified native fallback is the owner-approved routing (OpenCode excluded). Any
+further correction requires a new explicit grant; branch source/lease must be
+refreshed first.
+
+---
+
+## 7. Reopened local checkpoint — Jest hoisting / missing-future-service correction
+
+**Reopened source head (verified unchanged on intake):**
+`33afcb050a78205fc49bd0055272c8dddf79fbc9`. Root reported that its isolated
+local combined foundation run stopped at a Babel `jest.mock` hoisting error in
+T006 (`currentOwnerId` in a factory) and a missing future dependency resolution
+in T008. Those results are **root-provided observations**, not a test batch
+executed by this worker.
+
+**Correction commits (sole-writer, same branch):**
+`7574ebbb2beea4920e327a4d90660de125c19728`,
+`ddd49321b8a448e3bfc145a60839eb88503dc519`,
+`9ba85c91f66403b003a1be4629f4fe9828575a6f`, and
+`6f635616827a80ce78d85c50d7eb2eedaf13fa51`. This final receipt adds one
+report-only successor commit. Only the T006/T008 tests and this receipt changed
+from the frozen checkpoint; the synthetic JSON byte content is unchanged.
+
+### Exact repairs
+
+1. **T006 factory scope:** Renamed mutable current-user state to
+   `mockCurrentOwnerId`. `jest.mock("@monyvi/db")` and
+   `jest.mock("@/services/user-data-access")` now wrap every external Jest spy
+   in **lazy mock-prefixed functions**; no eager factory-time reference to a
+   test-module `const`. The DB factory's return type is factory-local structural
+   syntax rather than an external type reference. All seven T006 behavior
+   assertions and the real (unmocked) target `loadAccountReviewAccountSnapshots`
+   import remain intact.
+2. **T008 missing dependency:** Used explicit `{ virtual: true }` **only** for
+   the future T010 `@/services/account-review-read-model-service`, which is a
+   dependency of the fixture-entry service. The actual T015 service
+   `@/services/account-review-fixture-service` is **never mocked or
+   virtualized**; it is imported lazily **inside the runtime-test call path**.
+   No production substitute or test-only Save implementation was created.
+3. **Independent executable catalogue:** Removed eager future-service and
+   future-schema value imports from the T008 file. The first
+   `describe("T008 #395 bounded fixture descriptor contract")` exercises fixture
+   JSON directly, without requiring future T005/T010/T015 exports. Canonical
+   `accountReviewRequestContextSchema` parity is kept as a deferred T008
+   runtime-entry test, not claimed as an already executable assertion.
+   Descriptor tests can be selected by this exact `describe` name, independent
+   of missing runtime services.
+4. **No false-positive gating failures:** Negative tests first
+   `await resolveRuntimeFixtureEntry()` **outside** `expect(...).rejects`,
+   verify a callable export exists, and only then check real service rejection.
+   A missing module, absent export, or broken import can no longer masquerade as
+   valid off-mode/production/signed-out/unknown-fixture rejection. The runtime
+   tests remain honest **pending Red** until T015 exists; positive sessions
+   still use canonical Zod parsing with inferred types.
+
+**Test inventory after correction:** T006 **7** authored test cases. T008
+descriptor-only **7 named + 8 parameterized = 15** catalogue cases; T008
+deferred runtime-entry **8** cases, yielding **23** T008 cases overall.
+Descriptor/static logic preserves all M01–M20 IDs, 15 synthetic scenes and exact
+B1 states including 7/5/2 (EN/AR), 4/3/1 removed, 2/0/2 default-only and 3/0/0
+empty selected. No fixture JSON, account IDs, source fingerprints or business
+rules were edited in the correction.
+
+### Mandatory producer reconciliation before T010 production authorization
+
+The current T006 expectation that `loadAccountReviewAccountSnapshots()` returns
+a strict `accountReviewRequestContextSchema` value covers **provider-safe
+metadata only**; by itself it is insufficient for **local resolver default
+eligibility**. The resolver needs to know current-owned **active account
+identities and `isDefault` flags** (including zero/multiple-default ambiguity)
+without ever transmitting those private flags or additional financial/account
+metadata to the parsing provider.
+
+**Minimal shared read boundary suggestion (not an approved new wire schema):**
+Use a **single** authenticated-user-scoped batched account/profile/children read
+to produce two explicitly separate projections: (a) **local-only**
+active-account review snapshots containing the default flag plus safe
+identity/type/currency/eligibility metadata for resolver and Save revalidation,
+and (b) **provider-facing** `accountReviewRequestContextSchema` constructed by a
+strict whitelist that omits `isDefault`, balances, full account/card numbers,
+foreign/deleted rows and private local state. Reuse the same scoped read rather
+than duplicating queries; no balance/financial fields enter parser context.
+Whether `loadAccountReviewAccountSnapshots` exposes both projections or stays
+provider-only with a sibling local accessor is a **lead/T010 contract
+decision**. Reconcile the existing T006 direct-context expectation and add a
+local-default safety assertion **before T010 production grant**; this report
+does not silently invent or freeze a new domain shape. The synthetic JSON
+continues to carry only the already frozen provider-safe request-context fields.
+
+**T015 seam:** Owner accepted the proposed explicit-test-mode
+`loadAccountReviewFixtureSession(sceneId)` entry in principle, **conditional
+on** canonical current-owner hydration and unchanged real financial Save
+delegation. T008 does not authorize a production bypass, durable Voice fixture,
+generic writable seed, hosted mutation or stub service.
+
+### Verification / freeze after this correction
+
+- GitHub immutable-ref and existing branch HEAD: verified on intake and
+  refreshed before receipt publication.
+- Correction code/JSON source readback: verified. Static source inspection
+  confirms no unprefixed owner closure in T006, no top-level T015 import, no
+  mock of the T015 target, lazy virtual dependency only, four negative test
+  paths resolving the target before asserting rejection, and no recursive loader
+  helper.
+- Published JSON parses; 15 scenes and M01–M20 remain unchanged. No `any`,
+  unsafe cast, fake schema or out-of-scope production edit introduced.
+- **This worker ran no Jest, Babel, typecheck, lint, Maestro or device/emulator
+  test in the reopened checkpoint.** Root alone will rerun the affected local
+  batch and judge observed Red/behavioral results. Do not claim these
+  corrections pass until root reports actual execution.
+- Next observed failure may legitimately be missing T010/T015 target
+  implementation or Core Zod exports; neither permits virtualizing the target or
+  creating a production stub in this test-only leaf.
+
+**CORRECTION REPORT PUBLISHED — EXCLUSIVE WRITE OWNERSHIP RELEASED — ALL WRITES
+FROZEN.**
+
+---
+
+## 8. Next correction — F01/F07/F08/F09, regular Jest loading (test-only)
+
+**Reopened frozen revision:** `b482c79a917f1388818cf323f15201091c76eb01`. Root's
+actual isolated local affected batch, **before this correction**, reported **37
+mobile tests: 21 PASS / 16 FAIL**. All **15 synthetic descriptor cases passed**.
+The earlier 8 T008 runtime-entry tests reached a dynamic-import callback
+requiring `--experimental-vm-modules`; the T006 read-loader SUT was still
+absent. These are root-supplied outcomes, **not** new green results. No
+Jest/global runner flag, production source, fake SUT or alternate writer was
+introduced here.
+
+**Published correction commits (sequential, exclusive worker branch):**
+
+- `57b8f5833ac2e7bdf8fd11bdff086ad6b5d82547` — F01/F07 dual-projection T006
+  expectations and immutable-owner deferred reads.
+- `a320ef097af8f4af10fc633d3f96aa4950e3b828` — regular synchronous
+  `jest.requireActual`; F08 owner/reference validation and F09 per-scene
+  canonical hydration tests.
+- `f0d7dee882d486e8a456e2359da1f39e44b70f08` — owner-scoped synthetic category
+  read used only as an in-memory test double; no seeds or persistent writes.
+- `11413e9ec4444e40cb78d3062c4669e46a1cefc0` — formatting and order-independent
+  account comparisons.
+- One final successor commit updates this report only. Verify its exact full SHA
+  and diff against the reopened revision before accepting this leaf.
+
+### F01 accepted producer boundary — reflected in T006 assertions
+
+**Accepted future API:**
+`loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>`
+returning `{ownerId, preferredCurrency, accounts, providerContext}`, with
+**local** `AccountReviewLocalAccountSnapshot` fields equal to all canonical
+`AccountReviewRequestContext["accounts"][number]` fields plus
+`isDefault: Account["isDefault"]`. These local-only interfaces belong to
+`apps/mobile/services/account-review-read-model-service.ts`. No new persisted
+columns or provider protocol keys.
+
+T006 now validates **only** `snapshots.providerContext` against
+`accountReviewRequestContextSchema` and asserts the separate local fields,
+captured owner and preferred currency. Provider JSON contains exactly
+`reviewContractVersion`, `preferredCurrency`, and `accounts`, with strictly
+whitelisted account identity/currency/type/provider/masked card/sender values.
+It has **no ownerId, isDefault, balance, full card/account number,
+foreign/deleted record or private local metadata**. Local accounts retain true
+`isDefault`; tests explicitly preserve both **zero** and **inconsistent multiple
+defaults** for unresolved review, never selecting an arbitrary default. The same
+scoped read must produce both projections and batched bank/sender children
+without N+1 access.
+
+### F07 owner identity and deferred-read safety
+
+The T006 mock scope captures `const scopedOwnerId = mockCurrentOwnerId` **once**
+when created and passes it immutably into every query and child query; mutable
+global owner changes no longer alter an existing scope. One case verifies the
+scope against a user switch before its deferred `fetch`. A second blocks the
+owned account fetch, switches authenticated identity while the operation is in
+flight, releases the read and requires **rejection** before returning financial
+account context. The production T010 loader must revalidate against the
+**current** owner after the batched async read and fail closed if the owner
+changed. The mock's final `getRequiredCurrentUserId` remains dynamic for this
+proof.
+
+### F08 current-owner fixture references cannot be relabeled
+
+The T008 dependency `mockLoadAccountReviewAccountSnapshots` now returns
+**F01-shaped owner-specific** snapshots. For the original fixture owner it
+exposes the static synthetic owned catalog; for another authenticated owner it
+exposes **different account IDs**. Distinct in-memory
+unavailable/deleted/foreign conditions remove the referenced Cash account from
+current-owned eligibility; a moved foreign account is visible only to its
+modeled owner. Tests require the _real future T015 loader_ to reject a
+previously valid scene when its static assignment points to missing, deleted,
+foreign or another user's account. Simply overwriting `session.ownerId` or
+trusting the synthetic accountId is insufficient. The mock also supplies the
+current owner's synthetic category via a scoped in-memory query; no hosted/local
+data was seeded or mutated.
+
+Accepted T015 seam remains `loadAccountReviewFixtureSession(sceneId)` with
+explicit test mode, canonical current-user hydration and ordinary financial Save
+behavior, not a test-only Save shortcut. Missing or invalid user/reference state
+must fail closed.
+
+### F09 separate catalogue integrity from real hydration
+
+The original **15 catalogue-integrity cases** (7 named, 8 B1 parameterized)
+remain independent of missing T005/T010/T015 runtime modules. The T008
+**runtime-only** section now has **8 named cases + 3 missing/deleted/foreign
+parameterized cases + 15 individually parameterized all-scene cases = 26** test
+cases. Including the catalogue, T008 authors **41** cases. T006 authors **10**
+cases after adding F01 default-inconsistency and F07 scope-switch/deferred-read
+coverage; the two owned files now author **51** cases in total, but **no new run
+evidence**.
+
+The 15 runtime scene cases resolve the **actual future T015 service** through
+ordinary synchronous `jest.requireActual<typeof import(...)>(...)`, and pass its
+output to the **actual canonical** `accountReviewSessionSchema.parse` from
+`@monyvi/logic`. They assert authenticated owner/source, scene row/group counts,
+actual checked counts, review-reason row counts, SMS fingerprint/Voice-null
+boundaries and zero direct mock DB financial writes. The existing 20 M01–M20
+mappings and approved exact B1 counts are unchanged. These runtime cases remain
+intentionally **Red/pending** until the genuine canonical schemas and real T015
+service are implemented.
+
+The only virtual module is the **future T010 read-model dependency** used by the
+T008 fixture-entry test, not either actual service under test. The real T006
+loader SUT stays unmocked/unvirtualized, and the real T015 loader SUT stays
+unmocked/unvirtualized. Rejection tests resolve the real module/export
+**before** `expect(...).rejects`, preventing missing-module failures from
+masquerading as successful runtime gating. No `await import()` remains; no
+changes to global Jest flags.
+
+### Actual verification and ownership boundary
+
+- GitHub branch ref was refreshed at the exact reopened SHA before any mutation.
+  Sole writer stayed on `codex/395-ui-worker`.
+- The pre-receipt HEAD was rechecked before the final report edit. Test-file
+  source and unchanged JSON were read back. A static source inspection checked
+  mock scope capture, `jest.requireActual` occurrences, no dynamic imports,
+  future-SUT nonvirtualization, 15-scene/20-scenario integrity and exact B1
+  counts. This is **not** a Jest/TypeScript/lint result.
+- **Tests actually executed in this correction leaf: NONE.** Root alone reruns
+  the affected local batch; 21/37 is a **prior** run and must never be reported
+  as a result of these changes.
+- The reopened correction changed **T006, T008 and this validation report
+  only**. `apps/mobile/e2e/fixtures/shared-account-review.json` remains
+  **byte-identical**, and the original branch-versus-implementation-context
+  cumulative delta stays within the four-authorized-path allowlist.
+- Root/Core own canonical schema implementation and compatibility with existing
+  Voice behaviors. T010/T015 production implementation requires a separate grant
+  after canonical types freeze and meaningful Red. No production code, SQL,
+  business documents, PR/issues/Pages/root branch, provider call, hosted/local
+  seed/reset/deploy, emulator or Maestro operation was performed.
+
+**F01/F07/F08/F09 CORRECTION HANDOFF COMPLETE. EXCLUSIVE TEST LEAF OWNERSHIP
+RELEASED; ALL WRITES FROZEN.**
+
+---
+
+## 9. T010 — bounded production-read-model PLAN ONLY (awaiting root Red and source grant)
+
+**Checkpoint / authorization:** owner-authorized **planning and publication of
+this section only** on `codex/395-ui-worker`, exact starting HEAD
+`ad9c3bbac355e4024b038643312269d50177aafa`. No T010 source lease, test rewrite,
+production modification, generator change, Core-file ownership, or check
+execution is authorized by this plan. The next step is **root acceptance of this
+plan + actual T006 Red checkpoint + separate explicit T010 write grant**, with a
+fresh immutable branch HEAD/ownership lease. Preserve all preexisting T006/T008
+review receipts and reports without reopening them.
+
+### Evidence and frozen interface
+
+| Requirement or source      | Actual pinned evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation task            | [T010 in tasks.md L86–95](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/tasks.md#L86-L95): one local service for owned batched account/bank/sender read, never exposing balances or full IDs to provider                                                                                                                                                                                                                                                                                                                                                                                                |
+| Account/context wire       | [T004 L54–60](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/wire-shapes.md#L54-L60); immutable source schema at [Core `schemas.ts` L94–113](https://github.com/Msg22/Monyvi/blob/0700eb3e6023ea33a91f8662515d98e644087112/packages/logic/src/account-review/schemas.ts#L94-L113), whose **RequestContext/AccountContext subtree is accepted** (not the whole T009)                                                                                                                                                                                                                            |
+| Evidence/provider boundary | [`parser-evidence.md` L23–39](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/parser-evidence.md#L23-L39) excludes private balances/full identifiers/foreign or soft-deleted entries, never trims evidence to fit provider payload                                                                                                                                                                                                                                                                                                                                                              |
+| Default eligibility        | [`review-commands.md` L36–53](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/review-commands.md#L36-L53): precisely one **eligible** active default, no arbitrary choice on zero/multiple defaults; SMS ordinary source cannot pick Cash                                                                                                                                                                                                                                                                                                                                                       |
+| Accepted F01 output        | `loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>` returns **exactly** `{ ownerId, preferredCurrency, accounts, providerContext }`. Local account fields come from canonical `AccountReviewRequestContext["accounts"][number]` **plus** `Account["isDefault"]`, and providerContext stays the strict canonical request shape                                                                                                                                                                                                                                                                                                                 |
+| Tests-first                | [`T006` tests at frozen authored base](https://github.com/Msg22/Monyvi/blob/76c9d0c30e49426c08a285edf6db472f156abb5e/apps/mobile/__tests__/services/account-review-read-model-service.test.ts), blob `91b84ac6da7ccfaf0b3b24b36612325df966b3bb` (10 source-authored cases, not newly run by this worker)                                                                                                                                                                                                                                                                                                                                                                |
+| Existing user scope        | [`user-data-access.ts` L59–112](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/apps/mobile/services/user-data-access.ts#L59-L112), [L121–197](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/apps/mobile/services/user-data-access.ts#L121-L197) and [L305–374](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/apps/mobile/services/user-data-access.ts#L305-L374) — `getCurrentUserDataScope()`, scoped `queryOwned` and batched `queryChildrenOfOwnedParents`, authenticated-user recheck available                                                                      |
+| Persisted fields           | [`BaseAccount` L31–42](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/packages/db/src/models/base/base-account.ts#L31-L42); [`BaseBankDetails` L25–29](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/packages/db/src/models/base/base-bank-details.ts#L25-L29); [`BaseAccountSmsSender` L25–30](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/packages/db/src/models/base/base-account-sms-sender.ts#L25-L30); [`BaseProfile` L29–36](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/packages/db/src/models/base/base-profile.ts#L29-L36) |
+| Governance/runtime         | Main [`AGENTS.md`](https://github.com/Msg22/Monyvi/blob/7838df64eb9b3828c6e8f1a02f590b008d5435fd/AGENTS.md), portable frontend persona, TDD guide; approved [policy revision](https://github.com/Msg22/Monyvi/commit/8a96f74c09a5c3d62ac37f1d965c80d10605fce0) routes Normal ChatGPT → verified free OpenCode → Antigravity, **native only after Mohamed's explicit prior permission**. None of those runtimes were delegated or probed in this plan                                                                                                                                                                                                                    |
+
+**F01 local interfaces (source-owned, not new wire/domain enums):** In the
+proposed `apps/mobile/services/account-review-read-model-service.ts`, export a
+readonly local `AccountReviewLocalAccountSnapshot` extending the exported
+canonical `AccountReviewAccountContext` inferred from the RequestContext account
+member, adding `readonly isDefault: Account["isDefault"]`. Export readonly
+`AccountReviewAccountSnapshots` with `ownerId: string`,
+`preferredCurrency: AccountReviewRequestContext["preferredCurrency"]`,
+`accounts: readonly AccountReviewLocalAccountSnapshot[]`, and
+`providerContext: AccountReviewRequestContext`. `AccountReviewAccountContext`
+and `AccountReviewRequestContext` are inferred canonical **type-only** imports
+from `@monyvi/logic`; currency/account types come from DB-generated unions,
+never copied `"EGP"|"USD"` or `"BANK"|"CASH"` definitions. Reuse the accepted
+actual runtime `accountReviewRequestContextSchema` **only** to validate
+`providerContext`. No local alternate Zod schema, model/table field, package
+barrel edit, or provider wire key.
+
+### Proposed T010 implementation sequence — dependent on the next explicit source grant
+
+1. **Freeze a single authenticated owner:**
+   `const scope = await getCurrentUserDataScope()`; retain
+   `const ownerId = scope.userId`, which the approved helper captures in
+   closures **once**. No unscoped `database.get(...).query().fetch()`, no
+   observable/hook or network access, and no cached snapshots crossing
+   logout/login. Before returning anything, compare a fresh
+   `getRequiredCurrentUserId()` with `ownerId`; fail closed with existing
+   `AUTH_SCOPE_CHANGED` error on mismatch. A safe route may reuse the existing
+   `assertExpectedCurrentUser` helper, but if selected, amend only the
+   authorized T006 mock to expose it **after source grant**; the current test
+   mock already implements `getRequiredCurrentUserId`, so an equivalent final
+   recheck does not require test weakening. Do **not** return partially gathered
+   data on missing/switching owner or failed read.
+2. **One user-scoped accounts + profile fetch each:** using
+   `scope.queryOwned(database.get<Account>("accounts"), Q.where("deleted", false)).fetch()`
+   and
+   `scope.queryOwned(database.get<Profile>("profiles"), Q.where("deleted", false)).fetch()`,
+   with exact generic model types and no `any`/unsafe cast. Execute as
+   independent reads with `Promise.all` if error semantics are preserved.
+   Require a real active **current-owned** profile carrying supported
+   `preferredCurrency`; missing or conflicting active profiles fail/recover
+   rather than guessing EGP or using a foreign/deleted record. Retain every
+   active owned account's `isDefault` flag as-is (including no default or
+   multiple defaults); do **not** resolve a winner in the read service.
+3. **At most one owned batched query per child table:** derive the exact parent
+   accounts from the owned active rows. Use
+   `scope.queryChildrenOfOwnedParents(database.get<BankDetails>("bank_details"), ownedActiveBankAccounts, "account_id", Q.where("deleted", false)).fetch()`
+   and the same helper for `AccountSmsSender` with owned active account parents.
+   Never fetch every account's children separately (N+1) or join by
+   name/provider. If there are zero eligible parents, produce empty children
+   without querying foreign/global child rows. The helper builds
+   `account_id IN (owned-parent-IDs)` and asserts parent ownership. Child read
+   failures propagate; do not reinterpret as a safe missing suffix/sender.
+4. **Deterministic, conservative shaping:** key active children by `accountId`
+   (owned UUID), not nickname, provider display or SMS sender. For Bank,
+   `bank_details.cardLast4` is a persisted optional **number**, while T004
+   requires exactly four ASCII digits or **null**. Convert a valid integer
+   0–9999 to `String(value).padStart(4, "0")`, preserving `0007`; never project
+   `accountNumber` or other full identifiers. Invalid or conflicting multiple
+   live bank-detail suffixes must not be arbitrarily selected; treat as an
+   integrity/recovery concern, preserving privacy and consulting root if source
+   policy does not define the exact rejection mode. Cash/Wallet are not assigned
+   invented bank/card metadata. Sender names come only from current-owned,
+   non-deleted `account_sms_senders.senderName`; apply existing sender
+   normalization/duplicate rules without inventing aliases, preserve safe
+   display spelling and a stable deterministic order. Normalize optional
+   persisted `institutionId` and `providerDisplayName` to required
+   `string | null` exactly; never treat missing values as AI evidence.
+5. **Two distinct projections from the same captured rows:** construct
+   `accounts` as canonical eight account-context fields **plus** `isDefault`,
+   with stable account-ID ordering. Build `providerContext` **explicitly** with
+   `{reviewContractVersion:"account-review/v2", preferredCurrency, accounts:[{id,name,currency,type,institutionId,providerDisplayName,cardLast4,senderNames}]}`,
+   not via `...localAccount`/spreading a DB model. This enforced whitelist must
+   contain no `ownerId`, `isDefault`, `balance`, `financialRevision`,
+   `accountNumber`, full card data, raw sender-message body, deleted/foreign
+   metadata, or UI/internal flags. Run
+   `accountReviewRequestContextSchema.parse(providerContext)` before exposing
+   provider data. Do not validate or rebuild local account snapshots by parsing
+   away `isDefault`.
+6. **Revalidate and return atomically:** perform the final current-owner check
+   **after** all awaited account/profile/child reads, normalization, and strict
+   provider projection. On owner mismatch, missing profile, malformed
+   projection, failed child read, invalid identifier or source corruption,
+   throw/recover without exposing any partial context. Return the full four-key
+   result only on a successful scoped read. Runtime offline is supported by
+   WatermelonDB; no provider request, SQL, sync, account write, migration, event
+   side effect, or new table.
+
+### T006 / F01 / F07 acceptance and evidence to obtain at the root gate
+
+- **Current 10 T006 cases are kept intact**, not weakened: strict four-key
+  response, three active owned Bank/Cash/Wallet examples, `0007`, expected
+  nullable keys, provider-context privacy/closed shape, one accounts/profile
+  query and at most one batched bank/sender query each, empty accounts, owner
+  A→B isolation, zero/multiple local defaults preserved without leaking
+  `isDefault`, immutable scope's deferred query ownership, in-flight owner
+  switch rejecting after final validation, missing profile, child-read failure.
+  Existing mock `Q.where`/batched helpers are suited to this plan.
+- **Root prerequisite:** run the latest corrected T006 batch on the frozen
+  schema/worker integration worktree and **record actual meaningful Red** before
+  source edits, distinct from unrelated missing-module/hoist/test-runner
+  failures. Root decides the T010 write gate after inspecting this plan and test
+  results; this report does **not** claim Red, Green, typecheck, lint,
+  formatter, device, or hosted test execution.
+- **After a separate exclusive grant:** source/test owner may create only
+  `apps/mobile/services/account-review-read-model-service.ts`, boundedly correct
+  `apps/mobile/__tests__/services/account-review-read-model-service.test.ts`
+  **if a real assertion/mock defect is observed**, and append to this
+  `ui-wave1.md` report. No other writable files, imports of other workers'
+  unpublished schemas, generator/SQL/financial writer/fixture service edits. Do
+  not remove the security check or change F01 contract merely to Green a test.
+- **Root-controlled Green:** focused Jest T006 behavior + mobile TypeScript,
+  scoped ESLint with repository `--rulesdir`, Prettier/hook check, static source
+  privacy check, and independent review of any exceptional bank/sender data
+  handling. Device/MAESTRO is outside this service leaf. Record exact runner
+  outputs, failures, untouched feature dependencies, diff and ownership release
+  only when those checks are actually observed.
+- **Protected parallel ownership:** Core owns H1/H3/H4 schema/test corrections
+  and all T009 generated vocabulary/barrel files; T014 owns uncertain-currency
+  normalization (proven omission remains preferred currency), T027/T048 owns
+  save-state/financial guards, and root owns integration/ledger/checks. T009
+  **overall remains unaccepted**; its RequestContext/AccountContext subtree
+  alone is accepted for this parallel plan. Any observed incompatible
+  canonical-type or unresolved schema dependency is a **STOP/escalate**
+  condition, not permission to rewrite it.
+
+### Plan receipt, limits, and pause
+
+**Actual work in this checkpoint:** immutable GitHub source/governance reads,
+inspection of real user-scoped helper APIs and existing DB model fields, and
+this **report-only** publication. No T006 test modification, T010 service
+creation, Core schema change, helper export, financial save/fixture API, branch
+merge/PR/issues/Pages, E2E, hosted action or native worker. Runtime checks **NOT
+RUN** by this author; prior root reports remain external evidence, not a fresh
+pass.
+
+**T010 PLAN-ONLY HANDOFF — STOP FOR ROOT PLAN ACCEPTANCE, NEXT MEANINGFUL RED
+CHECKPOINT, AND EXPLICIT PRODUCTION FILE GRANT. ALL OTHER WRITE OWNERSHIP
+FROZEN.**
+
+---
+
+## 10. T010 — source-only implementation handoff (exclusive bounded grant)
+
+**New explicit authorization:** after accepting the Section 9 plan, root
+reported its affected **55-mobile-case** batch: **22 PASS / 33 FAIL**,
+comprising **26 future fixture-service module-absence failures** and **7
+remaining parser behavior failures**. The T006 file stopped at the missing new
+`account-review-read-model-service` import; **zero T006 assertions executed**.
+This was accepted as **new-API-absence tests-first Red for creating T010**,
+**not** proof of behavior, security or T010 assertion correctness. All root-run
+figures are historical checkpoints supplied by root. The Core
+`RequestContext/AccountContext` subtree at
+`0700eb3e6023ea33a91f8662515d98e644087112` is accepted; **whole T009 is not
+accepted**, with H1/H3/H4 still exclusively Core-owned.
+
+**Source lease:** branch `codex/395-ui-worker` started at exactly
+`61838678feabf1c514cadda85c00c245b3d86a7b`; GitHub exact-ref refresh matched
+before the first edit. Sole writer was this Normal ChatGPT lane. Authorized only
+`apps/mobile/services/account-review-read-model-service.ts`, existing
+`apps/mobile/__tests__/services/account-review-read-model-service.test.ts`, and
+this report. Protected Core schema/vocabulary/tests/barrel, account/payment
+services, fixture service, SQL/DB files, other test files, B1/artifacts and
+integration branch were untouched.
+
+### Exact implemented T010 boundary
+
+**New `apps/mobile/services/account-review-read-model-service.ts`**, source blob
+at final source checkpoint `0832fb64885637a0bf4b03f9291ba61df1c8e0b0`.
+
+- Exports
+  `loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>`.
+  `AccountReviewLocalAccountSnapshot` **extends the canonical inferred
+  `AccountReviewAccountContext`** from `@monyvi/logic` with only
+  `readonly isDefault: Account["isDefault"]`. `AccountReviewAccountSnapshots`
+  has exactly `{ ownerId, preferredCurrency, accounts, providerContext }`; no
+  copied currency/account union or new DB schema, logic generator, or barrel
+  export.
+- `getCurrentUserDataScope()` captures the current owner **once**. One
+  `queryOwned(..., Q.where("deleted", false))` read per `accounts` and
+  `profiles` collection; exactly one `queryChildrenOfOwnedParents` for active
+  owned BANK `bank_details` and one for active owned `account_sms_senders`, each
+  filtered active; zero-parent cases query no unscoped child records. No per-row
+  N+1 reads, write, network, provider call or cache crossing sessions.
+- Requires **exactly one** active owned profile and preserves its preferred
+  currency; missing/duplicate/inaccessible profile fails closed instead of
+  defaulting to EGP. Active account IDs must be unique/current-owned/not
+  deleted; invalid runtime `isDefault` fails closed. Valid zero and multiple
+  default flags are preserved **locally** without assuming a preferred default.
+  A final `getRequiredCurrentUserId()` check against the captured owner occurs
+  **after all async queries and strict context parsing**; owner change/logout
+  rejects before returning any context.
+- Bank details are joined **by owned parent account UUID**, never by
+  name/provider. Valid numeric suffix `7` converts to exactly `"0007"`, optional
+  absent suffix stays `null`; noninteger/out-of-range/non-numeric runtime suffix
+  and multiple live details per bank (even duplicate identical suffixes) throw
+  instead of silently picking arbitrary evidence. Cash/Wallet do not receive
+  invented Bank digits. Child results with out-of-scope parents fail closed.
+- Only persisted, active, current-owned sender aliases are admitted.
+  `normalizeAccountSmsSender` is reused for normalization/duplicate detection;
+  display spelling is whitespace-normalized, stable and deterministically
+  sorted, with no new alias inference. Empty/invalid active sender and
+  unexpected child-parent scope fail closed; soft-deleted and foreign senders
+  are never projected.
+- Constructs local snapshots explicitly as the eight canonical account identity
+  fields plus `isDefault`; constructs the provider account **separately** using
+  a literal eight-field whitelist. **Only** `providerContext` is passed through
+  the canonical `accountReviewRequestContextSchema.parse`. No local-default,
+  owner ID, balances, full account/card identifiers, financial revision, raw
+  SMS/message contents or model objects enter provider JSON; no extra provider
+  wire fields.
+- Errors are stable local codes without logging sensitive values. The service
+  does not create a financial action, call Supabase, start sync, mutate
+  WatermelonDB, implement a hook/UI, or touch the T015 fixture loader.
+
+### T006 behavior assertions retained and extended
+
+**Owned test path:**
+`apps/mobile/__tests__/services/account-review-read-model-service.test.ts`, blob
+at final test checkpoint `5c7625ea996219adcaffb72f8c645a6f39e61706`.
+
+Preserved all existing 10 named T006 assertions (F01 strict two-projection
+shape/privacy, batched queries, masked suffix, zero/multiple defaults, owner A→B
+isolation, immutable captured scope, delayed read with final owner change,
+missing profile and failed children). Strengthened deferred owner rejection to
+assert the existing `AUTH_SCOPE_CHANGED` stable code rather than any error.
+
+Added **six** individually named cases plus **two** parameterized test
+definitions (**5 invalid suffix values + 2 duplicate live Bank details cases**),
+for **23 authored concrete T006 cases** in this source file. New integrity
+coverage:
+
+1. Duplicate active owned profiles reject instead of choosing preferredCurrency
+   arbitrarily.
+2. Corrupted persisted local default boolean rejects, and duplicated owned
+   account IDs reject before child reads.
+3. Invalid live Bank suffixes `-1`, fractional `7.5`, `10000`, `NaN`, `Infinity`
+   reject; multiple live Bank details reject whether same or conflicting suffix.
+4. Missing Bank suffix remains honest `null`.
+5. Existing-normalizer sender duplicates coalesce with deterministic safe
+   visible spelling; private/deleted/foreign identifiers never enter provider
+   output.
+6. Blank active sender alias rejects instead of silently erasing identity
+   evidence.
+
+Tests use existing in-memory scoped mocks, synthetic IDs and Jest only; no real
+customer data, unsafe casts, `any`, runtime dependency installation or
+additional fixture source.
+
+### Observed verification vs still-unrun gates
+
+- **Remote GitHub checks actually performed:** exact branch lease refreshed
+  before each mutation; created the new service and updated only the existing
+  T006 file. Re-fetched published blobs; static source inspection verified
+  scoped/batched helper calls, distinct provider whitelist, accepted local type
+  imports, final owner recheck, no DB writes/private logging, and explicit
+  fail-closed error branches. The sole post-source validation-report change
+  remains this section.
+- **NOT RUN by this remote worker:** Jest/behavioral T006 Green, TypeScript,
+  ESLint custom `--rulesdir`, Prettier/normal commit hooks, Nx, E2E/MAESTRO,
+  device/emulator, provider/API, hosted/local SQL or sync. **Do not infer a
+  PASS** from a source string inspection. Root owns the single focused
+  integration batch after this freeze.
+- **Explicit temporary dependency:** `@monyvi/logic` exports the canonical
+  review context types and schema only on the independently frozen Core
+  revision; they do not yet exist on this isolated UI branch's original base.
+  Root must integrate the approved Core API subtree **without copying, stubbing
+  or changing Core-owned files here** before meaningful mobile typecheck/Green.
+- **Stop/follow-up:** if root observes a genuine T006 behavior/type/lint defect,
+  reconcile it against this exact source and the accepted F01 contract through a
+  **fresh explicit bounded grant**; do not weaken tests, relax owner scope or
+  broaden file ownership. Root handles code formatting, integration and
+  independent security review under the existing workflow. T016 and story
+  production remain gated.
+
+**T010 SOURCE AUTHORING COMPLETE — ROOT LOCAL CHECKS PENDING. EXCLUSIVE UI
+SOURCE/TEST/REPORT OWNERSHIP RELEASED; ALL WRITES FROZEN.**
+
+---
+
+## 11. T010 scoped test lint/refactor repair — observed root checkpoints
+
+**Authority/starting lease:** Reopened exclusively on `codex/395-ui-worker` at
+exact `8aff00b503e2b20734ca2a06ffa135a4587f800a`, following root's actual local
+**23/23 T006 PASS**. Root reported mobile TypeScript errors **only** in the
+still-unimplemented T015 fixture test module and `issueTags.includes` `never`
+typing, with **no T010 service type error**. Root's focused lint identified four
+preexisting T006 issues: no-await `fetch` at prior line 132, no-await
+`mockGetCurrentUserDataScope` near 209, no-await `getRequiredCurrentUserId` near
+274, and `no-unsafe-assignment` from `expect.arrayContaining` embedded in typed
+expectations near 460. Root also requested the single ~90-line source loader be
+split into cohesive helpers that remain under **50 source lines even after
+normal formatting**. These are **root-reported pre-repair observations**, not a
+new locally executed Green result.
+
+**Only permitted actual changes:**
+
+1. `apps/mobile/__tests__/services/account-review-read-model-service.test.ts`,
+   repair commit `1ec0aaa0dd4a8bea7453a5a54fe124c712141af9`: the mock child
+   `fetch` now returns `Promise.resolve(filteredRows)` or
+   `Promise.reject(existingError)` rather than `async` without `await`;
+   `mockGetCurrentUserDataScope` captures the same immutable owner in a
+   synchronous factory returning `Promise.resolve(scope)`;
+   `getRequiredCurrentUserId` returns `Promise.resolve(mockCurrentOwnerId)`. The
+   delayed owner-switch mock account read **still contains its original `await`
+   gate**, and rejects on the same `AUTH_SCOPE_CHANGED` failure; no timing/error
+   semantics were intentionally relaxed. `expect.arrayContaining` use inside
+   object matchers was replaced by individually typed
+   `AccountReviewLocalAccountSnapshot` Bank/Cash/Wallet full-object expectations
+   and a typed canonical `AccountReviewAccountContext` Bank provider
+   expectation, with exact canonical version/currency checks. All **23
+   previously passing cases and security/privacy assertions** remain.
+2. `apps/mobile/services/account-review-read-model-service.ts`, refactor commit
+   `a799c0824435310e1bd8a31b9824493ef51708f9`: helper decomposition only; **no
+   public API/signature, persisted field, new key, account policy, runtime
+   provider call or writer behavior change**. Cohesive functions own scoped
+   account/profile reads, single-profile integrity, unique active owned
+   accounts/default flags, batched bank and sender reads, child joining, local
+   projection, and strict provider whitelist. Runtime persisted sender
+   validation is extracted to `readPersistedAlias`. The exported loader performs
+   read/composition then a fresh authenticated-user recheck before returning
+   `{ownerId, preferredCurrency, accounts, providerContext}`. The
+   `getCurrentUserDataScope()` result remains the one immutable owner scope;
+   queries use the same `queryOwned` and batched `queryChildrenOfOwnedParents`
+   helpers. No new imports outside the authorized T010 service; only a
+   **type-only** import for existing `CurrentUserDataScope` was added.
+3. This section of `validation/ui-wave1.md`, documenting exact source/test
+   deltas and the separately requested T015 **plan-only** feasibility.
+
+**Static inspection on published immutable blobs (not a formatter run):** no
+`expect.arrayContaining` remains in T006; all three specified no-await test
+callbacks now return typed Promises, while the delayed account-read retains its
+`await`. Both scoped child batches and both active-owner base reads remain,
+provider projection still uses an explicit whitelist and
+`accountReviewRequestContextSchema.parse`, no `any`/unsafe casts, no DB write,
+no network request, no credentials or private logs. Fifteen named source
+functions were enumerated; initial static source spans were at most ~30–35 lines
+including the refactored sender helper and loader (the repository's normal
+Prettier is **NOT RUN** here). **No Jest, TypeScript, custom lint, formatter or
+hook execution by this worker.** Root must reformat and rerun the affected batch
+after this freeze before considering Green. T015's unrelated TypeScript errors
+are deliberately not fixed in this grant.
+
+## 12. T015 fixture runtime feasibility — PLAN ONLY, NO IMPLEMENTATION
+
+### Feasibility verdict and material blockers
+
+**Conditional feasibility, NOT currently demonstrated as a working full-app E2E
+path.** The existing
+[T008 test catalogue](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/__tests__/e2e/account-review-fixtures.test.ts)
+contains **15 static integrity cases** and **26 deferred runtime-entry cases**.
+The
+[JSON catalogue](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/e2e/fixtures/shared-account-review.json)
+has **15 scenes** and M01–M20 mappings; it explicitly calls itself
+`monyvi-account-review-fixture-descriptors/v1` and states it is **not** a
+persisted `AccountReviewSession`. Its opaque owner/account/category references,
+field `issueTags` including illustrative `"amount"`/`"category"`, group
+structures lacking canonical session fields, and synthetic source-fingerprint
+labels are **not** valid runtime proof of current-owned financial identities,
+real SMS parser fingerprints, or full canonical session invariants. Do not
+serialize this catalogue directly to the screen, reconstruct an owner by
+replacing a string, or treat static GUIDs as live financial IDs.
+
+**Actual app harness constraints inspected:**
+
+- [E2E gate](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/config/e2e-test-config.ts#L71-L103):
+  `isE2eTestMode()` checks the public `e2e` flag but **does not by itself refuse
+  `NODE_ENV=production`**. T015 entry must enforce **both** explicit E2E mode
+  and a separate non-production guard, at the service **and route-entry**
+  boundaries. SMS fixture parser settings are source-specific and are not
+  sufficient to authorize a Voice fixture. All unregistered scene IDs must fail
+  closed.
+- [Existing local E2E setup](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/e2e/maestro/README.md),
+  [auth helper](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/e2e/maestro/helpers/ci-auth-bootstrap.yaml)
+  and
+  [deep-link auth helper](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/e2e/maestro/helpers/ci-auth-deeplink-bootstrap.yaml)
+  authenticate a distinct test user. `helpers/seed-account.yaml` may create a
+  real Cash account through the existing Add Account UI, and `e2e-seed.js`
+  delegates to the separate `seed-fixtures/seed-engine.js` for local/CI setup.
+  **These are separate harness-owned preparation paths, not T015 powers to
+  create or overwrite bank/financial user data.**
+- [Actual E2E account seed](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/scripts/seed-fixtures/seed-engine.js#L962-L1068)
+  currently includes owned `E2E Cash` EGP default, `E2E NBE Bank`,
+  `E2E QNB Bank` with institution `qnb-egypt` and suffix `5566`, and
+  `E2E Wallet` EGP. Its account UUIDs are **owner/seed-scope-derived** in
+  `buildSeedIds`, **not the T008 static account IDs**. The catalogue instead
+  assumes Cash EGP, QNB Everyday suffix `0007`, QNB Savings `9221`, CIB Main
+  `5566`, and a **USD** Wallet. It also refers to an invented category UUID. The
+  baseline E2E seed **does not meet all scene prerequisites** (notably
+  CIB/second QNB/Wallet currency and the static category). A normal manual
+  user's active account IDs are not predictable either. Do **not** simply match
+  `QNB` name or change account IDs until counts look right.
+- [Actual Voice route](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/app/%28private%29/voice-review.tsx#L42-L73)
+  receives legacy serialized `transactions` route params and
+  [saves via `batchCreateTransactions`](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/app/%28private%29/voice-review.tsx#L93-L104).
+  [SMS review](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/app/%28private%29/sms-review.tsx#L161-L243)
+  derives its review list from an authenticated, persisted SMS draft queue.
+  Neither presently accepts a canonical `AccountReviewSession` as a fixture
+  route param. A service-only `loadAccountReviewFixtureSession(sceneId)` would
+  **not** by itself open the approved R1/R3 session UI or make an SMS
+  restart/save journey real.
+- [Existing SMS fixture parser](https://github.com/Msg22/Monyvi/blob/8aff00b503e2b20734ca2a06ffa135a4587f800a/apps/mobile/services/testing/ai-sms-fixture-parser.ts#L27-L70)
+  matches known synthetic SMS sender/body and derives actual source fields from
+  a candidate, not from T008 descriptor hashes. There is no legitimate shortcut
+  from `issueTags` to an authorized persistent SMS draft.
+
+### Smallest honest T015 service contract (future authorized implementation)
+
+1. Accept a **single allowlisted `sceneId` string** through
+   `loadAccountReviewFixtureSession(sceneId)` only. Reject nonexistent IDs,
+   malformed/multi-valued router parameters, explicit production mode, non-E2E
+   mode, signed-out owner, or any attempt to pass `ownerId`, serialized
+   `session`, account/category IDs, financial records or Save arguments through
+   a deep link. No bypass from `shouldUseFixtureSmsParser()`. Use the existing
+   authenticated private runtime and current-owner guard; do not expose this
+   entry from normal builds.
+2. Obtain fresh **current-owner** account metadata from real T010
+   `loadAccountReviewAccountSnapshots()`, and check its owner still equals the
+   authenticated user immediately before returning, after all async reads.
+   Resolve every scenario's **semantic account role** against **active owned**
+   local snapshots using type, exact supported currency, canonical
+   institution/provider identity, masked suffix and approved sender/name context
+   as applicable, not a global/static index. Require an unambiguous **one-to-one
+   binding** of each referenced role, and fail closed on zero/multiple matches,
+   foreign/deleted accounts, incompatible currency, missing/contradictory
+   default flags or owner switch. Do not silently substitute an NBE for CIB or a
+   QNB `5566` for requested QNB `0007`. An unbound scene is **unavailable**, not
+   a fake E2E pass. Keep pending suggested groups as **proposals**, not created
+   bank rows; confirmed group state is still a review choice and cannot insert a
+   financial account.
+3. Resolve `syntheticCategoryId` by **separate genuine current-user-accessible**
+   category lookup (existing `queryAccessibleCategories` scope; system
+   categories may be shared). Bind only an unambiguous, active, compatible
+   category matched on an explicit canonical `systemName`/transaction type. Do
+   **not** invent a UUID, use an unrelated category solely because it exists, or
+   create/update a category. The static descriptor currently has only
+   `categoryId`; it **does not encode category semantics**. A future
+   harness-owned **optional local E2E review-fixture seed profile/source** may
+   provide exact owner-derived accessible category roles and a typed semantic
+   mapping under the **already approved full-feature code-only test setup**;
+   this needs ordinary exclusive file/task ownership and validation, **not a new
+   product approval**. T015 still never creates a category or writes a financial
+   record.
+4. Build **complete, source-correct, in-memory canonical review state** using
+   the approved T014 normalization/pure resolver and
+   `accountReviewSessionSchema.parse`, not manual Zod bypass, `as unknown as`,
+   extra copied enums or static-spread JSON. The descriptor omits full
+   source-specific `ParsedVoiceTransaction`/`ParsedSmsTransaction` objects, real
+   Date/category/identity evidence, canonical currency wrappers, assignment
+   origins/revisions, group evidence keys and `saveIntent` state. Construct a
+   valid synthetic parsed-input fixture **without AI/network**, with correct
+   per-source required values, real accessible categories and resolved
+   owner-eligible accounts. Treat `"amount"`/`"category"` tags as descriptive
+   expected _hard-issue categories_, not canonical review reasons; actual
+   session reasons must be from `ACCOUNT_REVIEW_REASON_CODES` and reflect real
+   validation. Voice `sourceFingerprint` remains null; SMS must use the app's
+   actual canonical fingerprinting scheme for synthetic source candidates or an
+   explicitly verified known-input fixture; descriptor 64-hex labels are **not**
+   evidence of actual hash equivalence. Row/session/group IDs are ephemeral
+   review identities and may be generated without mutating DB, but never treat
+   them as owned/persisted financial account IDs.
+5. **No provider calls, DB writes or persistence in fixture entry**, and
+   absolutely no creation of financial accounts or SMS draft queues to satisfy
+   preconditions. Preserve source-specific semantic guards: proven v2 omission
+   may use the real captured preferred currency;
+   ambiguous/conflicting/unsupported/unknown stays unconfirmed; SMS ordinarily
+   excludes Cash source, ATM destination binds compatible distinct owned Cash;
+   pending suggestions do not become active confirmed groups by default. After
+   building a complete session, strict-parse it, revalidate the current owner
+   and only then expose it to the existing review state facade. No Save
+   callback, mock writer, persistent seed or separate review reducer is added to
+   the entry function.
+6. **Normal Save remains unchanged:** if a user subsequently selects Save
+   through the approved integrated review UI, dispatch through the **real**
+   `saveSelectedAccountReview` / financial-action writer and its existing
+   guards, not `batchCreateTransactions` legacy fallback or test-only
+   persistence. T015 tests should assert **zero writes at session
+   construction**, not that a _later_ genuine Save is prohibited;
+   destructive/save-specific tests need their own separately authorized scoped
+   writer harness and outcome evidence.
+
+### Real-app route feasibility and honest E2E entry
+
+A later **separately authorized route/hook owner** must add a minimal
+_test-mode-only_ `sceneId` entry to the **actual private Voice/SMS review
+session routes** (not an alternate fake screen): e.g.,
+`monyvi://voice-review?accountReviewFixtureScene=r3-combined-en` and
+`monyvi://sms-review?accountReviewFixtureScene=sms-review-restart` are
+**proposed links, not currently implemented URLs**. The route must accept only
+the allowlisted scene identifier, gate it again in non-production E2E mode after
+authentication, call the T015 service, install a fully validated
+`AccountReviewSession` into the **same canonical review facade** used by regular
+Voice/SMS, and show a clear disabled/unavailable state on missing data or
+changed owner. Ensure response/route generation invalidates on logout, new
+session, or navigation so late callbacks cannot restore previous-user state. A
+deep link that merely injects `transactions=JSON.stringify(...)` into legacy
+Voice review or displays a standalone fixture card is **not** proof of the
+approved review journey. Existing Maestro `openLink`/authenticated bootstrap
+illustrates how a future owned E2E journey could enter the actual route; new
+YAML, route parameter wiring, facade integration, and device execution require
+**separate grants**, not this report. Never put secrets/session payload or whole
+transaction JSON in a link.
+
+**Explicit feasibility dependency (root-accepted clarification):** the present
+baseline E2E accounts differ from the catalogue, so the future **harness/source
+owner may extend the existing local E2E seed source with an optional
+`review-fixture` profile** supplying the necessary owner-derived account roles
+and genuine accessible categories. This is **code-only test setup already
+included in the approved full feature scope; no new product decision or approval
+is necessary**, although its source owner still needs a fresh exclusive
+file/task lease and must validate the resulting current-owner relationships. No
+fixed catalogue UUID is relabelled or treated as a persisted account/category
+ID. **T015 loader itself never seeds or writes**; it reads and validates the
+already prepared current-user context, and B1/JSON expected counts and privacy
+inventory remain unchanged. The 15 scenes can be unit-tested with genuine scoped
+model data now, but **cannot be claimed as running-app E2E** until the optional
+local fixture profile's exact role/category setup, authenticated route entry and
+canonical session hydration are actually proven. Real UI rendering and normal
+Save remain unproven until the canonical review facade integration (**T054**,
+with other T016/route prerequisites); no standalone fixture route or test-only
+writer can close that gate.
+
+### Focused T008 test changes that would be needed **under a future separate test grant**
+
+- Keep the **15 catalogue-integrity cases** immutable and independent: source
+  references, B1 counts 7/5/2, 4/3/1, 2/0/2, 3/0/0, M01–M20 coverage, scene
+  groups/statuses, and synthetic privacy inventory. They prove descriptor
+  consistency only.
+- Replace the T008 runtime mock's direct `manifest.accountContext.accounts`
+  re-labeling at prior lines 19–61 with genuine **owner-specific** typed
+  `AccountReviewAccountSnapshots` fixtures whose runtime IDs **differ** from
+  static descriptor IDs. One scenario with suitable current-owned QNB/CIB/Cash
+  anchors may hydrate; missing/foreign/deleted/ambiguous anchors must fail
+  closed without changing `session.ownerId`. Explicitly test two distinct
+  authenticated users with distinct owned account sets and an in-flight owner
+  switch.
+- For each of the **15 parameterized scene cases**, demand the **real T015
+  service output** parse through canonical `accountReviewSessionSchema`,
+  including complete nested transaction shape/Date/category, state-specific
+  assignments, known versus unconfirmed currency, suggested-group reciprocal row
+  membership/revisions/status, exact selected/needs-review counts and unique
+  row/source provenance. Test that _actual bound account IDs_ are members of
+  current-owned eligible metadata and that _actual category IDs_ are in the
+  current accessible category set; never merely compare to the original static
+  UUIDs. Ensure removed tombstones remain detached and confirmed groups do not
+  select all linked rows.
+- Negative test current runtime `e2e` flag with `NODE_ENV=production`, disabled
+  `off`, unknown IDs, signed-out, no category, wrong
+  currency/type/provider/card, ambiguous role, missing/default-conflict,
+  foreign/deleted child, owner change during hydration, and no writes/provider
+  call. The target `account-review-fixture-service` must **never** be
+  virtualized: retain the real Jest `requireActual` pattern, with missing export
+  resolution **outside** `expect(...).rejects`, so missing-module errors cannot
+  masquerade as safe rejection.
+- Add separately authorized **actual user-visible Maestro** entry/projection
+  assertions once route/facade exists: the deep link opens the correct existing
+  review screen (rather than a fake route), EN/AR/dark/RTL display and B1 counts
+  reflect the validated session, selecting a pending group confirms shared
+  account while checking only the clicked row, failure/Save/restart assertions
+  run only against their real writer/queue/controlled test harness. Do not claim
+  a saved SMS draft, restart persistence, real financial-action replay or
+  provider interpretation from an in-memory-only session. M12/M18 and
+  provider/Android behavior remain their designated independent boundaries.
+
+### Gate, ownership and evidence honesty
+
+**Status:** **T010 REPAIR AUTHORED / T015 FEASIBILITY PLAN AUTHORED — RUNNER
+CHECKS PENDING / NO T015 IMPLEMENTATION.** The root's **23/23 T006 PASS**
+preceded these lint/refactor edits; new T006 Jest/type/lint/Prettier outcomes
+are **NOT RUN** by this remote worker. The separately reported T015 TypeScript
+issue (`issueTags.includes` argument inferred `never`) and missing loader import
+remain untouched, as required. No changes to `account-review-fixtures.test.ts`,
+shared JSON descriptor, E2E seed, auth/route components, account-service,
+canonical schemas, contracts, mockup/B1 assets, SQL, fixture loader,
+PR/issues/Pages, or main.
+
+**Next authorization:** root reruns focused T006 + TypeScript/custom
+ESLint/normal formatting hooks and confirms the refactor satisfies `<50`
+formatted lines per function, independently checks the privacy/owner contract,
+and separately decides T015 route/canonical binding test plan dependencies. This
+plan is **not** authority to begin fixture service, database setup, route
+integration or E2E execution. On final report commit, release the exclusive
+three-file T006 grant and freeze all source and report writes.
+
+---
+
+## 13. T012–T014 — canonical parser success reviewSession seam (PLAN ONLY)
+
+**Status: TECHNICAL RECONCILIATION PROPOSAL; NOT AN IMPLEMENTATION GRANT OR A
+PRODUCT/SCHEMA REDESIGN.** Plan-only authorization starts from branch
+`codex/395-ui-worker@76a68b3fd9d1abecca74f7b43aa02e6234e6df09`. The owner
+accepts the **full** canonical `AccountReviewSession` as the only review-state
+DTO in parser success results, rather than Core's earlier proposed
+`Pick<AccountReviewRow, ...>` subset that omits account/currency evidence,
+complete transactions, groups, and revisions. **Existing legacy parser
+`transactions`, quota/consent/refusal, progress, retry, and v1/live/headless
+behavior must continue unchanged.** The only new public result member proposed
+below is optional: `reviewSession?: AccountReviewSession`, emitted for a
+successfully requested/validated review-mode flow. T015 must return the exact
+same canonical session (no fixture shadow DTO). No route/adapter/transport/tests
+files were changed in this checkpoint.
+
+### Grounding in actual current source (read-only)
+
+- T004
+  [parser-evidence contract](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/parser-evidence.md#L1-L10)
+  reserves `reviewContractVersion: "account-review/v2"` on the **original Voice
+  multipart/SMS chunk request**. It preserves model/provider, consent, quota,
+  chunk scheduler, and v1 fallback;
+  [L84–125](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/parser-evidence.md#L84-L125)
+  requires submitted-input evidence matching, known-currency grouping,
+  request/chunk namespacing, no extra AI calls, and user override/tombstone
+  precedence.
+- T004
+  [wire-shapes L109–127](https://github.com/Msg22/Monyvi/blob/7e27eb55c642dccef44f4b977a8712ab320ecd18/specs/395-shared-account-review/contracts/wire-shapes.md#L109-L127)
+  freezes the complete `AccountReviewRow/Group/Session` fields, source financial
+  snapshot and required `categoryId`, plus distinct **known/unconfirmed
+  currency**. Canonical `AccountReviewSession` inferred from
+  [Core schema L617–664](https://github.com/Msg22/Monyvi/blob/0700eb3e6023ea33a91f8662515d98e644087112/packages/logic/src/account-review/schemas.ts#L617-L664)
+  has `ownerId`, `source`, `sessionId`, `sourceRevision`, `preferredCurrency`,
+  complete `rows`, `groups`, `removedEvidenceKeys`, `filter`, `revision`,
+  `operationGeneration`, and `saveIntent`. Row includes `accountEvidence`,
+  currency wrapper, sourceRefs/fingerprints, complete typed transaction,
+  assignment and `toAssignment`, reasons, selected/revisions/override flags;
+  group includes hashed evidence identity, linked row IDs/status and
+  revision/confirmation state. The subtree outside the approved
+  RequestContext/AccountContext API is still subject to outstanding Core
+  review/integration.
+- `AiVoiceParserOptions` today has `audioUri`, stable `requestKey`,
+  `callerTimeZone`, `categories`, legacy `accounts`, `preferredCurrency`,
+  `categoryRecords`, optional signal; `AiVoiceParserSuccess` has only
+  `transactions, transcript, originalTranscript, detectedLanguage`:
+  [apps/mobile/services/ai-voice-parser-service.ts:63](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-voice-parser-service.ts#L63)–L98.
+  Voice posts multipart once at
+  [apps/mobile/services/ai-voice-parser-service.ts:284](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-voice-parser-service.ts#L284)–L304;
+  current account-ID-first currency fallback at L479–L496 must **not authorize
+  v2 currency**, even though legacy output retains it.
+- `parseAiResponse(data, submittedFingerprints): ChunkAiResult` currently sees
+  neither current owner nor original submitted body/sender nor locally resolved
+  category:
+  [apps/mobile/services/ai-sms-parser-response.ts:130](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-parser-response.ts#L130)–L206.
+  Its v1 `AiSmsTransactionSchema.currency` currently requires/normalizes a
+  non-null string at L12–36. V2 **null/unknown** therefore needs a separate
+  typed canonical raw finance/advisory branch; it must not be erased as
+  malformed financial input or translated into proven omission. `ChunkAiResult`
+  at L72–86 retains completion/negative/terminal/unresolved/availability fields.
+- `ParseSmsContext` today has only categories and supported currency lists;
+  `AiParseResult` has legacy transactions plus existing safeguards:
+  [apps/mobile/services/ai-sms-parser-service.ts:78](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-parser-service.ts#L78)–L140.
+  `parseSmsWithAi` positional args end in optional
+  `expectedUserId, requestContext, requestKey`
+  ([apps/mobile/services/ai-sms-parser-service.ts:659](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-parser-service.ts#L659)–L667).
+  Existing `ChunkWork` supplies the actual per-chunk `requestKey` and submitted
+  messages; `ChunkRunInput` already carries candidate maps/categories
+  ([apps/mobile/services/ai-sms-chunk-runner-service.ts:112](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-chunk-runner-service.ts#L112)–L158).
+  `invokeParseChunk` explicitly builds one provider body and later calls
+  `parseAiResponse`
+  ([apps/mobile/services/ai-sms-chunk-runner-service.ts:307](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-chunk-runner-service.ts#L307)–L339,
+  L435–438), while `runChunk` correlates response to original candidates and
+  checks owner/abort before mapping (L445–465).
+- `mapAiTransaction` calls real `parseCategory` to obtain a category ID and
+  converts to `ParsedSmsTransaction`:
+  [apps/mobile/services/ai-sms-chunk-runner-service.ts:215](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/ai-sms-chunk-runner-service.ts#L215)–L245.
+  `ChunkAggregationState` and `applyChunkResolution` own current
+  concurrent/sequential/refusal/negative bookkeeping (L531–562, L672–827).
+  `SmsParserOrchestratorResult extends Omit<AiParseResult, "unresolvedCandidates">`
+  and retains safeguards/diagnostics:
+  [apps/mobile/services/sms-parser-result-contract.ts:61](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/sms-parser-result-contract.ts#L61)–L78.
+  Hybrid merging occurs at
+  [apps/mobile/services/sms-parser-orchestrator.ts:630](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/services/sms-parser-orchestrator.ts#L630)–L720;
+  therefore a per-chunk review group cannot simply be forwarded as the final
+  merged review session.
+- Current Voice navigation serializes only legacy transactions and transcript
+  through `serializeAiReviewParams`:
+  [apps/mobile/hooks/voice-flow-submission.ts:118](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/hooks/voice-flow-submission.ts#L118)–L145;
+  `useVoiceTransactionFlow` retains request owner/key across retries, so the new
+  optional session must share that logical lifetime, not be generated per render
+  or retry. `SmsScanContext` tracks a numeric route epoch/initiating user for
+  legacy SMS state
+  ([apps/mobile/context/SmsScanContext.tsx:19](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/context/SmsScanContext.tsx#L19)–L83);
+  that numeric counter is **not** the canonical UUID
+  `AccountReviewSession.sessionId`.
+
+### Recommended exact minimal public type/argument contract (proposal for root)
+
+**A. T012 Voice parser and request opt-in (one optional input and one optional
+output):**
+
+```ts
+// apps/mobile/services/ai-voice-parser-service.ts
+// Existing ParseVoiceOptions / AiVoiceParserOptions: additive only.
+readonly reviewAccountSnapshots?: AccountReviewAccountSnapshots;
+
+// Existing ParseVoiceResult / AiVoiceParserSuccess: additive only.
+readonly reviewSession?: AccountReviewSession;
+```
+
+The optional **whole** T010 `AccountReviewAccountSnapshots` input is local-only:
+it carries one captured owner and local default flags; **only** its canonical
+`providerContext` is placed on the existing multipart request together with
+`reviewContractVersion: "account-review/v2"`. No `isDefault`, balance, full
+identifiers, ownerId, or complete local snapshot is sent to Gemini. Presence is
+the v2 review-mode opt-in; absence retains today's `accounts`/currency payload
+and v1 behavior. `parseVoiceWithAi` retains the original quota/retry result
+union, transaction list and transcript; after actual v2 schema validation it
+invokes the T014 shared normalizer with **captured** `ownerId`, immutable
+requestKey, the full owned snapshot, already validated category map and original
+transcript. Do not compute the canonical `reviewSession` from a raw
+`ParseVoiceResponseSchema` echo or independently inside the UI. Revalidate the
+owner before returning the session and suppress stale async callbacks on
+logout/recording replacement.
+
+The real Voice start uses an already validated UUID request key (current
+`createRequestKey(): voiceRequestKeySchema.parse(randomUUID())`,
+[apps/mobile/hooks/voice-flow-submission.ts:16](https://github.com/Msg22/Monyvi/blob/76a68b3fd9d1abecca74f7b43aa02e6234e6df09/apps/mobile/hooks/voice-flow-submission.ts#L16)–L18);
+reuse that stable identity as the Voice session's UUID **when it meets the
+canonical UUID schema** instead of minting new identity on same-submission
+retries. The synthetic T007 `voiceRequestKey: "voice-logical-request-1"` is a
+**Ref**, not a valid canonical UUID session ID; future session tests must supply
+a valid owner-scoped UUID while still proving provider/ref alias scoping. Keep
+existing same-request retry semantics, no extra model request, and no new
+generated UUID on transient transport retry.
+
+**B. T013 SMS original request/response and raw intermediate (unchanged
+positional call shape):**
+
+```ts
+// apps/mobile/services/ai-sms-parser-service.ts
+// Existing ParseSmsContext, additive; forwarded through current context chain.
+readonly reviewAccountSnapshots?: AccountReviewAccountSnapshots;
+// Existing AiParseResult, additive.
+readonly reviewSession?: AccountReviewSession;
+
+// apps/mobile/services/ai-sms-parser-response.ts
+// Existing ChunkAiResult, internal additive typed evidence only:
+readonly reviewAdvisory?: AccountReviewSmsResponseV2;
+readonly reviewFinancialRows?: readonly AccountReviewSmsFinancialRow[];
+```
+
+`ParseSmsContext.reviewAccountSnapshots` opts into review-mode; existing
+`parseSmsWithAi(..., expectedUserId?, requestContext?, requestKey?)`
+signature/argument order stays intact. The context must be captured for one
+owner and checked against `expectedUserId`/current authenticated user before and
+after calls. `invokeParseChunk` must explicitly serialize
+**`context.reviewAccountSnapshots.providerContext` only**, under T004 keys,
+along with unchanged existing scanSessionId, scanKind, requestKey, messages,
+categories and supported currencies. The optional local snapshot is never spread
+into a provider JSON body. Existing 413 size/token refusal, 429 capacity,
+abort/consent, chunk splitting, fresh retry, negative/unresolved and candidate
+filtering remain authoritative; no quota precheck or second inference pass.
+
+Keep `parseAiResponse(data, submittedFingerprints)` **synchronous and its
+parameters unchanged**. Its sole responsibility on v2 is to validate the strict
+canonical raw v2 envelope/advisory when possible, independently recognize valid
+canonical financial rows (including `currency: null`), and retain typed evidence
+as `AccountReviewSmsResponseV2` or canonical `AccountReviewSmsFinancialRow[]`
+for downstream correlation. It must **not** invent `ownerId`, category UUID,
+complete `AccountReviewSession`, source body/sender, or a known currency. An
+invalid advisory cannot authorize a suggestion; retain otherwise valid financial
+rows for T014 as `unknown`/unresolved, with hard reason and without a fabricated
+durable negative fingerprint or extra provider retry. Legacy financial
+`AiSmsTransaction` and `transactions` parsing for nonreview/v1/live/headless
+remain unchanged, including old optional ATM/card rules. In review mode, if a
+null-currency v2 row cannot inhabit the legacy
+`ParsedSmsTransaction.currency: CurrencyType` result safely, **preserve it in
+canonical typed review input/session rather than dropping it or converting it to
+`preferred_omission`**. The final session must still contain the valid
+category/amount/source snapshot. Do not expose provider raw response as the
+session field.
+
+`AiParseResult.reviewSession` may be emitted only after the **whole admitted
+batch** is normalized against current-owner category/account data, with
+cross-chunk/group reconciliation. `SmsParserOrchestratorResult` inherits the
+optional property from `AiParseResult` (no new parallel DTO); if
+hybrid/trusted/local paths merge or override inputs, the orchestrator must use
+the shared T014 normalizer to produce the **final** session from merged records,
+not simply forward one chunk's AI-only session. If an unsupported mode cannot
+prove a trustworthy complete session, return legacy results without claiming
+`reviewSession` and surface unresolved/recovery state through existing
+safeguards.
+
+**C. T014 shared pure normalization and result pass-through:**
+
+No new `Pick<...>` review result interface. The future
+`apps/mobile/services/account-review-source-adapter-service.ts` should export a
+**single pure, explicitly typed**
+`normalizeAccountReviewParserResult(...): AccountReviewSession` using the
+canonical `AccountReviewSession`/row/group/evidence Zod types. Its internal
+input can be an existing typed Voice/SMS response plus actual current-owner
+snapshots, resolved accessible categories, submitted SMS candidates,
+source/request/chunk namespace, and previous owner-scoped review session for
+merge—**not** an opaque arbitrary-record tree or a new public partial session
+type. It should validate `accountReviewSessionSchema.parse(...)` and return it
+unchanged to optional parser success `reviewSession`.
+
+The session must populate **every frozen field**: owner/session/source IDs and
+canonical revisions, original financial transaction with required **accessible
+UUID `categoryId`**, amountDecimal, accountEvidence, typed known/unconfirmed
+currency, existing/suggested/unresolved assignment and `toAssignment`,
+selected/override flags, reasons, accurate Voice-null or canonical SMS
+fingerprint, group evidenceKey/suggestionRefs/reciprocal member
+IDs/status/revisions, tombstones, current filter and `saveIntent: null` for a
+newly parsed session. Do not substitute a truncated
+`Pick<AccountReviewRow, ...>`, a second `NormalizedReviewResult`, a stringly
+typed `reviewData`, or a raw JSON echo for `AccountReviewSession`.
+
+**Currency discipline (normative and non-negotiable):** a **valid proven v2
+`currencyEvidence.state="omitted"`** may produce
+`{state:"known", code: capturedPreferredCurrency, origin:"preferred_omission"}`.
+Explicit valid currency uses `origin:"explicit"`; user acceptance uses
+`origin:"user"`. `ambiguous/conflicting/unsupported/unknown`, malformed
+evidence, and v1 missing provenance produce `{state:"unconfirmed", reason: ...}`
+(v1 `legacy_unknown`), with unresolved account assignment, `selected:false`,
+hard reason, no active confirmed group and no Save. **The existing
+`ReviewableTransaction.currency: CurrencyType` required display/legacy field is
+not a currency-certainty source.** Do not turn a temporary
+display/financial-struct placeholder into known currency or a posted amount;
+only the independent canonical `row.currency` wrapper and fresh writer
+validation can authorize selection/Save. When a source-specific financial
+snapshot cannot safely be materialized, fail/recover that row explicitly rather
+than using a fabricated category or currency certainty.
+
+**Stable identities, replay and chunk merging:**
+
+- Pin owner UUID, canonical session UUID, source and originating request
+  identity **before** dispatch; use immutable `requestKey`/scanSessionId and
+  per-chunk `ChunkWork.requestKey` for _response-local alias namespaces_. Scope
+  `transactionRef`, `suggestionRef`, Voice logical request key and SMS
+  `messageId` by this namespace, never globally and never as a DB ID. The
+  existing `SmsAiRequestContext.scanSessionId: string|null` is not by itself
+  proof of a canonical UUID; establish a valid review session UUID once for the
+  logical scan, persist it across chunk retries/review lifetime, and validate it
+  before constructing a session. Do not treat the React
+  `SmsScanContext.reviewSessionId: number` as the canonical UUID.
+- Derive durable review `rowId` deterministically from **owner + canonical
+  session + source record** (SMS fingerprint/messageId plus stable intra-message
+  transaction identity, Voice stable logical submission plus stable row
+  identity) using approved cryptographic UUID formatting, not newly random IDs
+  per retry or the unscoped model ref. Reject duplicate/source-collision
+  ambiguities. Distinguish this stable row identity from per-chunk ref namespace
+  so `retryRequestMode:"fresh"`/a re-chunk cannot regenerate duplicate
+  transactions or orphan a confirmed group.
+- Group evidence keys come from normalized identity+currency+scoped source
+  provenance, never nickname/model-provided suggestionRef alone. Reconcile truly
+  equivalent groups across admitted chunks and retries **only** when full
+  currency/type/provider/card compatibility and source evidence match;
+  incompatible identities split/unresolved. Pending proposals are **not** active
+  confirmed groups. Preserve removed/tombstoned group evidence keys and
+  identical validated confirmation state; no `last-write-wins` on divergent
+  snapshots.
+- Respect `hasUserAccountOverride`, `hasUserCurrencyOverride`,
+  `removedEvidenceKeys`, group/row `revision`, selection flags and
+  `operationGeneration` when late chunks/retries arrive. Never replace the
+  current session from an out-of-order network result or reselect new rows
+  because a group was previously confirmed. A newly equivalent member may
+  inherit compatible account confirmation but remains **unchecked**. On
+  owner/session/generation change, abort or discard stale results; do not
+  synthesize inverse state or replay a Save intent. Confirmed groups and
+  selected rows are independent.
+- No additional Voice recognition or SMS grouping AI call, no changed
+  live/headless automatic financial action, no alteration of the existing chunk
+  scheduler, retry budgets, capacity/refusal envelopes or cancellation. Partial
+  successes remain actual financial rows with unresolved/retry metadata, not
+  fabricated full sessions.
+
+**Legacy pass-through (T054/route owner, not a T012–T014 write permission):**
+keep the existing `transactions`, transcript and SMS diagnostics/safeguard
+members of parser success objects. An optional validated `reviewSession` travels
+through existing **current-user-bound in-memory review state** into the
+canonical review facade/hook when review is requested. `serializeAiReviewParams`
+must not stringify the full session (or evidence/raw text) into a URL: use a
+bounded opaque, owner/session-scoped in-memory handoff reference if required,
+preserve existing route origin params and clear it on actor change/unmount. The
+SMS orchestration result may flow through the existing `SmsScanContext` session
+epoch, but add the optional actual `AccountReviewSession` only with correct
+owner/generation checks, clearing on logout/review reset. The real Voice/SMS
+review routes must consume that full typed session when present and choose the
+approved **real review Save** path; no parallel fixture UI, no legacy
+`batchCreateTransactions` fallback for selected v2 review Save. Existing
+v1/nonreview/live/headless callers ignore the optional field and follow existing
+behavior.
+
+### Exact file/owner breakdown and gated dependency order
+
+| Stage / owner (proposed; no current write grants)     | Minimal files / interfaces and responsibilities                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Hard dependency / stop                                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T011 Core/Edge** — existing independent Core owner  | Generated canonical provider/Edge projections, schema parity; no UI changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Freeze and independently verify before v2 transport activation                                                                                                                                                   |
+| **T012 Voice request/response owner**                 | `supabase/functions/parse-voice/index.ts`, `apps/mobile/services/ai-voice-parser-service.ts`: nullable v2 evidence and request discriminator, original single multipart call, additive optional T010 snapshots and `AiVoiceParserSuccess.reviewSession` construction via T014                                                                                                                                                                                                                                                                                             | Needs accepted Core T009, T011, T014 shared normalizer seam; no extra model invocation or changed retry                                                                                                          |
+| **T013 SMS transport/response owner**                 | `apps/mobile/services/ai-sms-parser-response.ts`, `apps/mobile/services/ai-sms-parser-service.ts`, `supabase/functions/_shared/sms-ai/sms-ai-provider.ts`; required **additional exact ownership grant** for `apps/mobile/services/ai-sms-chunk-runner-service.ts` because the real chunk mapper/transport lives there. Change only optional `ParseSmsContext.reviewAccountSnapshots`, typed canonical v2 raw intermediate and optional `AiParseResult.reviewSession`, explicit provider whitelist in existing request                                                    | Full existing SMS scheduling/safeguards/nonce/candidate correlation remain; T011 schema gate and root-owned transport tests                                                                                      |
+| **T014 shared normalizer + SMS merge owner**          | `apps/mobile/services/account-review-source-adapter-service.ts` (new, pure typed complete-session normalization) and `apps/mobile/services/sms-account-matcher.ts` (approved resolver integration). **Separately allocate** `apps/mobile/services/sms-parser-orchestrator.ts` to the same exclusive merge owner for source-aware hybrid/local/trusted results; `sms-parser-result-contract.ts` should inherit `AiParseResult.reviewSession` and need no change unless TypeScript proves otherwise                                                                         | Must not overlap T013's chunk runner or T012's Voice parser; late override, owner, grouping, retry tests and Core H1/H3/H4 gates                                                                                 |
+| **T007 Core tests / root test owner**                 | `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts`: replace invalid synthetic `"category-food"`/`"category-shopping"` assertions with genuinely accessible canonical **UUIDs** using existing synthetic category fixtures; also valid owner and canonical session UUID fixtures. Assert exactly `result.reviewSession` via `accountReviewSessionSchema.parse`, including full required nested transaction/category, original evidence spans, row currency/assignment/reasons, group reciprocity, source IDs/revisions, and one-call/refusal behavior | **No schema weakening** to admit non-UUID category strings. Root must observe meaningful Red then Green for complete normalized output; no blind recursive search/echo assertions                                |
+| **T054/T015 later route, facades and fixture owners** | Separately leased `apps/mobile/hooks/voice-flow-submission.ts`, `voice-transaction-flow-types.ts`, `useVoiceTransactionFlow.ts`, `apps/mobile/context/SmsScanContext.tsx`, actual Voice/SMS routes and T015 fixture service/test. Pass **full** `AccountReviewSession`, retain existing route/save/availability behavior; future T015 uses the same session type, no shadow DTO. Optional harness-owned local E2E `review-fixture` account/category seed source is **already full-scope test setup**, not part of this report-only change                                 | Different owners/waves; no actual route, fixture loader or seed is authored here. T054 canonical review facade plus T016 and the real approved Save writer are prerequisites before claiming route/Save evidence |
+
+**Known blocker outside this leaf:** the currently authored T007 fixture
+`smsCategories().id="category-shopping"` and Voice expected
+`categoryId="category-food"`
+([apps/mobile/**tests**/services/account-review-parser-adapters.test.ts:220](https://github.com/Msg22/Monyvi/blob/0700eb3e6023ea33a91f8662515d98e644087112/apps/mobile/__tests__/services/account-review-parser-adapters.test.ts#L220)–L240,
+L300–313) are not valid T004 canonical UUIDs. The existing `parseCategory` must
+yield an owned or accessible **real UUID** in `row.transaction.categoryId`; the
+test owner must update synthetic fixtures accordingly _after authorization_
+rather than relaxing `accountReviewRowSchema`. Current raw `parseAiResponse`
+also cannot resolve owner/category/body; do not assert a complete session from
+that function's return.
+
+### Required verification before root accepts this proposal
+
+1. **Signature compatibility:** old Voice/SMS callers with no
+   `reviewAccountSnapshots` still typecheck and behave as today; `reviewSession`
+   is absent rather than a fake empty canonical session. No new mandatory API
+   parameters, provider calls or API/DB writes.
+2. **True complete v2 content:** one valid Voice and one SMS integration case
+   parse returned `reviewSession` with the canonical schema and check `ownerId`,
+   UUID `sessionId`, source fingerprints (Voice null/SMS verified source), valid
+   category UUID, amount/evidence, known/unconfirmed currency, account
+   assignment, groups/evidence hash/link revisions, selection/override and
+   save-intent state. Do not pass with just `transactions.length` or
+   `nestedValues(...)`.
+3. **Uncertain currency and v1:** valid financial amount/category survives
+   malformed/uncertain advice as a blocked row; valid proven v2 omission uses
+   captured preferred; ambiguous/unsupported/v1 null never masquerades as
+   omission; invalid advisory does not create an account, group, negative
+   fingerprint or an extra AI attempt.
+4. **Chunk/refusal/override:** 1-chunk, multiple chunks, parallel versus
+   sequential, split/429/413/fresh retry, foreign/unsubmitted `messageId`,
+   duplicate refs, late prior-user result and late user override/tombstone;
+   preserve true existing availability, terminal/negative/refusal metadata and
+   no additional calls.
+5. **Separate later UI/E2E verification:** owner-scoped route handoff and actual
+   financial Save writer integration; no current device/runner pass can be
+   inferred from a plan. T015 remains **plan only** and uses the full canonical
+   session.
+
+**Executed by this remote author:** GitHub immutable source and contract reads
+only and this additive report publication. **NOT RUN/NOT CLAIMED:** Jest,
+TypeScript, ESLint, Prettier, generator, model/provider calls, local
+category/account setup, SMS/Voice transport, emulator, SQL, deployment or
+runtime UI. T010 root verification and Core T011/financial work are separate. No
+source, test, generator, route, fixture, contract, PR/issue/Page or native
+worker was changed/spawned.
+
+### Final owner checkpoint — tests, feasibility and frozen boundaries
+
+**Root's subsequently reported local verification after the T010 lint/refactor
+repair at `a799c0824435310e1bd8a31b9824493ef51708f9`:** T006 **23/23 PASS**,
+mobile typecheck reports only T015's **missing fixture loader** and the fixture
+`issueTags.includes` inferred-`never` problem; scoped lint **0 errors / 17
+warnings**, formatting **PASS**. Root has **accepted T010 behavior**. These are
+**root-observed results**, not tests or lint run in this read-only/report-only
+Normal ChatGPT leaf. Earlier historical T010 checkpoints remain valid as at
+their own commit time; this note supersedes only their pending-verification
+status.
+
+**Additional root lint findings elsewhere (not authorized for correction
+here):** T008 has **four mock-`async` require-await** warnings/errors plus **two
+missing-loader-derived unsafe-type** errors, and T007 has **three missing
+explicit return types**. Keep the same T008 descriptor/runtime tests and T007
+adapter tests frozen. Their corrections require a new named, nonoverlapping
+write grant; do not weaken assertions, virtualize the real T015 loader, or claim
+module-resolution errors as behavioral failures.
+
+**Accepted T015 feasibility scope:** the root authorizes a **future optional
+local E2E seed-source `review-fixture` profile** for exact owner-derived role
+accounts and accessible categories as already approved **code-only test setup**.
+The profile is a separate harness owner/file task and is not implemented or
+executed here; no new business/product approval must be requested for it. The
+existing T015 service still needs current-owner binding, strict
+nonproduction/E2E gate, and canonical `AccountReviewSession` with zero writes at
+fixture entry; the full app route and ordinary financial Save cannot be claimed
+until T054's canonical review facade and real writer integration are actually
+verified.
+
+**Normalized-seam proposal remains exactly as in Section 13:** additive optional
+`reviewSession?: AccountReviewSession` on existing Voice/SMS success results,
+typed raw SMS advisory until owner/category/body correlation in T014, full
+evidence/groups/revision/session identity, real UUID category IDs, safe currency
+provenance and no change to v1, live/headless, chunk refusals or provider call
+count. The report is **plan only**; Core owns T011, free OpenCode's separate
+financial test work remains independent. No source, tests, T008 JSON, account
+seed, E2E route, parser, generator, schema, contract, hosted SQL, PR/issue/Page
+or worker dispatch has been performed during this checkpoint.
+
+**Report-only receipt:** exclusive writable path
+`specs/395-shared-account-review/validation/ui-wave1.md` from frozen
+`0cdc151be79af912fd70e61bc09bd3e1fbe7616a`; all other files protected. Root may
+recover this immutable report after its environment restart. **NO PRODUCTION OR
+NEW TASK AUTHORIZED.**
+
+**T012–T014 SEAM RECONCILIATION CHECKPOINT PUBLISHED — STOP FOR ROOT ACCEPTANCE
+AND FRESH EXCLUSIVE SOURCE/TEST ASSIGNMENTS. ALL OTHER WRITES FROZEN.**
+
+---
+
+## 14. T007 tests-only canonical reviewSession Red handoff (root checks pending)
+
+- **Explicit lease:** `codex/395-ui-worker` verified at
+  `d215855e345bec489a5d7ff85b093a0de30a891b`; permission covers **only**
+  `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts` and
+  this report. The T007 file was absent on this isolated UI branch: it was
+  authored from Core's frozen original
+  `89927a256349b77c6f8e083f35741bf16510109d` at
+  `codex/395-core-worker@a1f1765530c6de43c236bd2450df7ebc8b3d4203`, rather than
+  replacing Core-owned production.
+- **23 named test cases authored:** all **14 original** Voice/SMS
+  request/response, financial row, v1, privacy, refusal, one-provider-call and
+  user-scope cases retain their names and hard expectations, strengthened to
+  assert the **canonical full `AccountReviewSession`** rather than recursive
+  `nestedValues` evidence discovery. Nine additional cases cover pending
+  grounded groups, v2 proven omission vs ambiguous/conflicting/unknown, v1
+  opt-in unknown/unresolved, no-opt-in legacy unchanged, real
+  owner/category/body/sender/fingerprint SMS orchestration and canonical session
+  revisions.
+- **Three previously missing return annotations:**
+  `makeReviewRequestContext(): AccountReviewRequestContext`,
+  `voiceOptions(...): AiVoiceParserOptions & {reviewAccountSnapshots?: AccountReviewAccountSnapshots}`,
+  and
+  `smsContext(...): ParseSmsContext & {reviewAccountSnapshots?: AccountReviewAccountSnapshots}`.
+  The latter use T010's accepted **exact local+provider projections**, never
+  reintroducing a duplicate wire schema. Synthetic category identifiers are now
+  canonical lower-case UUIDs, with SMS category mapping from its supplied
+  real-shaped category context; the source-specific v2 success fixtures use
+  trusted/correlated SMS rows so successful mapping is not falsely blocked by
+  `isTrusted:false`.
+- **Typed two-stage SMS evidence:** raw synchronous `parseAiResponse` is
+  asserted only for canonical `reviewAdvisory`/`reviewFinancialRows` and
+  existing completion/refusal/negative metadata; it must **not** fabricate
+  owner, category UUID, raw body or `reviewSession`. `parseSmsWithAi` and the
+  **real** `parseSmsWithOrchestrator` in opted-in review assert
+  `accountReviewSessionSchema` over full rows, groups, currencies, assignments,
+  revisions, category UUIDs, source fingerprints and exact submitted SMS
+  body/sender UTF-16 spans. V1 without review opts into **no new session**; v1
+  with review requested preserves a valid row but remains
+  `legacy_unknown`/unresolved; malformed advisory retains valid financial row
+  blocked from Save.
+- **Test-first dependency:** the accepted Core schema module and frozen T010
+  snapshot service are imported, not copied. This isolated branch does not
+  contain Core's file tree, and current T012–T014 parsers lack optional
+  `reviewAccountSnapshots`, typed v2 raw SMS intermediate and `reviewSession`;
+  root must mechanically combine branches and observe **meaningful old-API Red**
+  before implementation, not mistake isolated missing imports for behavioral
+  failure. The new test remains a separate report-only handoff for the
+  designated parser/adapter owners.
+- **Not executed here:** Jest, TypeScript, ESLint, formatting, Edge/provider,
+  network, SQL, local app/device, E2E or financial writes. Only immutable
+  source/branch reads and authorized GitHub file publications occurred. Root
+  owns actual Red/Green and formatting/lint outcomes; none is claimed by this
+  worker. No
+  parser/adapter/Edge/schema/generator/T008/catalogue/fixture/seed/contracts/UI/PR/issues/main
+  files or native/Codex delegates were touched.
+- **STOP / ownership:** after verifying exactly these two changed paths and the
+  new immutable HEAD, release T007 test/report ownership. No further changes
+  without fresh explicit permission; parallel Core T011/financial work remains
+  protected.
+
+**T007 TESTS-ONLY AUTHORING COMPLETE — ROOT INTEGRATION RED/STATIC CHECKS
+PENDING — ALL WRITES FROZEN.**
+
+---
+
+## 15. T008 test-only current-owner fixture Red checkpoint
+
+**Grant and scope:** verified
+`codex/395-ui-worker@03623771a575ad83a6a7d580d6bf67f508856c8e` before editing.
+Changed only `apps/mobile/__tests__/e2e/account-review-fixtures.test.ts` and
+this report. **All 15 JSON scenes, B1 counts, 20 scenario mappings and original
+static catalogue remain unchanged**; original JSON blob
+`9c3520032cde8ee2659232dc9bd245280a18ad0e` was read back unchanged.
+
+- **T008 runtime evidence:** the actual
+  `loadAccountReviewFixtureSession(sceneId)` is resolved using
+  `jest.requireActual` with a typed module boundary, not mocked, virtualized,
+  skipped or substituted. Missing future T015 module remains honest **creation
+  Red**. Every scene must return a **complete canonical
+  `AccountReviewSession`**, strict `accountReviewSessionSchema.parse`, matching
+  B1 rows/issues/selections/groups/statuses plus revisions, real `Date`
+  snapshots, currency uncertainty, source-specific fingerprints and reciprocal
+  memberships.
+- **Fresh current-owner fixtures:** two authenticated synthetic owners have
+  **different UUID account/category IDs** but comparable Cash/QNB/CIB/Wallet
+  semantic roles; no static descriptor account/category UUID is re-labelled as a
+  persisted user record. The T010 dependency mock supplies exact local
+  `isDefault` snapshots plus an explicit provider whitelist, and the scoped
+  category helper only exposes owned/accessibly active categories.
+  Missing/deleted/foreign account or category, ambiguous duplicate bank role,
+  mismatched bank card/currency and in-flight owner switch all demand rejection.
+- **Safety:** `NODE_ENV=production`, E2E-off, signed-out and unknown scene IDs
+  must reject; no unscoped category read, DB financial write or AI/Edge/provider
+  invocation is allowed at fixture entry. This is **session construction only**:
+  no fake local fixture Save callback, mock financial writer or bypass of the
+  later real T054/final Save path. Real route/UI/emulator evidence remains
+  blocked until the separate canonical facade/route owner integration.
+- **Lint/typing repairs only within owned T008:** four original no-await async
+  mocks now use typed `Promise.resolve/reject`; an actual awaited snapshot gate
+  remains to exercise late owner switching. The prior `issueTags.includes`
+  inferred-`never` union is handled by `DescriptorIssueTag` derived from the
+  JSON catalogue and a typed helper. Test-only real-module signature uses
+  `Promise<unknown>` and validates its output through the full canonical schema;
+  it does **not** fabricate an AccountReviewSession DTO.
+- **Verification boundary:** immutable GitHub refs/files/diff and static source
+  assertions only; **NOT RUN** by this lane: Jest, TypeScript, lint, formatter,
+  hooks, Maestro/device, local seed, provider, SQL or financial Save. Root owns
+  the first meaningful Red, subsequent Green, and formatting; missing T015
+  loader is not a passing rejection-path assertion. No production source, Core
+  schema, T007, T006, E2E JSON, routes, contracts, SQL/seed, PR/issues/comments
+  or native/Codex delegates modified.
+- **Ownership:** report/test writes released after GitHub compare; other lanes
+  remain protected. Any real test failure needs a **new explicit narrow grant**.
+
+**T008 TESTS-ONLY SOURCE RELEASED — ROOT T015 CREATION RED PENDING — ALL WRITES
+FROZEN.**
+
+---
+
+## 16. T007 test-only fixture extraction checkpoint
+
+- **Contact recovery:** T008 final tests/report were **already published** at
+  `321cb133673dcc4459a515e59db3f51730856ab4` and independently read back; no
+  T008 modification, duplicate publication or claim of Green.
+- **New bounded lease:** on
+  `codex/395-ui-worker@321cb133673dcc4459a515e59db3f51730856ab4`, author
+  **only**
+  `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts`, new
+  `apps/mobile/__tests__/services/account-review-parser-test-fixtures.ts`, and
+  this report. Core normalization, SQL/financial, routes, schema, T008, JSON,
+  source, and other test lanes remain protected.
+- **Mechanical split:** T007 primary file **1,111 → 820 raw lines** (<900).
+  Extracted pure typed request-context, T010-snapshot, Voice/SMS source, v2
+  advisory, and orchestrator case builders into one new **322-line** test
+  helper; all helper function boundaries are **<50 raw lines** (largest static
+  function-to-function span 29 lines). Original `unmatchedSmsCase` was
+  subdivided into a CIB SMS evidence helper and a concise case builder; Voice
+  CIB evidence likewise uses the existing canonical span fixture helper.
+- **Behavior preservation proof:** immutable GitHub readback compared the
+  complete T007 `describe(...)`-through-EOF test body **byte-for-byte equal**
+  before/after extraction; all **23 named assertions** and 14 original
+  safeguards/refusal/one-call tests remain untouched. `jest.mock` factories,
+  `mock*` captures, spies, typed raw-v2 evidence, complete canonical
+  `reviewSession`, no-options/v1, category UUID, and original privacy tests stay
+  in the owning test module. New fixture helper has no Jest mocks, DB writes or
+  provider calls; canonical source/test types are imported, not copied.
+- **Execution honesty:** no runner, TypeScript, ESLint, formatter, hook,
+  emulator, provider, install, SQL or native worker invoked. Root's existing
+  Red/Green process remains pending, and this mechanical comparison is **not**
+  runtime proof. If integration reveals a genuine module-hoist/type/format
+  error, root must request a fresh narrow correction grant rather than silently
+  weakening assertions.
+- **Final scope freeze:** T007 test + new typed helper + report only; no
+  PR/issue/comment/merge, branch beyond this leaf, E2E seed or T015 loader work.
+  **Ownership released, all writes frozen.**
+
+**T007 TEST-ONLY EXTRACTION COMPLETE — ROOT RED PENDING — SOURCE/TEST OWNERSHIP
+RELEASED.**
+
+---
+
+## 17. T007/T008 test harness recovery — split and native bridge boundary
+
+**Exclusive test-only lease:** Started at verified
+`codex/395-ui-worker@01e5f7048ef29f26b955b3553e981b7d735e9384`. T018 remains
+**HOLD**. Authorized only existing T007 parser test/fixture, optional new Voice
+test, existing T008 fixture test/optional new typed fixture helper, and this
+report. Core normalization/Node Edge/Deno, SQL/pgTAP, T015 production loader,
+JSON catalogue, account service, UI, contracts, and seed are protected.
+
+- **T007 format-safe split:** Original combined **820 raw / root-reported 1,005
+  Prettier lines** is now **555 raw SMS lines** in
+  `account-review-parser-adapters.test.ts` and **457 raw Voice lines** in new
+  `account-review-parser-voice.test.ts`. Existing
+  `account-review-parser-test-fixtures.ts` stays byte-identical. GitHub
+  immutable text comparison verified **all 23 individually named test bodies
+  byte-for-byte unchanged** (10 Voice, 13 SMS), including provider one-call,
+  refusal, privacy, raw advisory, full `reviewSession` and v1 fallback. Both
+  suites retain hoist-safe `jest.mock` factories/typed `mock*` captures; no
+  production parser/chunk/orchestrator function is mocked.
+- **Actual T007 import-load repair:** Only SMS test mocks the
+  `@/services/profile-service` **read/consent boundary**, returning the existing
+  synthetic authenticated owner and consent state without loading
+  `@monyvi/db/database.ts` / native `WMDatabaseBridge`. Real
+  `sms-parser-orchestrator`, `ai-sms-chunk-runner-service`, raw response parser
+  and transport mocking assertions remain SUT; Voice parser keeps its own
+  independent test file/mocks. This is an **unrun harness fix** for root's
+  observed previous native bridge load failure, **not** a fresh suite PASS.
+- **T008 format-safe fixture extraction:** Existing
+  `account-review-fixtures.test.ts` is **736 raw lines** (previously 966; root
+  reported >1,000 after formatting). New
+  `account-review-fixture-test-fixtures.ts` holds owner-derived roles/IDs,
+  active scoped category/account projection builders and decomposed canonical
+  session assertion helpers (**357 raw lines**). Mutable `mock*` ownership/async
+  gates/Jest factories remain solely in T008 main file. Original **16 static
+  descriptor and 32 runtime/Red cases** are preserved: both `describe` blocks
+  were checked **byte-for-byte identical**. No fixture loader virtualization,
+  fake success, account/financial seed or Save bypass.
+- **Two genuine T008 TypeScript fixes:** Retain narrowed
+  `const assignment = row.assignment` across the group `.find` callback, and use
+  source-inferred `"currencyEvidenceState" in descriptor` before checking
+  omission; **no casts, broadening or schema change**. All **55** original
+  `expect(...)` assertions from the prior complete-session helper were carried
+  to the typed test helper, with immutable
+  account/group/currency/owner/fingerprint/Date/selection checks intact.
+- **Root pre-repair observed state, not a new result:** T006 **23 PASS**; T007
+  suite **FAILED LOAD** at profile-service → native DB bridge; T008 **16
+  catalogue PASS + 32 missing-real-T015-loader creation Red**, and two actual
+  test-only type errors. Core T014 narrowing and generated Node/Edge/Deno
+  failures are separate owners. **NOT RUN BY THIS WORKER:** Jest, TypeScript,
+  ESLint, Prettier, hooks, local CLI/install, emulator, live/provider, native
+  worker, SQL or deploy. A fresh root formatter and focused Jest/type/lint batch
+  must verify formatted <900 and load behavior. No Green is claimed.
+- **Scope and freeze:** Only these four test paths + this report. T007 fixture
+  source `account-review-parser-test-fixtures.ts` remains unchanged. Source/test
+  ownership is released at the final GitHub compare checkpoint; all other files,
+  PRs/refs, comments and shared branch lanes are protected.
+
+**T007/T008 TEST HARNESS REPAIR AUTHORED — ROOT CHECKS PENDING — T018 HOLD — ALL
+WRITES FROZEN.**
+
+---
+
+## 18. T008 duplicate owner import repair — test-only freeze
+
+- **Root's observed r3 integration batch:** T007 **23 executed** (7 PASS, 16
+  expected missing v2 API failures); native `WMDatabaseBridge` load issue
+  cleared. Actual formatted sizes: SMS 670, Voice 546, T008 785, helper 399 (all
+  <900). T014/Core test and generated typing issues remain Core-owned. T008
+  could not load because both `CURRENT_OWNER` and `ANOTHER_OWNER` were imported
+  from the new typed helper **and** redeclared locally. These results are
+  **root-reported**, not rerun here.
+- **Exact authorized repair:** on
+  `codex/395-ui-worker@4eb3afa3bfeed20af0dcb33a7e7f3e43014341ca`, deleted **only
+  the two local `const` declarations** from
+  `apps/mobile/__tests__/e2e/account-review-fixtures.test.ts`. Retained
+  canonical helper imports, the existing `mockActiveOwnerId` reference, all Jest
+  mock factories, both T008 `describe` blocks byte-for-byte, all **48 cases**
+  and the **55 exact full-session assertions** in unchanged helper
+  `account-review-fixture-test-fixtures.ts`. Unmocked real T015 loader remains
+  legitimate creation Red; no fake pass.
+- **Scope and evidence:** updated only this T008 test and
+  `validation/ui-wave1.md`. Remote GitHub source inspection compared pre/post
+  T008 test bodies exactly; no local
+  CLI/Jest/TypeScript/lint/format/provider/SQL/emulator or native delegation
+  executed. Root must rerun the T008 load/type gate; no PASS claimed. T007 and
+  all helper files are protected and unchanged. **T018 remains HOLD.**
+
+**T008 TWO-CONSTANT REPAIR COMPLETE — ROOT RERUN PENDING — OWNERSHIP RELEASED /
+ALL WRITES FROZEN.**
+
+---
+
+## 19. T015 current-owner canonical fixture loader — implementation plan checkpoint
+
+**Exact lease:** `codex/395-ui-worker@7d98f970135bee360c211bb1bc445b7db12fbee1`.
+Root's r4 reports **T008 16 static PASS + 32 missing-real-loader creation Red**,
+mobile TypeScript EXIT 0. This worker does not run local checks. No T018 work.
+
+- **Exclusive planned files:** new
+  `apps/mobile/services/account-review-fixture-service.ts` public
+  `loadAccountReviewFixtureSession(sceneId):Promise<AccountReviewSession>`;
+  optional new `account-review-fixture-role-service.ts` for fresh T010
+  snapshot + current-owner category binding; optional new
+  `account-review-fixture-builders.ts` for full canonical source-correct
+  in-memory Voice/SMS rows, group links and revision/session namespaces. T008
+  tests + its typed helper **only** if genuine integration repairs are needed.
+  No external read service, seed profile, route or adapter mutation.
+- **Security order:** before private reads require E2E mode, non-production
+  runtime, recognized **single allowlisted scene** and authenticated owner. T010
+  provides current-owned active account metadata; category access uses
+  `getCurrentUserDataScope().queryAccessibleCategories`. Bind descriptor
+  semantic roles against exact
+  name/type/currency/institution/provider/card/sender where appropriate; reject
+  missing/duplicate/conflicting/foreign/deleted identities or owner changes
+  across awaits. Never reuse manifest account/category UUIDs as persisted record
+  IDs.
+- **Data contract:** validate through logic `accountReviewSessionSchema`,
+  including real accessible category UUID, actual JS Date, deterministic scoped
+  UUID/evidence hash, source identity and SMS fingerprint from a synthetic
+  input, grouped pending/confirmed/removed state with reciprocal links and
+  revisions, canonical reason codes (including descriptive amount/category tags
+  mapped to existing reasons), Voice-only eligible Cash default, ATM independent
+  Cash destination, uncertain currency unresolved and unselected, null
+  `saveIntent`. No shadow DTO/new enums or false v1/provider evidence.
+- **Hard exclusions:** no DB writes, hosted/network/provider/AI calls, financial
+  Save or mock writer, production entry, T054 route/deeplink,
+  device/emulator/seed, source/core/parser/schema/contracts/SQL/T007 changes.
+  The service constructs an in-memory review state **only**. Real user-visible
+  route/Save E2E remains blocked on T054; do not claim it here.
+- **Verification:** root runs focused T008 **48 cases** + normal formatting,
+  mobile TS/lint and independent security review once authoring freezes. Missing
+  T015 module should disappear as the intended Red cause; failures beyond that
+  require real correction, not test bypass. All 15 JSON descriptors/B1 counts
+  remain unchanged.
+
+**T015 PLAN PUBLISHED — IMPLEMENTATION PENDING — ROOT GREEN NOT YET CLAIMED.**
+
+---
+
+## 20. T015 canonical current-owner fixture implementation checkpoint — ROOT GREEN PENDING
+
+**Published source:** starting from accepted
+`7d98f970135bee360c211bb1bc445b7db12fbee1`, new
+`apps/mobile/services/account-review-fixture-service.ts` (one
+`loadAccountReviewFixtureSession(sceneId): Promise<AccountReviewSession>`); new
+`account-review-fixture-role-service.ts` (real T010 current-owner roles +
+accessible active category); new `account-review-fixture-builders.ts` (complete
+canonical synthetic state). Only
+`apps/mobile/__tests__/e2e/account-review-fixtures.test.ts` was strengthened,
+plus this validation report. No T010/logic contracts/parser/fixture JSON/test
+helper/seed/route/locale/SQL/UI/T018 files were changed.
+
+- **Gates and ownership:** service rejects release/production mode, absent E2E
+  flag, unknown scene and signed-out user **before private reads**. T010 returns
+  one owned active account snapshot; five descriptor roles bind by full exact
+  name/type/currency/provider/institution/card/sender and unique default Cash. A
+  scoped `queryAccessibleCategories` read selects one nondeleted, visible,
+  usable current-user or system `other` expense category. Fail closed on
+  missing/duplicate/stale/foreign/deleted role, wrong bank suffix/currency,
+  conflicting default/category or in-flight owner switch. Owner is rechecked
+  across async reads and after full construction.
+- **Strict session:** deterministic owner+scene+source SHA-256 namespaced UUIDv4
+  session/row/group IDs, actual category UUID and JS Date, explicitly synthetic
+  text evidence/aliases, SHA-256 SMS fingerprint **computed from submitted
+  synthetic sender/body/date** (never the catalogue's unrelated 64-hex labels),
+  account/currency evidence and closed review reason codes, known explicit vs
+  proven omission vs blocked unconfirmed currency, Cash source only for Voice,
+  independent ATM Cash destination, reciprocal pending/confirmed/removed groups
+  with revisions/tombstones, exact B1 selection/issue counts and
+  `saveIntent: null`. All constructed states pass through
+  **`accountReviewSessionSchema.parse`**; no shadow review-session DTO, provider
+  call, write, Save callback, or manual route/deep link.
+- **Harness-proof addition:** T008 test-only `expo-crypto` boundary uses Node's
+  **actual SHA-256** (avoids native bridge without faking a constant digest);
+  existing `it.each(manifest.scenes)` now independently recomputes each SMS
+  source fingerprint from its transaction sender/body/Date. All **48 existing
+  T008 cases**, 15 static descriptor scenes, JSON/B1 receipt, and real unmocked
+  T015 service remain intact.
+- **Source audit only:** GitHub immutable compare found exactly these **five
+  authorized paths**. Raw sizes: loader 67, role resolver 145, builder 445, T008
+  757 (all under 900 before formatting); helper function raw span max ~35.
+  Reviewed current Core exported canonical Zod types from accessible
+  `codex/395-core-worker@79d4f1975590fcf4a30678adb5f7079de1544432` and approved
+  T004 wire; the supplied abbreviated `de3f0167` ref was not separately
+  resolvable by connector. Root must integrate and verify the exact Core frozen
+  revision.
+- **Not run/claimed:** no Jest, TypeScript, ESLint, Prettier, emulator, native
+  worker, npm/install, fixture seed, hosted DB, provider or financial Save
+  operation. Root owns the coherent T008 48-case Green and
+  type/lint/format/security gates. **T054** later owns the real review
+  route/facade and normal writer; this T015 loader alone is not end-to-end
+  UI/Save proof. T018 stays **HOLD**.
+
+**T015 SOURCE AUTHORING COMPLETE — ROOT GREEN PENDING — OWNERSHIP RELEASED / ALL
+WRITES FROZEN.**
+
+---
+
+## 21. T015 typed-descriptor/null-evidence correction checkpoint — ROOT RERUN PENDING
+
+- **Narrow source lease:** at verified
+  `codex/395-ui-worker@17b400bedb1a8a6262e57d315cee9dd0f1039f62`, modified only
+  `apps/mobile/services/account-review-fixture-role-service.ts`,
+  `apps/mobile/services/account-review-fixture-builders.ts`, and this report.
+  T008 and helper, 15-scene JSON catalogue, T010, logic/Core, parser, UI, seed,
+  contracts, SQL, and T018 remain frozen.
+- **Real TypeScript correction:** parse `manifest.accountContext` **once** with
+  canonical `accountReviewRequestContextSchema.parse` at its static descriptor
+  boundary; `bindExactAccounts` now iterates
+  `validatedFixtureAccountContext.accounts` (Zod-inferred currency/type/account
+  shape) instead of broad JSON strings. Existing T010 provider-context
+  validation, exact current-owned role matching and ambiguity checks are
+  unchanged. No casts, copied enums, schema changes or loose type extensions.
+- **Null-path correction:** `makeAccountEvidence` retains the absent/default and
+  grouped paths, but now explicitly rejects its otherwise impossible ungrouped
+  `row.accountId === null` branch and invokes
+  `requireAccount(bindings, row.accountId)` only after narrowing to a real
+  string. Removed `row.accountId ?? ""`; no sentinel, hidden fallback or relaxed
+  lookup.
+- **Root observed prior batch (not re-run here):** **T008 48/48 PASS**;
+  formatted service 69 / builder 617 / role service 176 / tests 809, all named
+  functions under 50. Root reported just the manifest descriptor `string` to
+  `AccountReviewAccountContext` TypeScript error, plus the AGENTS empty-ID
+  branch concern. These fixes address both identified source lines, but **no
+  post-correction TypeScript/Jest/formatter PASS is claimed**.
+- **Audit boundary:** immutable GitHub compare/readback only. No local commands,
+  provider/network calls, hosted or local writes, E2E route, device, financial
+  Save, native or delegated worker. Root owns the focused tsc/48-case rerun.
+  T054 facade/Save proof remains separate; **T018 HOLD**.
+
+**T015 NARROW REPAIR AUTHORED — POST-REPAIR ROOT GREEN PENDING — OWNERSHIP
+RELEASED / ALL WRITES FROZEN.**

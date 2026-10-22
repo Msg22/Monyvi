@@ -54,7 +54,9 @@ jest.mock("../../services/metal-reconciliation-service", () => ({
     mockCommitMetalOutcome(...args),
 }));
 
+import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 import { pushChanges } from "../../services/sync/push-service";
+import { legacyPushDatabase } from "./sync-push-legacy-test-fixtures";
 
 type PushChangesDatabase = Parameters<typeof pushChanges>[0];
 type PushChangesArgs = Parameters<typeof pushChanges>[1];
@@ -98,7 +100,7 @@ function rootPayload(input: GroupChangesInput): string {
 interface TableSlice {
   readonly created: ReadonlyArray<Record<string, unknown>>;
   readonly updated: ReadonlyArray<Record<string, unknown>>;
-  readonly deleted: ReadonlyArray<string>;
+  readonly deleted: readonly string[];
 }
 
 interface MetalsGroupSlices {
@@ -108,7 +110,10 @@ interface MetalsGroupSlices {
   readonly metal_holding_states: TableSlice;
 }
 
-function groupChanges(input: GroupChangesInput, hash: string): MetalsGroupSlices {
+function groupChanges(
+  input: GroupChangesInput,
+  hash: string
+): MetalsGroupSlices {
   return {
     financial_action_groups: {
       created: [
@@ -233,14 +238,39 @@ function mergeGroupChanges(
   };
 }
 
-function makeDatabase(): PushChangesDatabase {
-  return {
-    get: jest.fn(() => ({
-      query: jest.fn(() => ({
-        fetch: jest.fn().mockResolvedValue([]),
-      })),
-    })),
-  } as unknown as PushChangesDatabase;
+function sdkTableChanges(
+  changes: PushChangesArgs["changes"],
+  table: string
+): SyncTableChangeSet | undefined {
+  const entry = Object.entries(changes).find(([name]) => name === table);
+  return entry ? (entry[1] as SyncTableChangeSet) : undefined;
+}
+
+function makeDatabase(
+  changes: PushChangesArgs["changes"]
+): PushChangesDatabase {
+  // Unlike the retired empty-DB test double, the protected account catalog
+  // now reads genuine owner-filtered historical Metal roots before dispatch.
+  // Independent groups still flow only through real Metal RPC coordination.
+  const rootsSlice = sdkTableChanges(changes, "financial_action_groups");
+  const assetsSlice = sdkTableChanges(changes, "assets");
+  const roots = [
+    ...(rootsSlice?.created ?? []),
+    ...(rootsSlice?.updated ?? []),
+  ];
+  const assets = [
+    ...(assetsSlice?.created ?? []),
+    ...(assetsSlice?.updated ?? []),
+  ].map((asset: Record<string, unknown>) => ({
+    ...asset,
+    // Real owner-scoped child-parent reads require an active asset. The
+    // transport fixtures omit the stored default, not a deleted asset.
+    deleted: asset.deleted ?? false,
+  }));
+  return legacyPushDatabase({
+    financial_action_groups: roots,
+    assets,
+  }).database;
 }
 
 function readRejectedIds(result: unknown): Record<string, readonly string[]> {
@@ -324,7 +354,7 @@ describe("pushChanges F3 - malformed group isolation", () => {
       valid.holdingId
     );
 
-    const result = await pushChanges(makeDatabase(), {
+    const result = await pushChanges(makeDatabase(changes), {
       changes,
       lastPulledAt: 0,
     });
@@ -349,6 +379,84 @@ describe("pushChanges F3 - malformed group isolation", () => {
     expect(rejected["metal_action_evidence"] ?? []).not.toContain(
       valid.evidenceId
     );
+  });
+
+  it("keeps an owned malformed Metal JSON root dirty while exactly one independent valid group reaches the RPC", async () => {
+    const bad: GroupIds = {
+      actionId: "10000000-0000-4000-8000-0000000000c6",
+      holdingId: "20000000-0000-4000-8000-0000000000c7",
+      evidenceId: "30000000-0000-4000-8000-0000000000c8",
+      eventId: "40000000-0000-4000-8000-0000000000c9",
+      stateId: "50000000-0000-4000-8000-0000000000ca",
+    };
+    const valid: GroupIds = {
+      actionId: "10000000-0000-4000-8000-0000000000cb",
+      holdingId: "20000000-0000-4000-8000-0000000000cc",
+      evidenceId: "30000000-0000-4000-8000-0000000000cd",
+      eventId: "40000000-0000-4000-8000-0000000000ce",
+      stateId: "50000000-0000-4000-8000-0000000000cf",
+    };
+    const hashValid = "9".repeat(64);
+    const merged = mergeGroupChanges(
+      groupChanges(
+        {
+          ids: bad,
+          kind: "add",
+          eventKind: "created",
+          revision: null,
+          userId: USER_ID,
+          includeLifecycleRow: true,
+        },
+        "a".repeat(64)
+      ),
+      groupChanges(
+        {
+          ids: valid,
+          kind: "correct",
+          eventKind: "correct",
+          revision: "0",
+          userId: USER_ID,
+          includeLifecycleRow: true,
+        },
+        hashValid
+      ),
+      bad.holdingId,
+      valid.holdingId
+    );
+    const rootGroup = sdkTableChanges(merged, "financial_action_groups");
+    if (!rootGroup) throw new Error("missing_metal_root_changes");
+    const changes: PushChangesArgs["changes"] = {
+      ...merged,
+      financial_action_groups: {
+        ...rootGroup,
+        created: rootGroup.created.map((row: Record<string, unknown>) =>
+          row.action_id === bad.actionId
+            ? { ...row, payload_json: "{malformed-json" }
+            : row
+        ),
+      },
+    };
+
+    const result = await pushChanges(makeDatabase(changes), {
+      changes,
+      lastPulledAt: 0,
+    });
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith(
+      "apply_metal_action_v1",
+      expect.objectContaining({ p_payload_hash: hashValid })
+    );
+    const rejected = readRejectedIds(result);
+    expect(rejected.financial_action_groups ?? []).toContain(bad.actionId);
+    expect(rejected.financial_action_groups ?? []).not.toContain(
+      valid.actionId
+    );
+    expect(rejected.metal_action_evidence ?? []).toContain(bad.evidenceId);
+    expect(rejected.metal_action_evidence ?? []).not.toContain(
+      valid.evidenceId
+    );
+    expect(rejected.assets ?? []).toContain(bad.holdingId);
+    expect(rejected.assets ?? []).not.toContain(valid.holdingId);
   });
 
   it("submits the valid group when a foreign-owner root shares the push", async () => {
@@ -395,7 +503,7 @@ describe("pushChanges F3 - malformed group isolation", () => {
       valid.holdingId
     );
 
-    const result = await pushChanges(makeDatabase(), {
+    const result = await pushChanges(makeDatabase(changes), {
       changes,
       lastPulledAt: 0,
     });
@@ -465,7 +573,7 @@ describe("pushChanges F3 - malformed group isolation", () => {
       holdingId
     );
 
-    const result = await pushChanges(makeDatabase(), {
+    const result = await pushChanges(makeDatabase(changes), {
       changes,
       lastPulledAt: 0,
     });
@@ -543,7 +651,7 @@ describe("pushChanges F3 - malformed group isolation", () => {
       valid.holdingId
     );
 
-    const result = await pushChanges(makeDatabase(), {
+    const result = await pushChanges(makeDatabase(changes), {
       changes,
       lastPulledAt: 0,
     });
@@ -604,7 +712,7 @@ describe("pushChanges F3 - malformed group isolation", () => {
       "20000000-0000-4000-8000-0000000000ad"
     );
 
-    const result = await pushChanges(makeDatabase(), {
+    const result = await pushChanges(makeDatabase(changes), {
       changes,
       lastPulledAt: 0,
     });

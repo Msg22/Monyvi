@@ -434,61 +434,110 @@ test("rejects Markdown-equivalent duplicate Binding Facts headings", () => {
   }
 });
 
-test("requires every mandatory mockup workflow to invoke the binding verifier", () => {
+test("historical image workflows retain verifier authority without requiring it for future interactive design", () => {
   const repositoryRoot = path.resolve(__dirname, "..");
-  const mandatoryConsumers = [
+  const read = (file) =>
+    fs.readFileSync(path.join(repositoryRoot, file), "utf8");
+  const twoTrackConsumers = [
     ".agent/workflows/sprint-issue.md",
     ".agent/workflows/speckit.implement.md",
     ".agent/workflows/speckit.tasks.md",
     ".agent/workflows/code-review.md",
     ".agent/workflows/style-audit.md",
-    ".claude/commands/speckit.implement.md",
-    ".claude/commands/speckit.tasks.md",
-    ".claude/commands/code-review.md",
-    ".claude/commands/style-audit.md",
     ".agent/workflows/applying-mockups.md",
     ".agent/workflows/mockup-implementation.md",
-    ".claude/commands/applying-mockups.md",
-    ".claude/commands/mockup-implementation.md",
     ".agents/skills/source-command-code-review/SKILL.md",
   ];
 
-  for (const consumerPath of mandatoryConsumers) {
-    const consumer = fs.readFileSync(
-      path.join(repositoryRoot, consumerPath),
-      "utf8"
+  for (const consumerPath of twoTrackConsumers) {
+    const consumer = read(consumerPath);
+    assert.match(
+      consumer,
+      /historical(?:ly)?/i,
+      consumerPath + " must preserve historical image governance"
     );
     assert.match(
       consumer,
-      /node scripts\/verify-mockup-binding\.js <[^>]+>/,
-      `${consumerPath} must invoke the mockup binding verifier`
+      /interactive/i,
+      consumerPath + " must recognize prospective interactive designs"
+    );
+    assert.match(
+      consumer,
+      /(?:verify-mockup-binding\.js|verifier)/i,
+      consumerPath + " must retain historical verifier rules"
+    );
+    assert.match(
+      consumer,
+      /sidecar/i,
+      consumerPath + " must retain historical sidecar authority"
     );
   }
+
+  const designWorkflow = read("docs/design/interactive-design-workflow.md");
+  assert.match(designWorkflow, /runnable interactive design/i);
+  assert.match(designWorkflow, /short README/i);
+  assert.match(designWorkflow, /One owner approval/i);
+  assert.match(designWorkflow, /no mandatory SHA-256 approval tuple/i);
+  assert.match(
+    designWorkflow,
+    /only when consuming those historical image\/sidecar/i
+  );
+
+  const reviewSkill = read(
+    ".agents/skills/source-command-code-review/SKILL.md"
+  );
+  const historical = reviewSkill.slice(
+    reviewSkill.indexOf("For **historically approved static/images only**"),
+    reviewSkill.indexOf("Check only approved product UI")
+  );
+  assert.match(
+    historical,
+    /node scripts\/verify-mockup-binding\.js <path\/to\/mockup\.binding\.md>/i
+  );
 });
 
-test("requires review evidence checks to use the approved combined revision contract", () => {
+test("historical source-command review preserves combined approval evidence without adding future binding gates", () => {
   const repositoryRoot = path.resolve(__dirname, "..");
-  const combinedConsumers = [
-    ".agents/skills/source-command-code-review/SKILL.md",
-    ".agent/workflows/sprint-issue.md",
-    ".agent/workflows/speckit.implement.md",
-  ];
-  for (const consumerPath of combinedConsumers) {
-    const consumer = fs.readFileSync(
-      path.join(repositoryRoot, consumerPath),
-      "utf8"
-    );
-    assert.match(
-      consumer,
-      /approval evidence\/reference[\s\S]{0,300}approved combined/i,
-      `${consumerPath} must require approval evidence against the approved combined revision`
-    );
-    assert.doesNotMatch(
-      consumer,
-      /evidence(?:\/reference)?\s+identifies that (?:same\s+)?revision/i,
-      `${consumerPath} must not bind approval evidence to the metadata revision alone`
-    );
-  }
+  const skill = fs.readFileSync(
+    path.join(
+      repositoryRoot,
+      ".agents/skills/source-command-code-review/SKILL.md"
+    ),
+    "utf8"
+  );
+  const historicalStart = skill.indexOf(
+    "For **historically approved static/images only**"
+  );
+  const interactiveStart = skill.indexOf("For **future interactive designs**");
+  assert.ok(interactiveStart >= 0 && historicalStart > interactiveStart);
+  const interactive = skill.slice(interactiveStart, historicalStart);
+  const historical = skill.slice(
+    historicalStart,
+    skill.indexOf("Check only approved product UI", historicalStart)
+  );
+
+  assert.match(
+    interactive,
+    /No new HTML binding sidecar[\s\S]*legacy verifier run is required/i
+  );
+  assert.match(historical, /Binding metadata approval: APPROVED/i);
+  assert.match(
+    historical,
+    /Approved binding metadata revision[\s\S]*Binding metadata revision/i
+  );
+  assert.match(
+    historical,
+    /Approved binding approval revision[\s\S]*Binding approval revision/i
+  );
+  assert.match(
+    historical,
+    /approval evidence\/reference[\s\S]{0,150}approved combined/i
+  );
+  assert.doesNotMatch(
+    historical,
+    /evidence(?:\/reference)?\s+identifies that (?:same\s+)?revision/i,
+    "historical approval evidence must identify the combined revision, not metadata alone"
+  );
 });
 
 test("pins binding sidecars to LF line endings at repository level", () => {
@@ -500,18 +549,40 @@ test("pins binding sidecars to LF line endings at repository level", () => {
   assert.match(attributes, /^\*\.binding\.md\s+text\s+eol=lf\s*$/m);
 });
 
-test("requires approval workflows to record and evidence the combined approval revision", () => {
+test("legacy image workflow retains combined approval while interactive designs use one runnable artifact approval", () => {
   const workflowPath = path.resolve(
     __dirname,
     "..",
     ".agent/workflows/mockup-implementation.md"
   );
   const workflow = fs.readFileSync(workflowPath, "utf8");
-
-  assert.match(workflow, /Binding approval revision/);
-  assert.match(workflow, /Approved binding approval revision/);
-  assert.match(
-    workflow,
-    /approval evidence\/reference[\s\S]*approved combined/i
+  const historicalStart = workflow.indexOf(
+    "## Historical image reference migration"
   );
+  assert.ok(historicalStart >= 0, "historical-image migration must remain");
+  const interactive = workflow.slice(0, historicalStart);
+  const historical = workflow.slice(historicalStart);
+
+  assert.match(interactive, /runnable design itself/i);
+  assert.match(interactive, /runnable entry[\s\S]*short README/i);
+  assert.match(interactive, /exact working design revision once/i);
+  assert.match(
+    interactive,
+    /No future interactive[\s\S]*sidecar[\s\S]*metadata approval/i
+  );
+  assert.match(historical, /Legacy Approved Mockup Metadata Migration/i);
+  assert.match(historical, /Binding approval revision/i);
+  assert.match(
+    historical,
+    /both current revisions copied into their approved fields/i
+  );
+  assert.match(
+    historical,
+    /approval\s+evidence identifying the approved combined revision/i
+  );
+  assert.match(
+    historical,
+    /Run the verifier before[\s\S]*sidecar as authoritative/i
+  );
+  assert.match(historical, /Never apply[\s\S]*new interactive HTML/i);
 });

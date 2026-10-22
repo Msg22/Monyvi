@@ -4,6 +4,15 @@ import type {
   SyncTableChangeSet,
 } from "@nozbe/watermelondb/sync";
 import type { FinancialActionPushCandidate } from "../financial-action-sync-service";
+import { inspectNewFinancialActionPushRoot } from "../account-review-recovery-protected-push";
+import {
+  malformedAccountActionRoot,
+  type AccountActionFailurePhase,
+  type AccountActionFailureReason,
+  type AccountActionFailureSite,
+} from "./account-action-failure-context";
+import type { AccountActionProtection } from "./account-action-protection";
+import { collectAcceptedReviewRootOnlyAck } from "./accepted-review-root-ack";
 import {
   ACCOUNT_BALANCE_WRITER_REGISTRY,
   requireGuardedAccountBalanceWriter,
@@ -16,8 +25,15 @@ const ENTITY_TABLES = {
   transfer: "transfers",
 } as const;
 
-const MALFORMED_ROOT_ERROR = "account_financial_action_malformed_root";
 const GENERIC_ACCOUNT_PUSH_WRITER_ID = "sync.accounts.push-full-row";
+
+function rejectMalformedRoot(
+  phase: AccountActionFailurePhase,
+  reason: AccountActionFailureReason,
+  context: Pick<AccountActionFailureSite, "rootState" | "table"> = {}
+): never {
+  throw malformedAccountActionRoot({ phase, reason, ...context });
+}
 
 function assertGenericAccountPushIsGuarded(): void {
   const isRegistered = ACCOUNT_BALANCE_WRITER_REGISTRY.some(
@@ -44,22 +60,92 @@ function readChangeId(value: unknown): string | null {
 interface AccountBalanceEnvelope {
   readonly accountGuards: ReadonlyArray<Readonly<Record<string, unknown>>>;
   readonly payload: Readonly<Record<string, unknown>>;
+  readonly references?: ReadonlyArray<{
+    readonly table: string;
+    readonly id: string;
+  }>;
+  /** Only a fully inspected, zero-opening Add tuple can omit financial guards. */
+  readonly verifiedZeroOpeningAdd?: boolean;
+  /** Strictly inspected Add's new account, never inferred from generic refs. */
+  readonly createdAccountId?: string;
+  /** Immutable Add snapshot account IDs that may have pending creator roots. */
+  readonly defaultSnapshotAccountIds?: readonly string[];
 }
 
 function readAccountBalanceEnvelope(
-  record: unknown
+  record: unknown,
+  changes: SyncPushArgs["changes"]
 ): AccountBalanceEnvelope | null {
   if (!isObject(record) || typeof record.payload_json !== "string") return null;
+  const strict = inspectNewFinancialActionPushRoot(record, changes);
+  if (strict) {
+    const isValidatedAdd =
+      record.domain === "accounts" &&
+      record.kind === "create_with_default" &&
+      strict.payload.schemaVersion === "account.create-default/v1" &&
+      strict.payload.operationCode === "account.create-default";
+    let createdAccountId: string | null = null;
+    let defaultSnapshotAccountIds: readonly string[] = [];
+    if (isValidatedAdd) {
+      // The strict inspector checked the canonical Add payload and physical
+      // owned create. Generic refs also contain default-account updates, so
+      // only the actual account/create mutation can establish this edge.
+      const mutation = strict.payload.domainMutation;
+      const created =
+        isObject(mutation) && Array.isArray(mutation.records)
+          ? mutation.records.filter(
+              (item) =>
+                isObject(item) &&
+                item.entity === "account" &&
+                item.mode === "create"
+            )
+          : [];
+      if (created.length !== 1 || !isObject(created[0])) {
+        rejectMalformedRoot("envelope", "add_created_account_cardinality");
+      }
+      createdAccountId = readChangeId(created[0].after);
+      const snapshot = strict.payload.expectedDefaultSnapshot;
+      if (
+        !createdAccountId ||
+        !isObject(snapshot) ||
+        !Array.isArray(snapshot.activeAccountIds)
+      ) {
+        rejectMalformedRoot("envelope", "add_created_account_snapshot_invalid");
+      }
+      // Local dependencyActionIds are derived from this frozen snapshot.
+      // Match those identities against pending Add creators in this batch,
+      // without adding a transport field or prechecking remote bank rows.
+      defaultSnapshotAccountIds = snapshot.activeAccountIds.filter(
+        (id): id is string => typeof id === "string"
+      );
+    }
+    return {
+      accountGuards: strict.accountGuards,
+      payload: strict.payload,
+      references: strict.references,
+      createdAccountId: createdAccountId ?? undefined,
+      defaultSnapshotAccountIds,
+      // No legacy envelope can claim this exemption. Zero-opening Add must
+      // have zero guards/effects and a strictly validated created account.
+      verifiedZeroOpeningAdd:
+        isValidatedAdd &&
+        strict.accountGuards.length === 0 &&
+        Array.isArray(strict.payload.accountEffects) &&
+        strict.payload.accountEffects.length === 0 &&
+        createdAccountId !== null,
+    };
+  }
   let envelope: unknown;
   try {
     envelope = JSON.parse(record.payload_json);
   } catch {
-    throw new Error(MALFORMED_ROOT_ERROR);
+    rejectMalformedRoot("envelope", "legacy_envelope_invalid_json");
   }
-  if (!isObject(envelope)) throw new Error(MALFORMED_ROOT_ERROR);
+  if (!isObject(envelope))
+    rejectMalformedRoot("envelope", "legacy_envelope_not_object");
   if (envelope.payloadVersion !== "account.balance-effects/v1") return null;
   if (!isObject(envelope.payload) || !Array.isArray(envelope.accountGuards)) {
-    throw new Error(MALFORMED_ROOT_ERROR);
+    rejectMalformedRoot("envelope", "legacy_envelope_fields_invalid");
   }
   return {
     accountGuards: envelope.accountGuards.filter(isObject),
@@ -67,12 +153,16 @@ function readAccountBalanceEnvelope(
   };
 }
 
-function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
+function protectedRefsFromRoot(
+  record: unknown,
+  changes: SyncPushArgs["changes"]
+): ReadonlyArray<{
   readonly id: string;
   readonly table: string;
 }> {
-  const envelope = readAccountBalanceEnvelope(record);
+  const envelope = readAccountBalanceEnvelope(record, changes);
   if (!envelope) return [];
+  if (envelope.references) return envelope.references;
   const refs: Array<{ readonly id: string; readonly table: string }> = [];
   const domainMutation = envelope.payload.domainMutation;
   if (isObject(domainMutation) && Array.isArray(domainMutation.records)) {
@@ -103,6 +193,44 @@ function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
     }
   });
   return refs;
+}
+
+/**
+ * A durable catalog is loaded and hashed BEFORE any dirty-bundle admission.
+ * Accepted/rejected/terminal roots do not require their action's original
+ * created/updated children to remain in the current Watermelon dirty set.
+ * An initial local_complete/sync_pending/sync_failed action still does.
+ */
+function isCataloguedNonDispatchRoot(
+  root: Readonly<Record<string, unknown>>,
+  catalog: AccountActionProtection | undefined
+): boolean {
+  if (!catalog) return false;
+  const found = catalog.roots.find(
+    (candidate) =>
+      candidate.physicalRootId === root.id &&
+      candidate.actionId === root.action_id &&
+      candidate.ownerId === root.user_id &&
+      candidate.payloadHash === root.payload_hash &&
+      candidate.payloadJson === root.payload_json &&
+      candidate.state === root.state
+  );
+  if (!found)
+    rejectMalformedRoot("catalog", "catalog_binding_mismatch", {
+      rootState: root.state,
+    });
+  // Only Add is rerouted to durable clean/terminal membership. Review and
+  // deployed legacy dirty-group admission remain exactly on their existing
+  // coordinator/strict-member path (including accepted/recovery behavior).
+  return (
+    root.domain === "accounts" &&
+    root.kind === "create_with_default" &&
+    (found.terminalAccepted ||
+      found.locallyCompensated ||
+      ["rejected_compensating", "reconciliation_incomplete"].includes(
+        found.state
+      ))
+  );
 }
 
 function collectFinanciallyDirtyAccountIds(
@@ -170,6 +298,101 @@ function collectEffectIdsByAction(
   return grouped;
 }
 
+function assertEveryEffectHasOwnedRoot(
+  changes: SyncPushArgs["changes"],
+  catalog?: AccountActionProtection
+): void {
+  const roots = (
+    changes as unknown as Readonly<
+      Record<string, SyncTableChangeSet | undefined>
+    >
+  ).financial_action_groups;
+  const dirtyRootActionIds = new Set(
+    [...(roots?.created ?? []), ...(roots?.updated ?? [])]
+      .filter(isObject)
+      .map((root) => root.action_id)
+      .filter((id): id is string => typeof id === "string")
+  );
+  const effects = (
+    changes as unknown as Readonly<
+      Record<string, SyncTableChangeSet | undefined>
+    >
+  ).account_financial_effects;
+  for (const record of [
+    ...(effects?.created ?? []),
+    ...(effects?.updated ?? []),
+  ]) {
+    if (!isObject(record))
+      rejectMalformedRoot("effects", "effect_record_invalid", {
+        table: "account_financial_effects",
+      });
+    if (typeof record.action_id !== "string" || typeof record.id !== "string")
+      rejectMalformedRoot("effects", "effect_identity_missing", {
+        table: "account_financial_effects",
+      });
+    const durable = catalog?.roots.find(
+      (candidate) => candidate.actionId === record.action_id
+    );
+    const terminal =
+      durable?.terminalAccepted === true ||
+      durable?.locallyCompensated === true ||
+      (durable !== undefined &&
+        ["rejected_compensating", "reconciliation_incomplete"].includes(
+          durable.state
+        ));
+    if (dirtyRootActionIds.has(record.action_id) && !terminal) continue;
+    const boundRoot = catalog?.roots.find(
+      (candidate) =>
+        candidate.actionId === record.action_id &&
+        (candidate.terminalAccepted ||
+          candidate.locallyCompensated ||
+          ["rejected_compensating", "reconciliation_incomplete"].includes(
+            candidate.state
+          ))
+    );
+    if (
+      !boundRoot ||
+      record.user_id !== boundRoot.ownerId ||
+      !catalog?.effectIdsByAction.get(record.action_id)?.has(record.id)
+    )
+      rejectMalformedRoot("effects", "orphan_effect_unverified", {
+        table: "account_financial_effects",
+      });
+    // The immutable root has been fully decoded/hash-checked by the durable
+    // catalog. Never allow an extra or swapped action effect as a terminal
+    // outstanding member.
+    let envelope: unknown;
+    try {
+      envelope = JSON.parse(boundRoot.payloadJson);
+    } catch {
+      rejectMalformedRoot("effects", "effect_payload_invalid_json", {
+        table: "account_financial_effects",
+      });
+    }
+    if (
+      !isObject(envelope) ||
+      !isObject(envelope.payload) ||
+      !Array.isArray(envelope.payload.accountEffects)
+    )
+      rejectMalformedRoot("effects", "effect_payload_invalid_shape", {
+        table: "account_financial_effects",
+      });
+    const original = envelope.payload.accountEffects.filter(
+      (value) => isObject(value) && value.effectId === record.id
+    );
+    if (
+      original.length !== 1 ||
+      !isObject(original[0]) ||
+      original[0].accountId !== record.account_id ||
+      original[0].amountMinorUnits !== record.amount_minor_units ||
+      original[0].currency !== record.currency
+    )
+      rejectMalformedRoot("effects", "effect_immutable_fields_mismatch", {
+        table: "account_financial_effects",
+      });
+  }
+}
+
 function groupRowIds(
   rootId: string,
   refs: ReadonlyArray<{ readonly id: string; readonly table: string }>,
@@ -189,8 +412,11 @@ function groupRowIds(
   return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
 }
 
-function readGuardRevisions(record: unknown): ReadonlyMap<string, string> {
-  const envelope = readAccountBalanceEnvelope(record);
+function readGuardRevisions(
+  record: unknown,
+  changes: SyncPushArgs["changes"]
+): ReadonlyMap<string, string> {
+  const envelope = readAccountBalanceEnvelope(record, changes);
   const revisions = new Map<string, string>();
   if (!envelope) return revisions;
   envelope.accountGuards.forEach((guard) => {
@@ -219,11 +445,19 @@ function compareRevision(left: string, right: string): number {
 
 function orderBundlesByAccountRevision(
   bundles: readonly AccountFinancialActionPushBundle[],
-  revisionsByAction: ReadonlyMap<string, ReadonlyMap<string, string>>
+  revisionsByAction: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  createdAccountsByAction: ReadonlyMap<string, string>,
+  snapshotAccountsByAction: ReadonlyMap<string, readonly string[]>
 ): readonly AccountFinancialActionPushBundle[] {
   if (bundles.length < 2) return bundles;
   const edges = bundles.map(() => new Set<number>());
   const indegrees = bundles.map(() => 0);
+  const addEdge = (from: number, to: number): void => {
+    if (from !== to && !edges[from].has(to)) {
+      edges[from].add(to);
+      indegrees[to] += 1;
+    }
+  };
 
   for (let leftIndex = 0; leftIndex < bundles.length; leftIndex += 1) {
     for (
@@ -244,13 +478,37 @@ function orderBundlesByAccountRevision(
         if (comparison === 0) return;
         const from = comparison < 0 ? leftIndex : rightIndex;
         const to = comparison < 0 ? rightIndex : leftIndex;
-        if (!edges[from].has(to)) {
-          edges[from].add(to);
-          indegrees[to] += 1;
-        }
+        addEdge(from, to);
       });
     }
   }
+
+  // A validated Add creates its account remotely before any guarded action
+  // can spend into it. A later Add may also capture an earlier pending Bank
+  // creator in its original default snapshot despite both having zero guards.
+  const creators = new Map<string, number>();
+  bundles.forEach((bundle, index) => {
+    const id = createdAccountsByAction.get(bundle.candidate.actionId);
+    if (!id) return;
+    if (creators.has(id))
+      rejectMalformedRoot("ordering", "creator_account_collision");
+    creators.set(id, index);
+  });
+  let hasCreatorOrderingEdge = false;
+  bundles.forEach((bundle, index) => {
+    const actionId = bundle.candidate.actionId;
+    const guards = revisionsByAction.get(actionId);
+    const touchedAccounts = new Set([
+      ...(guards ? guards.keys() : []),
+      ...(snapshotAccountsByAction.get(actionId) ?? []),
+    ]);
+    touchedAccounts.forEach((accountId) => {
+      const creatorIndex = creators.get(accountId);
+      if (creatorIndex === undefined || creatorIndex === index) return;
+      if (!edges[creatorIndex].has(index)) hasCreatorOrderingEdge = true;
+      addEdge(creatorIndex, index);
+    });
+  });
 
   const byActionId = (left: number, right: number): number =>
     bundles[left].candidate.actionId.localeCompare(
@@ -274,6 +532,9 @@ function orderBundlesByAccountRevision(
     });
   }
   if (orderedIndexes.length < bundles.length) {
+    // Never fall back to action-ID order if a creator prerequisite cycles.
+    if (hasCreatorOrderingEdge)
+      rejectMalformedRoot("ordering", "creator_dependency_cycle");
     const emitted = new Set(orderedIndexes);
     orderedIndexes.push(
       ...bundles
@@ -286,8 +547,10 @@ function orderBundlesByAccountRevision(
 }
 
 export function collectAccountFinancialActionPushBundles(
-  changes: SyncPushArgs["changes"]
+  changes: SyncPushArgs["changes"],
+  catalog?: AccountActionProtection
 ): readonly AccountFinancialActionPushBundle[] {
+  assertEveryEffectHasOwnedRoot(changes, catalog);
   const roots = (
     changes as unknown as Readonly<
       Record<string, SyncTableChangeSet | undefined>
@@ -296,23 +559,50 @@ export function collectAccountFinancialActionPushBundles(
   if (!roots) return [];
   const effectIdsByAction = collectEffectIdsByAction(changes);
   const revisionsByAction = new Map<string, ReadonlyMap<string, string>>();
+  const createdAccountsByAction = new Map<string, string>();
+  const snapshotAccountsByAction = new Map<string, readonly string[]>();
   const bundles = [...roots.created, ...roots.updated].flatMap((candidate) => {
     if (!isObject(candidate)) return [];
-    const refs = protectedRefsFromRoot(candidate);
+    if (isCataloguedNonDispatchRoot(candidate, catalog)) return [];
+    const acceptedRootOnly = collectAcceptedReviewRootOnlyAck(
+      candidate,
+      changes,
+      catalog
+    );
+    if (acceptedRootOnly) return [acceptedRootOnly];
+    const refs = protectedRefsFromRoot(candidate, changes);
     const actionId = readNonEmptyString(candidate, "action_id");
     const payloadHash = readNonEmptyString(candidate, "payload_hash");
     const payloadJson = readNonEmptyString(candidate, "payload_json");
     const rootId = readNonEmptyString(candidate, "id");
     const state = readNonEmptyString(candidate, "state");
-    const envelope = readAccountBalanceEnvelope(candidate);
+    const envelope = readAccountBalanceEnvelope(candidate, changes);
     if (!envelope) return [];
     if (!actionId || !payloadHash || !payloadJson || !rootId || !state) {
-      throw new Error(MALFORMED_ROOT_ERROR);
+      rejectMalformedRoot("collector", "root_identity_missing", {
+        rootState: candidate.state,
+      });
     }
-    if (refs.length === 0 || envelope.accountGuards.length === 0) {
-      throw new Error(MALFORMED_ROOT_ERROR);
+    if (refs.length === 0)
+      rejectMalformedRoot("collector", "root_references_empty", {
+        rootState: state,
+      });
+    if (
+      envelope.accountGuards.length === 0 &&
+      envelope.verifiedZeroOpeningAdd !== true
+    ) {
+      rejectMalformedRoot("collector", "root_guards_empty", {
+        rootState: state,
+      });
     }
-    revisionsByAction.set(actionId, readGuardRevisions(candidate));
+    revisionsByAction.set(actionId, readGuardRevisions(candidate, changes));
+    if (envelope.createdAccountId) {
+      createdAccountsByAction.set(actionId, envelope.createdAccountId);
+      snapshotAccountsByAction.set(
+        actionId,
+        envelope.defaultSnapshotAccountIds ?? []
+      );
+    }
     return [
       Object.freeze({
         candidate: Object.freeze({
@@ -329,20 +619,33 @@ export function collectAccountFinancialActionPushBundles(
       }),
     ];
   });
-  return orderBundlesByAccountRevision(bundles, revisionsByAction);
+  return orderBundlesByAccountRevision(
+    bundles,
+    revisionsByAction,
+    createdAccountsByAction,
+    snapshotAccountsByAction
+  );
 }
 
 export function collectProtectedFinancialActionRowIds(
-  changes: SyncPushArgs["changes"]
+  changes: SyncPushArgs["changes"],
+  catalog?: AccountActionProtection
 ): SyncRejectedIds | undefined {
   assertGenericAccountPushIsGuarded();
+  assertEveryEffectHasOwnedRoot(changes, catalog);
   const roots = (
     changes as unknown as Readonly<
       Record<string, SyncTableChangeSet | undefined>
     >
   ).financial_action_groups;
   const refs = roots
-    ? [...roots.created, ...roots.updated].flatMap(protectedRefsFromRoot)
+    ? [...roots.created, ...roots.updated].flatMap((root) =>
+        isObject(root) &&
+        (isCataloguedNonDispatchRoot(root, catalog) ||
+          collectAcceptedReviewRootOnlyAck(root, changes, catalog) !== null)
+          ? []
+          : protectedRefsFromRoot(root, changes)
+      )
     : [];
   const grouped = refs.reduce<Readonly<Record<string, readonly string[]>>>(
     (result, ref) => ({
@@ -352,15 +655,22 @@ export function collectProtectedFinancialActionRowIds(
     {}
   );
   const dirtyAccountIds = collectFinanciallyDirtyAccountIds(changes);
-  const protectedGrouped =
-    dirtyAccountIds.length === 0
-      ? grouped
-      : {
-          ...grouped,
-          accounts: [
-            ...new Set([...(grouped.accounts ?? []), ...dirtyAccountIds]),
-          ],
-        };
+  const protectedGrouped: Record<string, readonly string[]> = { ...grouped };
+  if (dirtyAccountIds.length > 0) {
+    protectedGrouped.accounts = [
+      ...new Set([...(protectedGrouped.accounts ?? []), ...dirtyAccountIds]),
+    ];
+  }
+  // Terminal losing members remain quarantined even when their root is
+  // synced/clean. This map may carry IDs not presently in dirty changes,
+  // which is intentional for the independent SDK final ACK/deletion gate.
+  if (catalog) {
+    for (const [table, ids] of Object.entries(catalog.losingIds)) {
+      protectedGrouped[table] = [
+        ...new Set([...(protectedGrouped[table] ?? []), ...ids]),
+      ];
+    }
+  }
   return Object.keys(protectedGrouped).length === 0
     ? undefined
     : Object.fromEntries(

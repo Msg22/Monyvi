@@ -44,6 +44,10 @@ import {
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
+import {
+  filterSelectableCategories,
+  getCategoryCatalogueSnapshot,
+} from "@/services/category-catalogue-service";
 
 type LiveSmsDeliveryMode = "foreground" | "headless";
 
@@ -232,11 +236,18 @@ async function loadAiContext(
       Q.where("deleted", Q.notEq(true))
     )
     .fetch();
+  // The AI resolves category names to ids, so it must only see the current
+  // catalogue of this backend and owner. Legacy rows stay resolvable for old
+  // records, but they are never offered to a new parse.
+  const canonicalCategories = filterSelectableCategories(
+    categories,
+    getCategoryCatalogueSnapshot()
+  );
 
   return {
     userId: scope.userId,
     context: {
-      categories: toCategoryTreeSources(categories),
+      categories: toCategoryTreeSources(canonicalCategories),
       supportedCurrencies: SUPPORTED_CURRENCIES.map(
         (currency) => currency.code
       ),

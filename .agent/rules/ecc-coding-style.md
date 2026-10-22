@@ -59,6 +59,21 @@ For new or changed authoritative financial calculations:
 
 ## Approved Mockup Fidelity
 
+Follow `AGENTS.md`, `docs/development-workflow.md`, and
+`docs/design/design-system.md` for the current authority and delivery order. For
+changed UI, also follow `.agent/rules/styling-rules.md` on actual content fit,
+accessible targets, semantic dark contrast and inline-notice feedback;
+owner-approved state-specific amendments supersede conflicting historical visual
+examples without changing approved image/binding bytes.
+
+For future meaningful UI designs, use
+`docs/design/interactive-design-workflow.md`: the primary feature mockup is a
+runnable, versioned and once-approved interactive artifact that itself owns the
+visual/responsive layout, with a short README; no prospective sidecar or
+additional hash/metadata approval. For historical image-backed UI, preserve the
+existing approved reference and sidecar. Browser prototypes guide native React
+Native implementation; they do not prove native fidelity or accessibility.
+
 For UI work governed by an approved scoped mockup:
 
 - Match the approved composition pixel-perfect at its declared UI viewport or
@@ -68,9 +83,10 @@ For UI work governed by an approved scoped mockup:
   the handoff explicitly marks them binding.
 - Use gradients when the design system or approved mockup uses them; gradients
   are allowed, not globally mandatory.
-- Use only a binding sidecar whose valid current content revision matches its
-  explicitly approved revision and same-revision approval evidence. Any binding
-  fact edit resets approval to `PENDING` until the changed revision is approved.
+- **Historical image references only:** Use their original approved binding
+  sidecar, immutable revisions and original verifier/evidence rules. **New
+  interactive references** need only the approved runnable design revision and
+  short README, not a sidecar, hash tuple or second approval.
 - Preserve composition, hierarchy, semantics, and material styling across
   compact-phone, ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and
   enlarged-text variants. Reflow only to keep content usable and readable.

@@ -1,0 +1,130 @@
+{
+  "style": "Generate exactly ONE standalone full-height phone mockup, matching the supplied Monyvi reference's dark navy background, slate surfaces, emerald actions, white readable typography, restrained amber pending labels, red expenses, Android-style subtle phone frame. SAME product, no redesign, no extra device collage. Portrait roughly 852x1846, logical 390x844. Crisp clear UI text. Existing PageHeader with back arrow. Safe top/bottom system areas, adequate normal-phone font size, slim generous spacing, flat transaction rows with dividers, ONE compact review-details area only when needed; never stacked generic warning cards. Keep all key actions above bottom navigation. Shared input style, red required asterisks. No added gradients/textures/provider logos/fake fields beyond requested. Match typography and framing of reference. This is a new proposed revision: leave original reference intact.",
+  "appReferenceHead": "c1e6a198422385a59f7e1bf4e5de3191b353e865",
+  "prompts": [
+    {
+      "id": "01-add-account-default-en",
+      "title": "Add account — choose the new default",
+      "referenceConcept": "form",
+      "prompt": "Screen Add account with green Save in header. Compact preview QNB Everyday / Bank account / 0 EGP. Account type * selector Bank active with Cash and Wallet inactive. Account name * QNB Everyday. Bank/provider * QNB dropdown. Currency * EGP dropdown, Initial balance * 0. Collapsed SMS matching (optional) section with chevron. Beneath balance before SMS section: SAME Edit Account toggle pattern with star icon, label Default account, emerald switch ON. Under it readable helper: \"Used for new transactions and voice or SMS entries when no account is mentioned and the currency matches.\" One quiet secondary line \"Saving will replace Cash as your default.\" Do not show Delete button or lock Add currency/type. No giant repeated framing around every field. Content may scroll but all illustrated controls should fit comfortably.",
+      "refinement": "Refine the supplied generated draft only. Put Default account block immediately after Initial balance, and place collapsed SMS matching below it. Use a FILLED emerald star beside Default account when ON. Add bank/cash/wallet icons to the three account-type buttons using the app's normal icon style. Keep all existing field names/values and helper/replacement copy. Preserve the body layout otherwise; no new fields.",
+      "finalRefinement": null
+    },
+    {
+      "id": "02-add-first-cash-default-en",
+      "title": "First account — default automatically; Cash eligibility",
+      "referenceConcept": "form",
+      "prompt": "Screen Add account, green Save. Compact Cash preview 0 EGP, type * Cash selected alongside Bank/Wallet. Account name * Cash, Currency * EGP selectable, Initial balance * 0. Default account same star/toggle pattern ON but visibly disabled to preserve first-account policy. Small helper directly underneath \"Your first account is the default.\" Then \"Used for new transactions and voice entries when no account is mentioned and the currency matches.\" Separate short line \"SMS entries use bank or wallet accounts.\" No bank-provider or SMS matching controls for Cash, no Delete button. Lots of calm room; no new warning card.",
+      "refinement": null,
+      "finalRefinement": "Edit only Default account row to add the SAME filled star icon before its label as the Edit Account / later Add account defaultpattern. Switch stays ON visibly disabled, helper 'Your first account is the default.' and Cash-onlyVoice/SMSeligibility text preserved. No financial/schema/otherformchanges. Keep existing normal form layout. Don't add warning."
+    },
+    {
+      "id": "03-confirm-currency-other-en",
+      "title": "Currency confirmation — choose another currency",
+      "referenceConcept": "currency",
+      "prompt": "Foreground bottom sheet Confirm currency over dimmed revised compact Review transactions (not old tall generic banner). Copy \"You mentioned EGP and USD. Which one applies to lunch?\" Unselected radio rows Egyptian pound / EGP; US dollar / USD. Quiet emerald text-link with globe/currency icon \"Choose another currency\" directly below suggestions, clearly separate from radio selection. Info \"No account is selected yet.\" Footer Cancel outline and disabled gray Use currency. Sheet tall enough for legibility and bottom inset. No preselection.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "04-other-currency-picker-en",
+      "title": "Choose another currency — search and confirm",
+      "referenceConcept": "currency",
+      "prompt": "ONE active bottom sheet titled Choose currency, back chevron to Confirm currency, close X. Context \"For Lunch at Talabat\". Search field Search currencies. List unselected radio items Egyptian pound EGP, US dollar USD, Euro EUR, Saudi riyal SAR, UAE dirham AED. Use normal supported-currency rows, no invented exchange rate or amount conversion. Sticky footer Cancel and disabled Use currency until explicit choice. Dimmed review behind; do NOT stack two sheets. Account remains unassigned until confirmation. All text readable.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "05-combined-review-en",
+      "title": "Combined states — independent groups and disclosed selection",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry, collapsed What I heard. One compact Review details: \"2 new accounts · 1 currency to check\"; independent QNB EGP New account ·3 transactions Confirm +menu; CIB EGP New account ·1 transaction Confirm +menu; \"1 transaction needs currency\" Review; neutral \"Cash used for 2 transactions · Why?\" line. A SHORT muted line inside QNB row or below it \"Selecting a QNB transaction confirms this account for all 3.\" Keep quiet and readable; this disclosure must exist. Filters All(7), Needs review(5), Selected(2). List toolbar \"7 transactions\" left, \"Select ready\" emerald right. Flat rows Lunch -120 EGP QNB new unchecked; Uber -50 EGP QNB new unchecked; Bus -20 EGP Cash Default account checked, remaining four offscreen. Footer Discard all and Save 2 transactions. Preserve independent confirmations and normal spacing; don't cram all seven rows.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "06-removed-suggestion-undo-en",
+      "title": "Remove one suggestion — transactions retained and Undo",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry / What I heard collapsed. ONE compact Review details containing CIB EGP New account·1 transaction Confirm+menu and amber \"2 transactions need an account\" Choose. Quiet \"Cash used for 1 transaction · Why?\" Filters All(4), Needs review(3), Selected(1). Select ready toolbar. Rows Lunch -120 EGP unchecked Choose account amber, Uber -50 EGP unchecked Choose account amber, Coffee -40 EGP CIB New account unchecked, Bus -20 EGP Cash Default account checked. A transient slim snackbar ABOVE footer \"QNB suggestion removed\" with emerald Undo. Footer Discard all, Save 1 transaction. No QNB draft row; keep its two transaction rows, no default reassignment to them, no duplicatewarningcard.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "07-default-only-en",
+      "title": "Default-only review — quiet information without a panel",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry / What I heard collapsed. No Review details heading/card because no issue/draft. One small info line \"Cash used for 2 transactions · Why?\" directly above filters. All(2), Needs review(0), Selected(2). Toolbar \"2 transactions\" and \"Clear selection\". Two checked flat rows Bus ride -20 EGP /Cash·Default account /Transport; Groceries -180 EGP /Cash·Default account /Shopping. Footer Discard all, Save 2 transactions. Calm layout, no giant default banner and no genericwarning.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "08-issues-only-en",
+      "title": "Issues-only review — account, currency, amount and category",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry / What I heard. ONE compact Review details titled \"4 transactions need a check\". Four concise divided rows \"Choose an account\" ·1 transaction with Choose; \"Confirm currency\" ·1 transaction with Review; \"Check amount\" ·1 transaction with Review; \"Choose a category\" ·1 transaction with Choose. No new-account/default block. Filters All(4), Needs review(4), Selected(0). Select ready toolbar. Visible rows Uber -50 EGP with amber Choose account and small \"No default account is set.\"; Lunch numeric -120 with NO currency code plus amber Confirm currency; Electricity bill amber Check amount with amount \"—\"; Coffee -40 EGP QNB existing account with amber Choose category. Every checkbox unselected, Footer Discard all and disabled Save selected. No separate generic missing-info notice. Keep roomy readable rows, bottom row may scroll but no overlap.",
+      "refinement": null,
+      "finalRefinement": "Edit only the category issue icon: use a tag/grid category icon beside Choose a category in the summary, NOT a bank/account icon. Keep all four summary rows within one panel, ALL other content and correct 4/4/0 counters unchanged. Preserve amount dash, uncertaincurrency noaccount, disabled save. Do not add new statuses."
+    },
+    {
+      "id": "09-confirmed-feedback-en",
+      "title": "Shared confirmation — only the clicked transaction selected",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry / What I heard. Compact Review details two rows QNB EGP Confirmed ·3 transactions read-only green check with Change +menu; CIB EGP Confirmed ·1 transaction read-only green check with Change +menu. Small line \"Accounts are created when you save.\" Filters All(4), Needs review(0), Selected(1), toolbar Select ready. Flat rows Lunch -120 EGP QNB·Confirmed CHECKED; Uber -50 EGP QNB·Confirmed UNCHECKED; Groceries -320 EGP QNB·Confirmed UNCHECKED; Coffee -40 EGP CIB·Confirmed UNCHECKED. Snackbar \"QNB confirmed for 3 transactions\" \"Only Lunch is selected.\" Footer Discard all, Save 1 transaction. No Confirm-all button, don't check all rows.",
+      "refinement": "Refine only: the filter bar MUST have exactly THREE equal tabs All(4), Needs review(0), Selected(1). Move Select ready OUT of the filter bar into a separate short toolbar immediately underneath, leftlabel 4 transactions, rightlink Select ready. Keep QNB/CIB confirmed, ONLY Lunch checked, all four rows and feedback, Save1. No fourthtab.",
+      "finalRefinement": "Edit only the final emerald button label: exact grammatical text 'Save 1 transaction' (singular). Keep all layout, threefiltertabs, separateSelectreadytoolbar, exactlyLunchchecked, snackbarQNB3, everyotherpixelconcept intact."
+    },
+    {
+      "id": "10-clean-review-en",
+      "title": "Clean review — omit empty account-information section",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry / collapsed What I heard. Immediately filters All(2), Needs review(0), Selected(2), no Review details card or default note. Toolbar 2 transactions / Clear selection. Checked Lunch -120 EGP QNB Everyday (existing exact match) Food&drinks; checked Uber -50 EGP QNB Everyday Transport. Footer Discard all and Save 2 transactions. No draft/default badges. Quiet clean spacing, no fabricated empty-state warning.",
+      "refinement": "Refine only: on both transaction rows render existing account nickname QNB Everyday as ONE neutral muted-blue label. Remove yellow/amber coloring and separator between QNB and Everyday. Existing matched account isn't a pending status. Keep rows checked, noReviewdetails/default section, counters2/0/2 and footer unchanged.",
+      "finalRefinement": null
+    },
+    {
+      "id": "11-empty-selected-filter-en",
+      "title": "Filtered empty state — no selected transactions",
+      "referenceConcept": "review",
+      "prompt": "Review transactions / Retry /What I heard collapsed. Compact QNB EGP Confirmed·3 transactions read-onlystatus and Change +menu, \"Created when you save linked transactions.\" Filters All(3), Needs review(0), Selected(0) with Selected ACTIVE amber. Empty filtered area small checkbox outline icon, title \"No selected transactions\", supporting \"Choose transactions from All to save them.\", small outline Show all button. Footer Discard all, Save selected disabledgray. This is filter empty, not recording noresults; no cloud/error/gray wave. Safe space.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "12-default-why-en",
+      "title": "Default assignment — friendly Why explanation",
+      "referenceConcept": "review",
+      "prompt": "ONE foreground neutral bottom sheet titled Default account used with bank/account icon. Friendly copy \"Cash was selected for 2 transactions because no account was mentioned and the currency matches.\" Second paragraph \"You can change the account on each transaction before saving.\" Quiet extra line \"A named account or an uncertain currency still needs your review.\" Emerald Got it button atbottomsafearea. Behinddimmed default-onlyscreen tiny note no tallReviewdetailscard. No permanentdismiss toggle, no developer jargon, no provider call.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "13-group-replace-en",
+      "title": "Replace shared draft — disclose group impact and candidate identity",
+      "referenceConcept": "currency",
+      "prompt": "ONE active bottom sheet Choose existing account with closeX, helper \"Replace QNB for all 3 linked transactions.\" Scope small EGP·Bank accounts. Unselected radio choices QNB Everyday /EGP ·card ending1234; QNB Savings /EGP ·card ending5678; CIB Salary /EGP ·card ending2468. No autochosenaccount. Quiet line \"Transaction selections stay unchanged.\" Cancel and disabled Use account. Dimmed compactreviewbehind. Header/bankicon notpersonprofileicon. This is groupreplacement notperrowchoice.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "14-sms-save-failure-en",
+      "title": "SMS review — preserve selections and drafts on save failure",
+      "referenceConcept": "review",
+      "prompt": "Review SMS / Retry header. Compact suggested-accountrow QNB EGP Confirmed ·2 transactions Change+menu. Filters All(2), Needs review(0), Selected(2). Two checkedrows Grocery -180 EGP and Uber -50 EGP, QNB Confirmed, allvalid. Neutral slim inline failure feedback ABOVEfooter \"Couldn't save your transactions. Your choices are still here.\" No giant alert/modal. Footer has smaller Review later link, Discard all and emerald Try saving again. No saved-success icon and no permanent realaccountcreated indicator. SMS sourcebanknotCash. Preserve selected count two. No wave/no genericerrorgraphic.",
+      "refinement": null,
+      "finalRefinement": null
+    },
+    {
+      "id": "15-combined-review-ar",
+      "title": "Arabic RTL — revised combined review and shared disclosure",
+      "referenceConcept": "review",
+      "prompt": "Arabic RTL version of combined Review transactions. Allcopy realArabic, accountcodes LTRisolated. Header مراجعة المعاملات and إعادة المحاولة. Collapsed ما قلته. One تفاصيل للمراجعة panel subtitle حسابان جديدان وعملة تحتاج تأكيدًا. QNB · EGP new حساب جديد · ٣ معاملات with تأكيد+menu; CIB ·EGP حساب جديد ·معاملة واحدة with تأكيد+menu. QNBdisclosure \"اختيار معاملة من QNB يؤكد الحساب للمعاملات الثلاث.\" Currencyrow \"معاملة تحتاج تأكيد العملة\" مراجعة. Cashinfo \"كاش مستخدم لمعاملتين · لماذا؟\". Filters الكل (٧), تحتاج مراجعة (٥), المحدد (٢). Toolbar اختيار الجاهز. Flat unchecked الغداء ·QNB حساب جديد amount expense١٢٠ج.م.;unchecked أوبر ·QNB; checked الحافلة ·كاش الحساب الافتراضي expense٢٠ج.م. Footer إلغاء الكل and حفظ معاملتين. Correct mirroredlayout, no corrupt letters, readable Arabic, amounts/codeskeepidentity.",
+      "refinement": "Refine only: shared QNB disclosure must be small neutral quiet text directly beneath QNB row, NO exclamation/warning icon and NO separate warning row. Keep currency issue row amber. Add separate compact toolbar below the THREE filters: ٧ معاملات and اختيار الجاهز. Show three visible rows الغداء unchecked, أوبر unchecked, الحافلة checked; other four accessed byscroll, so counts remain٧/٥/٢. Preserve all correctArabic/accountcodesLTRisolated. Expenses show explicit minus sign with isolated amount. Keep header/independentQNB/CIB/cashWhy/footer intact.",
+      "finalRefinement": "Refine the first Arabic reference to match SECOND English reference's ONE unified panel composition. Move currency issue 'معاملة تحتاج تأكيد العملة' with مراجعة and amber currency-alerticon INSIDE the تفاصيل للمراجعة panel, before Cash لماذا؟ note. There must be NO currency strip outside panel. Keep quiet QNB shared disclosure inside QNBrow, no extrawarning. THREE equalfilters belowpanel, separatetoolbar ٧ معاملات /اختيار الجاهز. Show THREE visible rows الغداء unchecked, أوبر unchecked, الحافلة checked; REMOVE the قهوة visible row (it exists offscreen). Counters ٧/٥/٢ remaincorrect. NaturalreadableArabicRTL withisolatedLTRQNB/EGP andexpense minus. Do NOTsplitconditionsections orshrinkfonts. Footer حفظ معاملتين /إلغاء الكل."
+    }
+  ],
+  "arabicAdditionalRefinements": [
+    "Precisely edit this supplied ARABIC RTL mockup. Keep its existing RTL layout: header back-arrow at RIGHT pointing right, إعادة المحاولة at LEFT; account icons RIGHT, confirmation/menu actions LEFT; filters الكل(٧)RIGHT, تحتاج مراجعة(٥)CENTER, المحدد(٢)LEFT. Change ONLY the currency issue placement: move the existing row معاملة تحتاج تأكيد العملة / مراجعة INTO the existing تفاصيل للمراجعة panel, between CIB and the Cash لماذا؟ footer. This produces ONE unified panel containing QNB, CIB, currency, defaultinfo. Preserve quiet line اختيار معاملة من QNB يؤكد الحساب للمعاملات الثلاث. directly under QNB. Do NOTuseEnglishlayoutorleft-alignaccountrows. NO new duplicate currency strip outside the panel. To preserve legibility show THREE visible transaction rows الغداء and أوبر unchecked and الحافلة checked; Coffee and fourremaining rows are offscreen. Counters7/5/2 and Save2correct. Keep separate toolbar٧ معاملات/اختيار الجاهز belowthreefilters. ALL Arabic legible. Preserve normal phone frame, navy/emerald/amber style and safefooter. No warning icon on QNBdisclosure. Do not change anybehavior.",
+    "Edit only TWO TEXT STRINGS in the currency issue row of this Arabic mockup. On the row titled معاملة تحتاج تأكيد العملة: replace its green action تأكيد with مراجعة; replace its small subtitle ٧ معاملات with معاملة واحدة. That currency row refers to ONE transaction, not seven. Preserve EVERY other visual element, all RTL positions, panel composition, QNB/CIB counts, quiet disclosure, Cash note, filters ٧/٥/٢, toolbar٧معاملات, transaction rows and footer. Do not change layout, reorder rows, translate codes, or add icons. Only these two literal Arabic replacements."
+  ]
+}

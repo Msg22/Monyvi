@@ -1,0 +1,275 @@
+<div id="monyvi-review-concepts">
+  <div class="viz-dotted-background" aria-label="Compact voice review design">
+    <section data-variant="ملخّص قابل للفتح" aria-label="Inline account review design"><div class="mv-stage"><div class="mv-phone" data-concept="inline" aria-label="Inline review preview"></div></div></section>
+  </div>
+</div>
+<style>
+  #monyvi-review-concepts .mv-stage { display:flex; justify-content:center; align-items:flex-start; padding:18px 4px 24px; min-height:822px; }
+  #monyvi-review-concepts .mv-phone { --mv-bg:light-dark(#f7f9fc,#10172b); --mv-surface:light-dark(#ffffff,#202d40); --mv-field:light-dark(#f0f4f8,#172237); --mv-text:light-dark(#142337,#f3f6fb); --mv-sub:light-dark(#536479,#b4c0d1); --mv-line:light-dark(#d8e0e9,#39465a); --mv-green:light-dark(#007c5d,#48dbac); --mv-green-fill:light-dark(#008866,#079b73); --mv-on-green:#ffffff; --mv-yellow:light-dark(#896000,#ffca42); --mv-soft:light-dark(#eaf6f1,#163b36); --mv-red:light-dark(#ba3742,#ff858d); --mv-scale:1; background:var(--mv-bg); color:var(--mv-text); width:min(100%,var(--mv-width,360px)); min-width:0; min-height:1120px; border:1px solid var(--mv-line); border-radius:26px; font-family:Inter,Arial,sans-serif; font-size:calc(14px * var(--mv-scale)); line-height:1.45; position:relative; display:flex; flex-direction:column; overflow-wrap:anywhere; container-type:inline-size; }
+  #monyvi-review-concepts .mv-phone * { box-sizing:border-box; }
+  #monyvi-review-concepts .mv-phone { min-height:0; height:780px; }
+  #monyvi-review-concepts .mv-phone button,#monyvi-review-concepts .mv-phone input,#monyvi-review-concepts .mv-phone select { font:inherit; }
+  #monyvi-review-concepts .mv-phone button { color:inherit; background:transparent; border:0; cursor:inherit; }
+  #monyvi-review-concepts .mv-phone button:focus-visible,#monyvi-review-concepts .mv-phone input:focus-visible,#monyvi-review-concepts .mv-phone select:focus-visible { outline:2px solid var(--mv-green); outline-offset:3px; }
+  #monyvi-review-concepts .mv-phone button:disabled { opacity:.5; cursor:default; }
+  #monyvi-review-concepts .mv-phone svg { display:block; flex-shrink:0; width:18px; height:18px; overflow:visible; }
+  #monyvi-review-concepts .mv-status { display:flex; justify-content:space-between; align-items:center; padding:15px 19px 9px; font-size:.85em; font-weight:600; }
+  #monyvi-review-concepts .mv-status-right { display:flex; align-items:center; gap:7px; }
+  #monyvi-review-concepts .mv-header { display:flex; align-items:center; gap:9px; padding:13px 13px 15px; }
+  #monyvi-review-concepts .mv-title { margin:0; font-size:1.4em; font-weight:650; flex:1; letter-spacing:-.035em; }
+  #monyvi-review-concepts .mv-icon { width:32px; height:36px; padding:6px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+  #monyvi-review-concepts .mv-link { color:var(--mv-green)!important; font-weight:600; padding:6px 0; display:inline-flex; gap:5px; align-items:center; text-align:left; }
+  #monyvi-review-concepts .mv-body { flex:1; min-width:0; min-height:0; overflow-y:auto; padding:0 14px 14px; scrollbar-width:thin; scrollbar-color:var(--mv-line) transparent; }
+  #monyvi-review-concepts .mv-transcript { border-radius:13px; background:var(--mv-surface); padding:12px; margin-bottom:15px; }
+  #monyvi-review-concepts .mv-transcript-head { display:flex; width:100%; align-items:center; gap:7px; color:var(--mv-sub)!important; font-size:.76em!important; letter-spacing:.04em; text-align:left; }
+  #monyvi-review-concepts .mv-transcript-head span:first-of-type { flex:1; }
+  #monyvi-review-concepts .mv-transcript p { margin:8px 0 0; color:var(--mv-sub); font-size:.9em; }
+  #monyvi-review-concepts .mv-transcript:not(.mv-expanded) p { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #monyvi-review-concepts .mv-summary { border:1px solid var(--mv-line); border-radius:12px; padding:10px 12px; margin-bottom:12px; }
+  #monyvi-review-concepts .mv-summary-main { display:flex; align-items:center; gap:8px; width:100%; text-align:left; }
+  #monyvi-review-concepts .mv-summary-main > span { flex:1; min-width:0; }
+  #monyvi-review-concepts .mv-summary-main small { display:block; color:var(--mv-sub); font-size:.82em; margin-top:2px; }
+  #monyvi-review-concepts .mv-summary-main > svg { color:var(--mv-green); }
+  #monyvi-review-concepts .mv-notice { padding:10px 12px; margin-bottom:12px; border-radius:10px; background:var(--mv-soft); color:var(--mv-text); display:flex; align-items:flex-start; gap:8px; font-size:.87em; }
+  #monyvi-review-concepts .mv-notice > span { flex:1; }
+  #monyvi-review-concepts .mv-notice .mv-icon { height:24px; width:24px; padding:2px; }
+  #monyvi-review-concepts .mv-switch { display:flex; gap:4px; border-bottom:1px solid var(--mv-line); margin:0 0 12px; }
+  #monyvi-review-concepts .mv-switch button { padding:10px 12px; flex:1; border-bottom:2px solid transparent; color:var(--mv-sub); font-weight:600; white-space:nowrap; }
+  #monyvi-review-concepts .mv-switch button[aria-selected="true"] { color:var(--mv-green); border-bottom-color:var(--mv-green); }
+  #monyvi-review-concepts .mv-count { display:inline-block; margin-left:4px; font-size:.85em; }
+  #monyvi-review-concepts .mv-tools { display:flex; gap:5px; flex-wrap:wrap; margin:7px 0 9px; align-items:center; }
+  #monyvi-review-concepts .mv-chip { padding:6px 8px!important; border-radius:7px; font-size:.8em!important; color:var(--mv-sub)!important; min-height:32px; }
+  #monyvi-review-concepts .mv-chip[aria-pressed="true"] { background:var(--mv-surface); color:var(--mv-text)!important; }
+  #monyvi-review-concepts .mv-list-title { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:12px 0 1px; color:var(--mv-sub); font-size:.85em; }
+  #monyvi-review-concepts .mv-list-title .mv-link { font-size:1em; }
+  #monyvi-review-concepts .mv-transaction { padding:15px 0 13px; border-bottom:1px solid var(--mv-line); }
+  #monyvi-review-concepts .mv-transaction:last-child { border-bottom:0; }
+  #monyvi-review-concepts .mv-tx-top { display:flex; align-items:flex-start; gap:8px; }
+  #monyvi-review-concepts .mv-check { display:flex; align-items:center; justify-content:center; width:30px; min-height:32px; flex-shrink:0; }
+  #monyvi-review-concepts .mv-check input { width:19px; height:19px; margin:0; accent-color:var(--mv-green-fill); }
+  #monyvi-review-concepts .mv-tx-name { flex:1; min-width:0; font-weight:600; }
+  #monyvi-review-concepts .mv-time { color:var(--mv-sub); font-size:.82em; font-weight:400; margin-top:3px; }
+  #monyvi-review-concepts .mv-amount { color:var(--mv-red); font-weight:650; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  #monyvi-review-concepts .mv-tx-meta { margin:8px 0 0 38px; display:flex; flex-wrap:wrap; align-items:center; gap:3px 13px; }
+  #monyvi-review-concepts .mv-meta { display:flex; align-items:center; gap:6px; min-width:0; max-width:100%; }
+  #monyvi-review-concepts .mv-meta > span { min-width:0; }
+  #monyvi-review-concepts .mv-meta > svg { color:var(--mv-sub); width:17px; height:17px; }
+  #monyvi-review-concepts .mv-edit { padding:5px!important; width:29px; height:32px; display:inline-flex; justify-content:center; align-items:center; color:var(--mv-sub)!important; flex-shrink:0; }
+  #monyvi-review-concepts .mv-edit svg { width:17px; height:17px; }
+  #monyvi-review-concepts .mv-category { color:var(--mv-sub); font-size:.84em; }
+  #monyvi-review-concepts .mv-tag { margin:3px 0 0 61px; color:var(--mv-yellow); font-size:.77em; }
+  #monyvi-review-concepts .mv-need { color:var(--mv-yellow)!important; font-weight:500; }
+  #monyvi-review-concepts .mv-group { padding:13px 0; border-bottom:1px solid var(--mv-line); }
+  #monyvi-review-concepts .mv-group:last-child { border-bottom:0; }
+  #monyvi-review-concepts .mv-removed .mv-group-name { color:var(--mv-sub); text-decoration:line-through; }
+  #monyvi-review-concepts .mv-discard-suggestion { color:var(--mv-red)!important; }
+  #monyvi-review-concepts .mv-group-head { display:flex; align-items:flex-start; gap:8px; }
+  #monyvi-review-concepts .mv-mark { flex-shrink:0; width:26px; min-height:30px; display:flex; align-items:center; justify-content:center; color:var(--mv-sub); }
+  #monyvi-review-concepts .mv-group-copy { flex:1; min-width:0; }
+  #monyvi-review-concepts .mv-group-name { font-size:.95em; font-weight:600; }
+  #monyvi-review-concepts .mv-group-sub { display:flex; flex-wrap:wrap; gap:2px 8px; font-size:.78em; color:var(--mv-sub); margin-top:3px; }
+  #monyvi-review-concepts .mv-group-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+  #monyvi-review-concepts .mv-small { display:inline-flex; gap:4px; align-items:center; justify-content:center; min-height:32px; padding:5px 7px!important; color:var(--mv-green)!important; font-size:.8em!important; font-weight:600; white-space:nowrap; }
+  #monyvi-review-concepts .mv-small svg { width:15px; height:15px; }
+  #monyvi-review-concepts .mv-more { width:28px; }
+  #monyvi-review-concepts .mv-linked { margin:6px 0 0 34px; font-size:.78em!important; }
+  #monyvi-review-concepts .mv-linked-list { margin:6px 0 0 34px; color:var(--mv-sub); font-size:.84em; }
+  #monyvi-review-concepts .mv-linked-row { display:flex; justify-content:space-between; gap:10px; padding:3px 0; }
+  #monyvi-review-concepts .mv-menu { margin:8px 0 0 34px; display:flex; gap:6px; flex-wrap:wrap; padding:7px 0; border-top:1px solid var(--mv-line); }
+  #monyvi-review-concepts .mv-menu button { color:var(--mv-green); padding:5px 7px; font-size:.84em; }
+  #monyvi-review-concepts .mv-disclosure { color:var(--mv-sub); font-size:.81em; margin:13px 0 10px; display:flex; gap:7px; align-items:flex-start; }
+  #monyvi-review-concepts .mv-disclosure svg { width:15px; height:18px; }
+  #monyvi-review-concepts .mv-why { color:var(--mv-green)!important; padding:0!important; text-decoration:underline; text-underline-offset:3px; }
+  #monyvi-review-concepts .mv-context-group { margin:9px 0 0; background:var(--mv-surface); border-radius:11px; padding:0 10px; }
+  #monyvi-review-concepts .mv-context-group .mv-group { border:0; }
+  #monyvi-review-concepts .mv-context-intro { color:var(--mv-sub); font-size:.8em; margin:0 0 6px; }
+  #monyvi-review-concepts .mv-footer { padding:14px 14px 20px; border-top:1px solid var(--mv-line); margin-top:auto; display:flex; gap:9px; background:var(--mv-bg); border-radius:0 0 26px 26px; }
+  #monyvi-review-concepts .mv-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; border:1px solid var(--mv-line)!important; border-radius:10px; padding:9px 12px!important; min-height:44px; font-weight:600; }
+  #monyvi-review-concepts .mv-save { background:var(--mv-green-fill)!important; color:var(--mv-on-green)!important; flex:1; }
+  #monyvi-review-concepts .mv-discard { color:var(--mv-red)!important; font-size:.9em!important; }
+  #monyvi-review-concepts .mv-overlay { position:absolute; inset:0; z-index:3; background:light-dark(#21304755,#00000077); border-radius:26px; padding:100px 0 0; display:flex; align-items:flex-start; }
+  #monyvi-review-concepts .mv-sheet { width:100%; background:var(--mv-surface); border:1px solid var(--mv-line); border-radius:20px; padding:17px 16px 22px; box-shadow:0 12px 35px #00000022; }
+  #monyvi-review-concepts .mv-sheet-head { display:flex; align-items:center; gap:10px; margin:0 0 14px; }
+  #monyvi-review-concepts .mv-sheet-head h3 { flex:1; margin:0; font-size:1.1em; }
+  #monyvi-review-concepts .mv-sheet-context { color:var(--mv-sub); margin-bottom:15px; font-size:.88em; }
+  #monyvi-review-concepts .mv-account-option { display:flex; gap:9px; padding:13px 0; align-items:center; border-bottom:1px solid var(--mv-line); }
+  #monyvi-review-concepts .mv-account-option > span { flex:1; min-width:0; }
+  #monyvi-review-concepts .mv-account-option small { display:block; color:var(--mv-sub); margin-top:3px; }
+  #monyvi-review-concepts .mv-account-option input { width:19px; height:19px; accent-color:var(--mv-green-fill); flex-shrink:0; }
+  #monyvi-review-concepts .mv-sheet p { color:var(--mv-sub); font-size:.88em; }
+  #monyvi-review-concepts .mv-sheet label.mv-field-label { display:block; margin:14px 0; color:var(--mv-sub); font-size:.85em; }
+  #monyvi-review-concepts .mv-sheet input[type="text"],#monyvi-review-concepts .mv-sheet select { width:100%; display:block; border:1px solid var(--mv-line); background:var(--mv-field); color:var(--mv-text); padding:11px 10px; border-radius:8px; margin-top:6px; font-size:16px; }
+  #monyvi-review-concepts .mv-sheet-footer { display:flex; gap:9px; padding-top:16px; }
+  #monyvi-review-concepts .mv-empty { color:var(--mv-sub); padding:20px 0; }
+  @container (max-width:330px) { #monyvi-review-concepts .mv-title { font-size:1.3em; } #monyvi-review-concepts .mv-body { padding-inline:11px; } #monyvi-review-concepts .mv-group-head { gap:5px; } #monyvi-review-concepts .mv-group-name { font-size:.89em; } #monyvi-review-concepts .mv-small { padding-inline:4px!important; } #monyvi-review-concepts .mv-group-actions { gap:0; } #monyvi-review-concepts .mv-group-actions .mv-small svg { display:none; } }
+  @media (pointer:coarse) { #monyvi-review-concepts .mv-phone button,#monyvi-review-concepts .mv-check { min-height:44px; } #monyvi-review-concepts .mv-edit { width:34px; } }
+  @media (max-width:380px) { #monyvi-review-concepts .mv-stage { padding-inline:0; } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('monyvi-review-concepts');
+  const transcript = 'Paid 20 EGP from my TEST NEW QNB for coffee, paid 30 EGP from my TEST NEW QNB for tea, paid 40 EGP from my TEST NEW QNB for a book, paid 50 EGP from my TEST CIB for a game, paid 60 EGP for a snack, paid 70 at QNB, could be EGP or USD.';
+  const seed = [
+    {id:'coffee',name:'Coffee',amount:20,category:'Food & drinks',group:'qnb'},
+    {id:'tea',name:'Tea',amount:30,category:'Food & drinks',group:'qnb'},
+    {id:'book',name:'Book',amount:40,category:'Shopping',group:'qnb'},
+    {id:'game',name:'Game',amount:50,category:'Shopping',group:'cib'},
+    {id:'snack',name:'Snack',amount:60,category:'Food & drinks',account:'Cash Wallet',currency:'EGP'},
+    {id:'unclear',name:'Unclear currency purchase',amount:70,category:'Shopping',account:null,currency:null}
+  ];
+  const icon = name => `<i data-lucide="${name==='pencil'?'square-pen':name}" aria-hidden="true"></i>`;
+  const safe = text => String(text).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  const previews = [];
+  const saved = window.openai?.widgetState?.privateContent;
+  root.querySelectorAll('.mv-phone').forEach(phone => {
+    const concept = phone.dataset.concept;
+    const state = {expanded:false,tab:'transactions',filter:'all',transcript:false,menu:null,linked:null,sheet:null,message:null,why:false,selected:[],groups:{qnb:{name:'TEST NEW QNB',currency:'EGP',confirmed:false},cib:{name:'TEST CIB',currency:'EGP',confirmed:false}},transactions:seed.map(t=>({...t})),width:360,scale:1,longNames:false};
+    const manuallyDeselected = new Set();
+    const removedSuggestions = new Map();
+    if (saved?.[concept]) {
+      const previous = saved[concept];
+      ['expanded','tab','filter','transcript','width','scale','longNames'].forEach(key => { if (typeof previous[key] === typeof state[key]) state[key] = previous[key]; });
+    }
+    const currentGroupIds = () => [...new Set(state.transactions.map(t=>t.group).filter(Boolean))];
+    const displayedGroupIds = () => Object.keys(state.groups).filter(id=>currentGroupIds().includes(id)||removedSuggestions.has(id));
+    const pending = () => currentGroupIds().filter(id=>!state.groups[id].confirmed).length;
+    const needsAccount = t => !t.group && !t.account;
+    const needsReview = t => needsAccount(t) || (t.group && !state.groups[t.group].confirmed) || !t.category?.trim() || !(t.amount>0) || !(t.group?state.groups[t.group].currency:t.currency);
+    function syncReadySelection() {
+      state.selected=state.selected.filter(id=>{const t=state.transactions.find(row=>row.id===id);return t&&!needsReview(t)&&!manuallyDeselected.has(id);});
+      state.transactions.forEach(t=>{if(!needsReview(t)&&!manuallyDeselected.has(t.id)&&!state.selected.includes(t.id))state.selected.push(t.id);});
+    }
+    const displayName = group => state.longNames ? group.name + ' Personal Savings Account' : group.name;
+    const accountName = t => t.group ? displayName(state.groups[t.group]) : t.account;
+    const currency = t => t.group ? state.groups[t.group].currency : t.currency;
+    const groupTransactions = id => state.transactions.filter(t=>t.group===id);
+    const persist = () => {
+      const privateContent = Object.fromEntries(previews.map(p=>[p.concept,{expanded:p.state.expanded,tab:p.state.tab,filter:p.state.filter,transcript:p.state.transcript,width:p.state.width,scale:p.state.scale,longNames:p.state.longNames}]));
+      window.openai?.setWidgetState?.({modelContent:{design:'ملخّص قابل للفتح',readyAutoSelection:true},privateContent})?.catch(()=>{});
+    };
+    function groupMarkup(id,contextual=false) {
+      const group = state.groups[id];
+      const linked = groupTransactions(id);
+      const removed = removedSuggestions.get(id);
+      if(removed) return `<div class="mv-group mv-removed" data-group="${id}"><div class="mv-group-head"><span class="mv-mark">${icon('landmark')}</span><div class="mv-group-copy"><div class="mv-group-name">${safe(displayName(group))} · ${group.currency}</div><div class="mv-group-sub"><span>Suggestion removed</span></div></div><div class="mv-group-actions"><button class="mv-small cursor-interaction" data-action="undo-suggestion" data-id="${id}">${icon('rotate-ccw')}Undo</button><button class="mv-icon mv-discard-suggestion cursor-interaction" aria-label="Discard ${safe(group.name)} suggestion permanently" data-tooltip="Discard suggestion permanently" data-action="discard-suggestion" data-id="${id}">${icon('trash-2')}</button></div></div></div>`;
+      return `<div class="mv-group" data-group="${id}"><div class="mv-group-head"><span class="mv-mark">${icon('landmark')}</span><div class="mv-group-copy"><div class="mv-group-name">${safe(displayName(group))} <span style="white-space:nowrap">· ${group.currency}</span></div><div class="mv-group-sub"><span class="${group.confirmed?'':'mv-need'}">${group.confirmed?'Confirmed':'New account'}</span><span>${linked.length} ${linked.length===1?'transaction':'transactions'}</span></div></div><div class="mv-group-actions"><button class="mv-small cursor-interaction" data-action="${group.confirmed?'change':'confirm'}" data-id="${id}">${icon(group.confirmed?'pencil':'circle-check')}${group.confirmed?'Change':'Confirm'}</button><button class="mv-icon mv-more cursor-interaction" aria-label="Actions for ${safe(group.name)}" aria-expanded="${state.menu===id}" data-action="menu" data-id="${id}">${icon('ellipsis-vertical')}</button></div></div>${contextual?'':`<button class="mv-link mv-linked cursor-interaction" data-action="linked" data-id="${id}" aria-expanded="${state.linked===id}">${state.linked===id?'Hide linked transactions':'View linked transactions'} ${icon(state.linked===id?'chevron-up':'chevron-down')}</button>`}${!contextual&&state.linked===id?`<div class="mv-linked-list">${linked.map(t=>`<div class="mv-linked-row"><span>${safe(t.name)}</span><span>${t.amount} ${group.currency}</span></div>`).join('')}</div>`:''}${state.menu===id?`<div class="mv-menu"><button class="cursor-interaction" data-action="editgroup" data-id="${id}">Edit details</button><button class="cursor-interaction" data-action="change" data-id="${id}">Use existing account</button><button class="cursor-interaction" data-action="remove" data-id="${id}">Remove suggestion</button></div>`:''}</div>`;
+    }
+    function transactionMarkup(t,contextual=false) {
+      const unresolved = needsAccount(t);
+      const name = accountName(t);
+      return `<article class="mv-transaction"><div class="mv-tx-top"><label class="mv-check"><input type="checkbox" aria-label="Select ${safe(t.name)}" data-select="${t.id}" ${state.selected.includes(t.id)?'checked':''}></label><div class="mv-tx-name">${safe(t.name)}<div class="mv-time">Today · 12:00 PM</div></div><div class="mv-amount">−${t.amount} ${currency(t)||''}</div></div><div class="mv-tx-meta">${contextual&&t.group?`<button class="mv-link mv-category cursor-interaction" aria-label="Choose account for ${safe(t.name)}" data-action="choose" data-id="${t.id}">Change account ${icon('pencil')}</button>`:`<div class="mv-meta">${icon(unresolved?'circle-help':name==='Cash Wallet'?'banknote':'landmark')}<span class="${unresolved?'mv-need':''}">${safe(name||'Choose an account')}</span><button class="mv-edit cursor-interaction" aria-label="Choose account for ${safe(t.name)}" data-action="choose" data-id="${t.id}">${icon('pencil')}</button></div>`}<div class="mv-meta mv-category">${icon(t.category==='Shopping'?'shopping-bag':'utensils')}<span>${safe(t.category)}</span><button class="mv-edit cursor-interaction" aria-label="Edit category for ${safe(t.name)}" data-action="category" data-id="${t.id}">${icon('pencil')}</button></div></div>${!contextual&&t.group&&!state.groups[t.group].confirmed?'<div class="mv-tag">New account</div>':''}</article>`;
+    }
+    function sheetMarkup() {
+      const sheet = state.sheet;
+      if (!sheet) return '';
+      const tx = state.transactions.find(t=>t.id===sheet.id);
+      const group = state.groups[sheet.id];
+      let title='',body='',footer='';
+      if (sheet.kind==='choose') {
+        title='Choose an account';
+        const affected = sheet.group ? groupTransactions(sheet.id) : [tx];
+        body=`<div class="mv-sheet-context">${sheet.group?`Applies to all ${affected.length} linked transactions`:'For '+safe(tx.name)}<div class="mv-linked-list" style="margin:7px 0 0">${affected.map(t=>`${safe(t.name)} · ${t.amount}`).join('<br>')}</div></div>${[{name:'QNB Savings Account',currency:'EGP'},{name:'CIB Dollar Account',currency:'USD'},{name:'Cash Wallet',currency:'EGP'}].map((a,i)=>`<label class="mv-account-option">${icon(a.name==='Cash Wallet'?'banknote':'landmark')}<span>${a.name}<small>${a.currency}</small></span><input name="${concept}-account" type="radio" value="${i}" ${sheet.choice===i?'checked':''}></label>`).join('')}<button class="mv-link cursor-interaction" data-action="newaccount">${icon('plus')}Prepare a new account</button><p>The selected account sets the currency. The numeric amount stays unchanged.</p>`;
+        footer=`<button class="mv-button mv-save cursor-interaction" data-action="applyaccount" ${sheet.choice===undefined?'disabled':''}>Use account${sheet.choice===undefined?'':' — '+(['EGP','USD','EGP'][sheet.choice])}</button>`;
+      } else if (sheet.kind==='editgroup'||sheet.kind==='newaccount') {
+        title=sheet.kind==='editgroup'?'Edit suggested account':'Prepare a new account';
+        body=`<div class="mv-sheet-context">${sheet.group?`${groupTransactions(sheet.id).length} linked transactions`:'For '+safe(tx?.name||'this transaction')}</div><label class="mv-field-label">Account name<input type="text" data-field="name" value="${safe(sheet.name||'')}" autocomplete="off"></label><label class="mv-field-label">Account type<select data-field="type"><option value="bank" ${sheet.type==='bank'?'selected':''}>Bank account</option><option value="wallet" ${sheet.type==='wallet'?'selected':''}>Digital wallet</option><option value="cash" ${sheet.type==='cash'?'selected':''}>Cash</option></select></label><label class="mv-field-label">Currency<select data-field="currency"><option ${sheet.currency==='EGP'?'selected':''}>EGP</option><option ${sheet.currency==='USD'?'selected':''}>USD</option></select></label><p>This is a draft. It is created only when you save its selected transactions.</p>`;
+        footer='<button class="mv-button mv-save cursor-interaction" data-action="applydraft">Confirm draft</button>';
+      } else if (sheet.kind==='category') {
+        title='Change category';
+        body=`<div class="mv-sheet-context">For ${safe(tx.name)}</div>${['Food & drinks','Shopping','Transport','Other'].map(name=>`<label class="mv-account-option"><span>${name}</span><input type="radio" name="${concept}-category" value="${safe(name)}" ${tx.category===name?'checked':''}></label>`).join('')}`;
+        footer='<button class="mv-button mv-save cursor-interaction" data-action="applycategory">Use category</button>';
+      } else if (sheet.kind==='why') {
+        title='Default account used'; body='<p>Cash Wallet was used for Snack because no account was named and the currency matches.</p><p>You can change its account before saving. Transactions with an uncertain currency still need an account choice.</p>'; footer='<button class="mv-button mv-save cursor-interaction" data-action="close">Got it</button>';
+      }
+      return `<div class="mv-overlay"><section class="mv-sheet" role="dialog" aria-modal="true" aria-label="${title}"><div class="mv-sheet-head"><h3>${title}</h3><button class="mv-icon cursor-interaction" data-action="close" aria-label="Close">${icon('x')}</button></div>${body}<div class="mv-sheet-footer"><button class="mv-button cursor-interaction" data-action="close">Cancel</button>${footer}</div></section></div>`;
+    }
+    function render() {
+      phone.style.setProperty('--mv-width',state.width+'px'); phone.style.setProperty('--mv-scale',state.scale);
+      let transactions = state.transactions.filter(t=>state.filter==='account'?needsAccount(t):state.filter==='review'?needsReview(t):state.filter==='selected'?state.selected.includes(t.id):true);
+      if(concept==='context') transactions=currentGroupIds().flatMap(id=>transactions.filter(t=>t.group===id)).concat(transactions.filter(t=>!t.group));
+      const countNeeds = state.transactions.filter(needsAccount).length;
+      const countReview = state.transactions.filter(needsReview).length;
+      const intro = `<div class="mv-transcript ${state.transcript?'mv-expanded':''}"><button class="mv-transcript-head cursor-interaction" data-action="transcript" aria-expanded="${state.transcript}">${icon('mic')}<span>WHAT I HEARD</span><span>EN</span>${icon(state.transcript?'chevron-up':'chevron-down')}</button><p>${transcript}</p></div>`;
+      const info = `<div class="mv-disclosure">${icon('info')}<span>New accounts are created only when you save their selected transactions.</span></div>`;
+      const cashInfo = `<div class="mv-disclosure">${icon('info')}<span>Cash Wallet used for Snack. <button class="mv-why cursor-interaction" data-action="why">Why?</button></span></div>`;
+      let overview='';
+      const reviewTitle=pending()?pending()+' '+(pending()===1?'account needs':'accounts need')+' review':countNeeds?countNeeds+' '+(countNeeds===1?'transaction needs':'transactions need')+' an account':'Accounts reviewed';
+      const reviewSubtitle=pending()?(countNeeds?countNeeds+' '+(countNeeds===1?'transaction needs':'transactions need')+' an account':'Confirm suggested accounts before saving'):countNeeds?'Choose accounts for the transactions below':'All transactions have confirmed accounts';
+      if(concept==='inline') overview=`<div class="mv-summary"><button class="mv-summary-main cursor-interaction" data-action="expand" aria-expanded="${state.expanded}">${icon(pending()||countNeeds?'circle-alert':'circle-check')}<span>${reviewTitle}<small>${reviewSubtitle}</small></span>${icon(state.expanded?'chevron-up':'chevron-down')}</button>${state.expanded?displayedGroupIds().map(id=>groupMarkup(id)).join('')+info+cashInfo:''}</div>`;
+      if(concept==='tabs') overview=`<div class="mv-switch" role="tablist" aria-label="Review sections"><button role="tab" class="cursor-interaction" aria-selected="${state.tab==='transactions'}" data-action="tab" data-id="transactions">Transactions <span class="mv-count">${state.transactions.length}</span></button><button role="tab" class="cursor-interaction" aria-selected="${state.tab==='accounts'}" data-action="tab" data-id="accounts">Accounts <span class="mv-count">${currentGroupIds().length}</span></button></div>`;
+      if(concept==='context') overview=`<div class="mv-context-intro">${state.transactions.length} transactions · ${pending()} new accounts</div>`;
+      const filters = `<div class="mv-tools" aria-label="Transaction filters"><button class="mv-chip cursor-interaction" data-action="filter" data-id="all" aria-pressed="${state.filter==='all'}">All ${state.transactions.length}</button><button class="mv-chip cursor-interaction" data-action="filter" data-id="review" aria-pressed="${state.filter==='review'}">Needs review ${countReview}</button><button class="mv-chip cursor-interaction" data-action="filter" data-id="account" aria-pressed="${state.filter==='account'}">Account needed ${countNeeds}</button></div><div class="mv-list-title"><span>${transactions.length} ${transactions.length===1?'transaction':'transactions'}${state.filter==='account'?' · account needed':''}</span>${state.filter!=='all'?'<button class="mv-link cursor-interaction" data-action="filter" data-id="all">Show all</button>':'<button class="mv-link cursor-interaction" data-action="selectready">Select ready</button>'}</div>`;
+      let content='';
+      if(concept==='tabs'&&state.tab==='accounts') content=currentGroupIds().map(id=>groupMarkup(id)).join('')+info+`<button class="mv-link cursor-interaction" data-action="filter" data-id="account">${countNeeds} transaction needs an account ${icon('arrow-right')}</button>`+cashInfo;
+      else {
+        const seen=new Set();
+        content=filters+transactions.map(t=>{let groupHeader=''; if(concept==='context'&&t.group&&!seen.has(t.group)){seen.add(t.group);groupHeader=`<div class="mv-context-group">${groupMarkup(t.group,true)}</div>`;}return groupHeader+transactionMarkup(t,concept==='context');}).join('')+(!transactions.length?'<p class="mv-empty">No transactions in this view.</p>':'');
+        if(concept==='context') content+=info+cashInfo;
+      }
+      phone.innerHTML=`<div class="mv-underlay" ${state.sheet?'inert aria-hidden="true"':''}><div class="mv-status"><span>9:41</span><span class="mv-status-right">${icon('wifi')}${icon('battery-medium')}</span></div><header class="mv-header"><button class="mv-icon cursor-interaction" aria-label="Back" data-action="back">${icon('arrow-left')}</button><h2 class="mv-title">Voice Review</h2><button class="mv-link cursor-interaction" data-action="tryagain">Try Again</button></header><main class="mv-body">${state.message?`<div class="mv-notice" role="status"><span>${safe(state.message)}</span><button class="mv-icon cursor-interaction" aria-label="Dismiss message" data-action="dismiss">${icon('x')}</button></div>`:''}${intro}${overview}${content}</main></div><footer class="mv-footer" ${state.sheet?'inert aria-hidden="true"':''}><button class="mv-button mv-discard cursor-interaction" data-action="discard">${icon('trash-2')}Discard</button><button class="mv-button mv-save cursor-interaction" data-action="save" ${!state.selected.length?'disabled':''}>${icon('lock-keyhole')}Save ${state.selected.length} selected</button></footer>${sheetMarkup()}`;
+      const underlay=phone.querySelector('.mv-underlay'); underlay.style.display='contents';
+      if(window.lucide) lucide.createIcons({attrs:{width:18,height:18}});
+    }
+    function openChoice(id,isGroup=false) { state.menu=null; state.sheet={kind:'choose',id,group:isGroup}; const t=state.transactions.find(t=>t.id===id); const name=isGroup?null:accountName(t); const names=['QNB Savings Account','CIB Dollar Account','Cash Wallet']; const choice=names.indexOf(name); if(choice>=0)state.sheet.choice=choice; }
+    phone.addEventListener('click',event=>{
+      const button=event.target.closest('button[data-action]'); if(!button)return;
+      const action=button.dataset.action,id=button.dataset.id;
+      if(action==='transcript')state.transcript=!state.transcript;
+      if(action==='expand')state.expanded=!state.expanded;
+      if(action==='tab')state.tab=id;
+      if(action==='filter'){state.filter=id;state.tab='transactions';}
+      if(action==='menu')state.menu=state.menu===id?null:id;
+      if(action==='linked')state.linked=state.linked===id?null:id;
+      if(action==='confirm'){state.groups[id].confirmed=true;state.menu=null;state.message=null;}
+      if(action==='change')openChoice(id,true);
+      if(action==='choose')openChoice(id);
+      if(action==='editgroup'){const g=state.groups[id];state.menu=null;state.sheet={kind:'editgroup',id,group:true,name:g.name,currency:g.currency,type:g.type||'bank'};}
+      if(action==='remove'){
+        removedSuggestions.set(id,{group:{...state.groups[id]}});
+        state.transactions.forEach(t=>{if(t.group===id){t.currency=state.groups[id].currency;delete t.group;t.account=null;t.removedFromGroup=id;state.selected=state.selected.filter(s=>s!==t.id);}});
+        state.menu=null;state.linked=null;
+      }
+      if(action==='undo-suggestion'){
+        const removed=removedSuggestions.get(id);
+        if(removed){state.groups[id]=removed.group;state.transactions.forEach(t=>{if(t.removedFromGroup===id&&!t.account&&!t.group){t.group=id;delete t.account;delete t.currency;delete t.removedFromGroup;}});removedSuggestions.delete(id);}
+      }
+      if(action==='discard-suggestion'){
+        removedSuggestions.delete(id);delete state.groups[id];
+        state.transactions.forEach(t=>{if(t.removedFromGroup===id)delete t.removedFromGroup;});
+      }
+      if(action==='newaccount'){const old=state.sheet;state.sheet={...old,kind:'newaccount',name:'',currency:'EGP',type:'bank'};}
+      if(action==='applyaccount'){
+        const account=[{name:'QNB Savings Account',currency:'EGP'},{name:'CIB Dollar Account',currency:'USD'},{name:'Cash Wallet',currency:'EGP'}][state.sheet.choice];
+        if(account){state.transactions.forEach(t=>{if(state.sheet.group?t.group===state.sheet.id:t.id===state.sheet.id){delete t.group;t.account=account.name;t.currency=account.currency;}});state.sheet=null;}
+      }
+      if(action==='applydraft'){
+        const name=phone.querySelector('[data-field="name"]').value.trim();if(!name){phone.querySelector('[data-field="name"]').focus();return;}
+        const curr=phone.querySelector('[data-field="currency"]').value;
+        const type=phone.querySelector('[data-field="type"]').value;
+        if(state.sheet.kind==='editgroup'){Object.assign(state.groups[state.sheet.id],{name,currency:curr,type});}
+        else {const groupId='draft'+Object.keys(state.groups).length;state.groups[groupId]={name,currency:curr,type,confirmed:true};state.transactions.forEach(t=>{if(state.sheet.group?t.group===state.sheet.id:t.id===state.sheet.id){t.group=groupId;delete t.account;delete t.currency;}});}
+        state.sheet=null;
+      }
+      if(action==='category')state.sheet={kind:'category',id};
+      if(action==='applycategory'){state.transactions.find(t=>t.id===state.sheet.id).category=phone.querySelector('input[name="'+concept+'-category"]:checked').value;state.sheet=null;}
+      if(action==='why')state.sheet={kind:'why'};
+      if(action==='close')state.sheet=null;
+      if(action==='dismiss')state.message=null;
+      if(action==='selectready')state.transactions.filter(t=>!needsReview(t)).forEach(t=>manuallyDeselected.delete(t.id));
+      if(action==='save')state.message='Design preview only — no transactions or accounts were saved.';
+      if(action==='discard'){state.transactions.forEach(t=>manuallyDeselected.add(t.id));state.selected=[];state.message='Selection cleared in this preview.';}
+      if(action==='tryagain'||action==='back'){state.filter='all';state.tab='transactions';state.expanded=false;state.message=null;}
+      syncReadySelection();render();persist();
+      if(state.sheet){const target=phone.querySelector('.mv-sheet');target.scrollIntoView({block:'nearest'});target.querySelector('button').focus({preventScroll:true});}
+    });
+    phone.addEventListener('change',event=>{
+      const target=event.target;
+      if(target.dataset.select){const id=target.dataset.select;const t=state.transactions.find(item=>item.id===id);if(target.checked&&needsAccount(t)){openChoice(id);render();return;}if(target.checked&&needsReview(t)){state.expanded=true;state.message='Confirm the suggested account before selecting its transactions.';render();return;}if(target.checked)manuallyDeselected.delete(id);else manuallyDeselected.add(id);syncReadySelection();render();persist();}
+      else if(state.sheet?.kind==='choose'&&target.type==='radio'){state.sheet.choice=Number(target.value);render();}
+    });
+    phone.addEventListener('keydown',event=>{if(event.key==='Escape'&&state.sheet){state.sheet=null;render();}});
+    previews.push({concept,state,render});syncReadySelection();render();
+    if(window.Tweak){const tweak=new Tweak({container:phone,onChange:render});tweak.addSlider(state,'width',{label:'عرض الشاشة',min:320,max:430,step:10,unit:'px'});tweak.addSlider(state,'scale',{label:'حجم النص',min:1,max:1.25,step:.05});tweak.addToggle(state,'longNames',{label:'أسماء حسابات طويلة'});}
+  });
+})();
+</script>

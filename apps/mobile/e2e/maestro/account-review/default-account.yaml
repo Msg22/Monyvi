@@ -1,0 +1,93 @@
+appId: com.monyvi.app
+---
+# #395 M01/M10/M11/M13/M17 — T015 current-owner VOICE R3-07 default-only.
+# AUTHORED, NOT RUN: do not treat synthetic session as Voice transcription,
+# parser/provider/financial Save, or real-device evidence.
+# Preconditions: E2E_FIXTURE_PROFILE=account-review, E2E_SUPABASE_MODE=local,
+# EXPO_PUBLIC_MONYVI_TEST_MODE=e2e, non-production build, EN locale,
+# authenticated test owner with the exact five account roles, the sole active
+# expense Other category and EGP Cash default. No fixture URL data beyond
+# the allowlisted scene ID; no hosted seed/reset, SMS inbox or microphone.
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-default-only&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# R3-07: 2 confidently assigned Cash-default transactions, both initially
+# selected. This remains an independent quiet note, not a shared suggestions
+# panel, a forced new account, or an automatic Save.
+- assertVisible:
+    id: "account-review-panel"
+- assertVisible:
+    id: "account-review-default-info"
+- assertVisible: "Cash was used for 2 transactions."
+- assertNotVisible:
+    id: "account-review-details-panel"
+- assertVisible: "All, 2"
+- assertVisible: "Needs review, 0"
+- assertVisible: "Selected, 2"
+- assertVisible:
+    id: "review-action-bar"
+- assertVisible:
+    id: "review-save-button"
+- assertVisible: "Save 2 selected"
+
+# R3-12: actual accessible Why trigger and dismiss, with the approved
+# same-currency/unmentioned-account and per-row edit boundaries.
+- tapOn:
+    id: "account-review-default-why-trigger"
+- assertVisible:
+    id: "account-review-default-why-sheet"
+- assertVisible:
+    "Cash was selected for 2 transactions because no account was mentioned and
+    the currency matches."
+- assertVisible: "You can change the account on each transaction before saving."
+- assertVisible:
+    "A named account or an uncertain currency still needs your review."
+- tapOn:
+    id: "account-review-default-why-dismiss"
+- assertNotVisible:
+    id: "account-review-default-why-sheet"
+
+# FR-019 controlled V2 transaction editor. Cancel is an actual UI callback,
+# not a fake Save or direct mutable session shortcut.
+- scrollUntilVisible:
+    element:
+      id: "transaction-review-edit-action"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "transaction-review-edit-action"
+- assertVisible:
+    id: "account-review-edit-modal"
+- assertVisible:
+    id: "account-review-edit-amount-input"
+- tapOn:
+    id: "account-review-edit-cancel"
+- assertNotVisible:
+    id: "account-review-edit-modal"
+- assertVisible: "Save 2 selected"
+- scrollUntilVisible:
+    element:
+      id: "account-review-filter-selected"
+    direction: UP
+    timeout: 30000
+- assertVisible: "Selected, 2"
+
+# Existing canonical selected filter remains reachable. The Save CTA is
+# visible/readiness-only; DO NOT TAP it without independently verified
+# owned writer, exact fixture and resulting durable financial outcome.
+- tapOn:
+    id: "account-review-filter-selected"
+- assertVisible:
+    id: "account-review-filter-bar"
+- assertVisible: "Selected, 2"
+- tapOn:
+    id: "account-review-filter-all"
+- assertVisible:
+    id: "account-review-default-info"
+# M02/M03/M14-M16/M19/M20 SMS/provider/restart/financial outcomes are
+# service/SQLite/SQL or owner-only. RTL, font scale, orientation, keyboard,
+# TalkBack/VoiceOver, actual locale switches and OS/app restart: NOT RUN.

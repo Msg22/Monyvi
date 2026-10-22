@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-09-04
+**Status:** Active product source of truth **Last updated:** 2026-10-20
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -57,6 +57,19 @@ forget. Egyptian users also need support for:
   soft deletes, and background sync.
 
 ## 2. Product Principles
+
+### Interactive design handoff (owner-approved 2026-10-20)
+
+New meaningful Monyvi UI designs from **any** model or worker are interactive
+first, stored in the feature's `mockups/` with a runnable browser entry, a short
+README for version, run/scenarios and native-only adaptations. The runnable
+artifact itself owns visual, layout and responsive decisions. The owner approves
+the exact reviewed design **once** before native implementation; no new binding
+sidecar, hash/metadata tuple or separate approval is required. See
+`docs/design/interactive-design-workflow.md` and the existing micro-UI
+exception. All prior approved image/sidecar artifacts, decisions and evidence
+remain unchanged; this policy does not itself approve any new feature design or
+change any financial/business behavior.
 
 ### Offline-First Trust
 
@@ -290,6 +303,264 @@ Business rules:
   unselected and asks the user to choose. Voice and SMS matching may still use
   exact account evidence, but if no confident account match exists they must
   return no match for user review instead of guessing.
+
+#### Approved Voice/SMS account review target — issue #395
+
+**Status (2026-10-18):** The specification and all 23 B1 mockup bindings are
+approved. Implementation is published in
+[PR #396](https://github.com/Msg22/Monyvi/pull/396) on
+`codex/395-shared-account-review`, targeting Main after #383 merged. Release
+acceptance, including owner device/visual testing, remains open; implementation
+is not yet merged, deployed or release-accepted. Historical planning labels in
+the approved spec do not describe the current delivery state.
+
+These product rules remain authoritative. Use the
+[approved spec](../../specs/395-shared-account-review/spec.md) and
+[visual handoff](../../specs/395-shared-account-review/pre-plan-review.md) for
+behavior and mockups. The
+[first-release scope](../../specs/395-shared-account-review/validation/first-release-scope.md)
+controls delivery priorities: approved design/functionality with basic owner,
+atomic-save, retry/deduplication and safe-sync protection. Advanced automatic
+compensation and historical restoration remain deferred, not release blockers;
+unknown outcomes must still remain unresolved/dirty with their required
+evidence. See
+[delivery evidence](../../specs/395-shared-account-review/validation/first-release-delivery.md)
+and PR #396 for validation status; this decision record does not certify it.
+
+- Use an eligible active owned default when no account is identified and the
+  known currency matches, regardless of account count. Explain this choice in
+  review and keep it editable; remove only the account blocker.
+- Voice explicit generic Cash payment evidence (approved 2026-10-21) selects the
+  active owned Cash default in the known transaction currency, otherwise the
+  sole active owned Cash in that currency. Several compatible Cash accounts
+  without a unique eligible default, or no compatible Cash, require user choice.
+  Never substitute a Bank/Wallet default, create an account, convert the amount,
+  or apply this type-only rule to named/provider/card identities or uncertain
+  evidence. This is an exact typed match, not absent-account default fallback;
+  refresh and Save must revalidate it. Explicit user overrides remain first.
+- Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
+  destination resolve separately. Only genuinely absent destination evidence
+  permits eligible same-currency default Cash, then sole eligible Cash; explicit
+  or uncertain `toAccountEvidence` requires a compatible owned choice. Automatic
+  resolution or AI evidence must **never invent** a Cash destination
+  group/account. An ATM may instead use an existing eligible Cash
+  (default/sole/manual) or a genuine, already-canonical confirmed destination
+  group, including an **explicitly user-prepared, same-currency row-only Cash
+  draft**. Preparing/confirming that draft creates no physical account; only an
+  eligible **selected ATM Save** may create the Cash account and post the
+  transfer atomically. Regular transfers require reliable proof or explicit
+  choices and distinct endpoints.
+- Proven currency omission uses the preferred currency. Ambiguous, conflicting
+  or unsupported currency requires confirmation before automatic account
+  assignment. Currency correction preserves the numeric amount without
+  conversion.
+- Explicit named unmatched accounts do not fall back to default. Suggest shared
+  drafts only with compatible explicit name/type/provider/card evidence and the
+  same known currency; ambiguous matches require a per-row choice. Similar names
+  alone cannot merge conflicting accounts/cards.
+- Each suggestion supports independent confirm/edit/replace/remove. Confirmation
+  affects account assignment, selects no other row and creates no real account.
+  Selecting an otherwise valid row may confirm its group with visible
+  disclosure; only that row becomes selected. Preserve all other review reasons.
+- Removal retains transactions and invalidates only affected
+  assignment/selection; unchanged input cannot regenerate it immediately. Undo
+  cannot overwrite later edits. SMS choices/removals survive Review
+  later/restart; Voice stays session-only.
+- Create only draft accounts referenced by valid selected financial entries at
+  final Save, with one atomic idempotent revision-guarded financial action.
+  Preserve existing financial outcomes, exact amount rules, source fingerprints
+  and owned references; no AI bank-balance inference or extra parsing call for
+  review actions. Compatible independently confirmed Voice Cash accounts in
+  different currencies may be created together; there is no one-Cash-per-Save
+  restriction. Each account has its own approved currency and exact selected
+  minor-unit effects, with zero inferred opening balance.
+- First-active default applies to **every** account created by review Save:
+  Cash, Bank and Wallet. Freeze one `creationDefaultSnapshot` (existing closed
+  DefaultSnapshot shape, sorted active owned IDs and current default or null)
+  exactly when any review account is created. If its captured active set is
+  empty, exactly the **first actual frozen created-account UUID in canonical
+  ASCII order** is default; all other new accounts are false. If the captured
+  set is nonempty, every new account is nondefault and any existing or
+  intentionally missing default remains unchanged. Validate this under one
+  owner-wide logical-state CAS with at-most-one default, action replay and
+  atomic rollback. Confirmation creates/changes no account or default; review
+  never clears a prior default separately. This does **not** change Add's
+  existing `expectedDefaultSnapshot`, user-controlled default intent, or Edit.
+- Add Account exposes Edit's Default flag: first active account ON/disabled;
+  later accounts start OFF, preserving existing/no default. ON replaces prior
+  default only after successful creation; unsaved toggle/cancel/failure changes
+  no persisted default. Helper is source/type-aware. Existing unrelated form
+  rules stay.
+- Use one compact conditional review section for shared suggestions and
+  actionable missing details, with a quiet default-account note. View all must
+  expose every suggestion with independent status/actions. Omit empty sections;
+  filters/counts reflect actual checked rows, and bulk selection includes only
+  eligible rows in the current filter.
+- Reuse the existing CurrencyPicker within the new row-only draft's currency
+  field; opening/cancelling commits nothing. No standalone currency
+  correction/recovery/confirmation surface.
+
+#### #395 manual account choice, ATM Cash drafts and explicit currency (owner decisions 2026-10-19)
+
+- Reopening Use/Choose account preselects the row's previously chosen
+  **existing** account only if still owned and eligible for that row, endpoint
+  and confirmed currency; never infer the first candidate or use a display-only
+  currency. The chooser may offer other owned endpoint-eligible accounts across
+  currencies for **deliberate account-and-currency confirmation**, never
+  automatic/default assignment. Automatic/default matching still requires a
+  known matching currency.
+- When an ordinary Voice/SMS source row has **no compatible existing account**,
+  the user may choose name, type and currency in the **same draft form** to
+  create one **local, row-only confirmed draft**. This explicitly chosen draft
+  does not select the transaction, link other rows, create a physical account or
+  change balances/defaults. SMS source drafts cannot be Cash. Cancel commits
+  nothing. SMS draft choices survive Review later/restart through the
+  authenticated local review writer; Voice draft choices remain review-session
+  only. Exactly selected transactions referencing a confirmed draft cause
+  account creation only inside the existing guarded atomic/idempotent Save.
+- An existing suggested group with no replacement candidates offers Edit/Keep
+  for that same draft, not a duplicate. A missing Cash destination on an actual
+  SMS ATM withdrawal may instead be prepared as a **row-only user-named Cash
+  draft** with currency selected in that same new-draft form; its source
+  Bank/Wallet assignment remains distinct and unchanged. The destination draft
+  uses the reciprocal `toAssignment`, never a fake source link, and only a
+  selected ATM Save may create the physical Cash account atomically. Ordinary
+  SMS source accounts still reject Cash. No new Voice/ordinary-transfer workflow
+  is authorized; those broader transfer questions are tracked separately (#404).
+- **Explicit existing-account currency override:** The existing account
+  chooser's final CTA names the chosen owned account **and authoritative
+  currency**; one deliberate tap applies both atomically under current
+  owner/account/row CAS even for missing, ambiguous, conflicting or previously
+  known-but-different currency. There is no second confirmation modal or
+  standalone currency-correction action. The numeric amount remains **exactly
+  unchanged**, with no FX conversion, AI inference or automatic default
+  override. Cancel/dismiss commits nothing; incompatible opposite ATM endpoints
+  are invalidated safely. New row-only drafts select currency within the form
+  using the existing CurrencyPicker.
+
+#### #395 R2 owner feedback — current UI amendments (2026-10-19)
+
+**Effective scoped supersession:** These newer owner-approved UI interactions
+replace only contradictory account/currency chooser, local draft and feedback
+presentation directions in the preceding #395 decisions and older mockup notes.
+The approved spec, all 23 B1 mockup/binding/image bytes, historical decisions,
+data safety and first-release scope stay intact. See
+[owner R2 feedback and checklist](../../specs/395-shared-account-review/validation/owner-feedback-r2.md).
+
+- **One owned existing-account chooser:** The final CTA **names the currently
+  selected owned account and authoritative currency**, e.g. "Use QNB · EGP". The
+  one final tap is explicit account+currency acceptance under current
+  authenticated account/row/owner CAS. **No extra "Confirm currency" or "Confirm
+  account and currency" modal/step.** Merely tapping a candidate, Back, Cancel
+  or Close changes nothing. Never infer a first candidate, change default
+  automatically or convert amounts: the numeric amount is identical without FX.
+  Automatic/default matching still requires a known compatible currency. There
+  is no separate currency-correction action/surface: the existing CurrencyPicker
+  is reused inside new row-only draft creation.
+- **New row-only draft:** Choose account **name, type and currency inside the
+  same new-draft form**, via existing CurrencyPicker, without a separate
+  currency confirmation. A bounded existing local command extension may carry
+  that explicit choice atomically under current owner/row/role guards with **no
+  SQL/database schema change**. Preserve permitted role (ordinary SMS source
+  Bank/Wallet; Cash destination only for genuine SMS ATM), source/destination
+  distinction, owner scope and unselected/unrelated rows. A confirmed local row
+  draft never creates a physical account or changes balances/defaults; only a
+  valid selected transaction's existing guarded atomic/idempotent Save may
+  create it. **Existing shared suggested groups retain locked group currency**
+  and independent edit/replace/remove/Undo until a separate approval.
+- **Review details recovery:** The account/currency-uncertain issue opens a
+  **temporary account-needed-only view** of the real rows in their original list
+  order, without persisting an alternative filter. **Show all** resets it; each
+  row is assigned independently. Disclosed group Replace remains confined to its
+  actual linked rows, never silently touching unrelated choices.
+- **Activation-only pencils:** The existing-account pencil opens its owned
+  chooser; a suggested-account pencil opens EditSuggestedAccountSheet with
+  linked-scope disclosure. Category pencil/quick category opens the existing
+  CategorySelectorModal **directly**, not the full TransactionEditModal. Only
+  final category choice dispatches the existing `edit_row_transaction` with
+  **only** `patch: { categoryId }` under its current guards; SMS ATM category
+  editing is prohibited. Pencil activation commits nothing and introduces no
+  alternate writer.
+- **Prospective feedback rule:** New/changed application code uses **no toasts
+  for errors, warnings or successes**. A page-scoped, persistent, dismissible
+  inline notice sits **directly under that page's header and outside scrolling
+  content** so it remains sticky while scrolling. Feedback belonging to an
+  active modal appears **at the top inside that modal**. Migrate unrelated
+  legacy screens gradually, not via an app-wide rewrite; touched #395 flows
+  follow the rule now. Unknown/rejected financial Save must never claim success;
+  keep owner/privacy/retry protections.
+- **Responsive and theme:** Adapt to real available container/label fit, not
+  character-count estimates, fixed button chrome or blanket viewport cutoffs;
+  reserve 44/48dp tap targets and natural text wrapping. Keep status+linked
+  count inline where it fits; a wrapped standalone line must not begin with a
+  separator dot. Dark informational text needs readable semantic contrast (not
+  disabled/muted), and an information icon uses a transparent dark backdrop
+  **only where the approved mockup requires it**; keep meaningful selected/alert
+  fills. Android Edit suggested account must retain keyboard-reachable focused
+  name and Cancel/Confirm footer under the existing scroll/KAV pattern with an
+  80% **usable** height cap and one bottom inset. Current type also needs
+  visibly selected styling alongside its accessible checked state.
+- **Evidence and scope:** The cause of the reported Save failure is not yet
+  established; diagnose the real protected path and display honest feedback, not
+  a speculative financial repair. Preserve the 19 DEV-only fixed transcript
+  scenarios and conspicuous TEST labels; their deliberately approved existing
+  selected Save remains a **real current-owner financial write**, not a mock. No
+  #239/#339, generalized transfers/#404, detector, SQL/schema, sync/ACK or
+  expanded recovery work follows from this UI amendment.
+
+#### #395 first-release scope — human decision (2026-10-17)
+
+The first release preserves the already approved Voice/SMS shared-account
+review, Add/default UI and selected-Save behavior, with **authenticated
+ownership, atomic local Save, rollback and immutable retry/duplicate protection,
+and safe push/pull/ACK handling**. An unknown, rejected, stale or unverifiable
+server result is **not success**: keep the local financial data, unsynced/dirty
+action state and necessary private proof for later resolution; do not silently
+acknowledge, overwrite, compensate or delete it.
+
+Advanced Add compensation-carrier encoding, financial-successor chain
+reconstruction and elaborate rejected-Add/historical restoration are **deferred
+from first-release gates**, not approved for deletion or safety relaxation. The
+following October 16 private-recovery direction is preserved as historical
+future technical design; it must not be mistaken for functionality already
+implemented or mandatory Green for the narrowed initial release. The approved
+spec and B1 decisions remain unchanged. See
+[the #395 controlling first-release scope](../../specs/395-shared-account-review/validation/first-release-scope.md),
+which also preserves the unshipped experimental carrier suite's published SHA.
+
+#### #395 technical storage decision — private local recovery (2026-10-16)
+
+**Status (2026-10-18):** Historical approved technical direction. Basic private
+local storage is implemented in PR #396; advanced recovery is deferred by the
+first-release decision above. Owner device acceptance and hosted deployment
+remain pending. This is a **technical storage/retention and privacy
+reconciliation**, not a new product behavior or customer-visible choice. The
+feature's accepted spec/approved B1/review Save semantics remain unchanged. The
+separately reviewed Constitution VII 1.8.0 exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) authorizes strictly device-only
+Watermelon migration routing, not a hosted migration.
+
+| Storage scope               | Approved target / boundary                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device-owned root extension | Existing `financial_action_groups` receives nullable **Watermelon-only** `local_recovery_snapshot_json`, accessed via non-generated `localRecoverySnapshotJson`. Old roots remain null; unresolved newly committed review roots require private recovery data. No Supabase column, public generated type, server action field or dummy SQL.                                                                     |
+| Versioned local upgrade     | Watermelon migration **31** follows 30. Its generator-consumed local-only declaration, regenerated schema/non-generated model and local migration/parity coverage are implemented on the feature branch; existing-device rollout is not verified.                                                                                                                                                               |
+| Private evidence            | Local strict `account-review-local-save/v1` has nine keys: version, action/owner/session, SMS drafts, created entity refs, default preimages, actual sorted predecessor IDs and `queuePreimage`. It binds captured owned preimages to actual prepared postimages in the same atomic writer; it is not the public financial tuple.                                                                               |
+| SMS restoration boundary    | Preserve recoverable unexpired draft choices. A proven automatic `pruned_empty` queue may be restored by exact original owned header only when no current owned queue exists. Explicit discard/reset, expired entries and a newer queue cannot be resurrected. At each draft's **inclusive 30-day parsedAt cutoff**, purge only that expired entry's raw recovery data; leave valid unexpired siblings.         |
+| Voice and sync privacy      | No durable Voice transcript/audio/review session. Private SMS evidence is excluded from Supabase payload/RPC/outbox, `payloadJson`, `outcomeJson`, logs and generic push; dedicated owned root pull must preserve validated local evidence without accepting server-supplied private fields. The opaque `frozenIntentDigest` and financial envelope `payloadHash` stay distinct from the local recovery record. |
+| Recovery ordering           | A rejected grouped action reconciles at most once after authenticated root/postimage/effect/child/default verification. Restore no newer overwritten choice; unresolved optimistic default/active-set predecessor actions must reach canonical acceptance before dependent actions push.                                                                                                                        |
+
+The complete technical guard, retention variants and task coverage are recorded
+in `specs/395-shared-account-review/contracts/local-recovery.md`,
+`contracts/wire-shapes.md` and the existing
+**T043/T044/T048/T049/T050/T051/T053/T074** tasks. No new table in Supabase,
+action format, business approval, default rule or runtime fallback is inferred.
+These historical contracts do not override the narrowed first-release scope.
+Automatic rejected-Review restoration and partial private-evidence expiry after
+a fully pruned queue remain deferred/HELD; preserve their sole private proof and
+unresolved financial state. Normal active-queue retention/discard, ordinary
+rollback and safe namespace acquisition remain required. Further changes still
+require the applicable tests-first, Speckit, authorization and database/security
+gates.
 
 ### Bank Details And SMS Senders
 

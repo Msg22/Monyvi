@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import i18next, { type i18n } from "i18next";
 import React from "react";
+import type { ReactTestInstance } from "react-test-renderer";
 import { Pressable, Text, TextInput } from "react-native";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 
@@ -184,7 +185,7 @@ describe("TextField", () => {
       />
     );
 
-    const input: unknown = screen.getByTestId("focus-field");
+    const input: ReactTestInstance = screen.getByTestId("focus-field");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
     expect(inputRef.current).not.toBeNull();
 

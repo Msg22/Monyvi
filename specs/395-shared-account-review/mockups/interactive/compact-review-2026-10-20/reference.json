@@ -1,0 +1,59 @@
+{
+  "kind": "interactive-design-reference",
+  "date": "2026-10-20",
+  "timezone": "Africa/Cairo",
+  "feature": "395-shared-account-review",
+  "interactionDirection": "owner-approved collapsible inline review",
+  "ownerReviewedWidthCssPx": 320,
+  "implementationBindingApproval": "not asserted by this reference package",
+  "source": {
+    "file": "source.fragment.html",
+    "gitBlob": "d07aae0eb285bcbd6e53988692cc1cef3e443572",
+    "sha256": "bf575bec03e19f21a858efa6e67f62111c55f3f8934536ee2e63bb9eddc02de8"
+  },
+  "export": {
+    "file": "index.html",
+    "sha256": "64748fe7945926d4f9e94d2e4095cbddb9dfd95a52f693d4878f0e590d68d38f",
+    "generator": "visualize render.py",
+    "generatorBundle": "1.0.50",
+    "generatorSha256": "26233f0378d1fb6d2306e3227f7415f43843c73aedb95755e34b299d753914a4",
+    "inputOrder": ["standalone-controls.html", "source.fragment.html"],
+    "title": "Monyvi compact voice review — design reference",
+    "requiresCodexChat": false,
+    "externalAssets": "Pinned icon/tooltip scripts use CDN; not fully offline"
+  },
+  "files": {
+    "source.fragment.html": {
+      "bytes": 37194,
+      "sha256": "bf575bec03e19f21a858efa6e67f62111c55f3f8934536ee2e63bb9eddc02de8"
+    },
+    "standalone-controls.html": {
+      "bytes": 4736,
+      "sha256": "6bb9f811d8dc5b442684a06fe611f727e4b895bcf26bcd98a56280f2a2a01f52"
+    },
+    "index.html": {
+      "bytes": 130827,
+      "sha256": "64748fe7945926d4f9e94d2e4095cbddb9dfd95a52f693d4878f0e590d68d38f"
+    },
+    "README.md": {
+      "bytes": 3869,
+      "sha256": "30c725c7910cd87a277cf583fe7adbcdd30b4be629a57bcd3ba80fd175956c7e"
+    }
+  },
+  "validation": {
+    "browserPreview": {
+      "result": "passed",
+      "method": "isolated localhost route serving exact exported index.html",
+      "widthCssPx": 320,
+      "phoneScrollWidthCssPx": 318,
+      "iconsRendered": true,
+      "longNamesControl": true,
+      "widthControl": true,
+      "initialReadySelection": 1
+    },
+    "applicationChecks": "not run for reference-only change",
+    "nativeDevice": "not run",
+    "directFileAutomation": "Not performed: browser automation policy allows HTTP(S), not file URLs. User can open index.html manually."
+  },
+  "applicationImplementationChanged": false
+}

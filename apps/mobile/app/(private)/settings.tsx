@@ -879,6 +879,7 @@ export default function SettingsScreen(): React.JSX.Element {
           isVisible={qaSmsPatternIntakeAvailability.isAvailable}
           isStartupQaVisible={__DEV__}
           isSmsProviderEvaluationVisible={isSmsProviderEvaluationVisible}
+          isReviewTranscriptFixturesVisible={__DEV__}
           chevronColor={theme.text.secondary}
           onQaSmsPatternIntakePress={() =>
             router.push("/qa-sms-pattern-intake")
@@ -886,6 +887,9 @@ export default function SettingsScreen(): React.JSX.Element {
           onStartupQaPress={() => router.push("/startup-qa")}
           onSmsProviderEvaluationPress={() =>
             router.push("/sms-provider-evaluation")
+          }
+          onReviewTranscriptFixturesPress={() =>
+            router.push("/review-transcript-fixtures")
           }
         />
 

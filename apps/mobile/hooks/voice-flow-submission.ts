@@ -1,5 +1,8 @@
 import { randomUUID } from "expo-crypto";
-import { voiceRequestKeySchema } from "@monyvi/logic";
+import {
+  accountReviewSessionSchema,
+  voiceRequestKeySchema,
+} from "@monyvi/logic";
 import type {
   AiVoiceParserOptions,
   AiVoiceParserSuccess,
@@ -7,6 +10,7 @@ import type {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { logger } from "@/utils/logger";
 import type {
+  AccountReviewAccountSnapshots,
   FlowConfig,
   ParserContextSnapshot,
   RetainedSubmission,
@@ -112,20 +116,71 @@ export function buildSubmission(
     categories: context.categories,
     accounts: [...context.accounts],
     categoryRecords: [...context.categoryRecords],
+    ...(context.reviewAccountSnapshots
+      ? { reviewAccountSnapshots: context.reviewAccountSnapshots }
+      : {}),
   };
+}
+
+export function buildSubmissionWithAccountSnapshots(
+  userId: string,
+  audioUri: string,
+  requestKey: string,
+  callerTimeZone: string,
+  config: FlowConfig,
+  reviewAccountSnapshots: AccountReviewAccountSnapshots
+): RetainedSubmission {
+  return buildSubmission(userId, audioUri, requestKey, callerTimeZone, {
+    ...buildConfigContext(config),
+    reviewAccountSnapshots,
+  });
 }
 
 export function serializeAiReviewParams(
   aiResult: AiVoiceParserSuccess,
   originTabIndex: number
 ): Record<string, string> {
-  return {
+  // Preserve original Voice data and route navigation. Only the validated
+  // optional T054 canonical session adds a V2 transport parameter.
+  const base = {
     transactions: JSON.stringify(aiResult.transactions),
     transcript: aiResult.transcript,
     originalTranscript: aiResult.originalTranscript,
     detectedLanguage: aiResult.detectedLanguage,
     originTabIndex: String(originTabIndex),
   };
+  if (aiResult.reviewSession === undefined) return base;
+
+  const session = accountReviewSessionSchema.parse(aiResult.reviewSession);
+  if (
+    session.source !== "VOICE" ||
+    session.rows.some((row) => row.source !== "VOICE") ||
+    session.rows.length !== aiResult.transactions.length
+  ) {
+    throw new Error("account_review_voice_route_session_invalid");
+  }
+  return { ...base, reviewSession: JSON.stringify(session) };
+}
+
+export function validateAndSerializeVoiceReviewRoute(
+  aiResult: AiVoiceParserSuccess,
+  expectedOwnerId: string,
+  originTabIndex: number
+): Record<string, string> | null {
+  if (
+    aiResult.reviewSession === undefined ||
+    aiResult.transactions.length === 0 ||
+    aiResult.reviewSession.ownerId !== expectedOwnerId ||
+    aiResult.reviewSession.source !== "VOICE"
+  ) {
+    return null;
+  }
+  try {
+    const routeParams = serializeAiReviewParams(aiResult, originTabIndex);
+    return routeParams.reviewSession ? routeParams : null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildParserPayload(
@@ -141,5 +196,8 @@ export function buildParserPayload(
     accounts: submission.accounts,
     categoryRecords: submission.categoryRecords,
     signal,
+    ...(submission.reviewAccountSnapshots
+      ? { reviewAccountSnapshots: submission.reviewAccountSnapshots }
+      : {}),
   };
 }

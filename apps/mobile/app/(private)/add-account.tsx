@@ -15,12 +15,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountPreviewCard } from "@/components/add-account/AccountPreviewCard";
+import {
+  AccountDefaultField,
+  AccountDefaultRecoveryNotice,
+} from "@/components/accounts/AccountDefaultField";
 import { AccountTypeSelector } from "@/components/add-account/AccountTypeSelector";
 import { InstitutionProviderSection } from "@/components/add-account/InstitutionProviderSection";
 import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -30,6 +35,7 @@ import {
   useEgyptianInstitutionEligibility,
 } from "@/hooks";
 import type { CurrencyType } from "@monyvi/db";
+import { useOwnedAccountDefaultState } from "@/hooks/useOwnedAccountDefaultState";
 
 const FOCUSED_FIELD_KEYBOARD_GAP = 24;
 
@@ -128,6 +134,23 @@ export default function AddAccount(): React.ReactNode {
   });
 
   const { createAccount, isSubmitting } = useCreateAccount();
+  const { state: defaultState, retry: retryDefaultState } =
+    useOwnedAccountDefaultState();
+  const [requestedDefaultIntent, setRequestedDefaultIntent] = useState(false);
+  const initialOwnerRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      defaultState.status !== "loading" &&
+      initialOwnerRef.current !== defaultState.ownerId
+    ) {
+      initialOwnerRef.current = defaultState.ownerId;
+      setRequestedDefaultIntent(false);
+    }
+  }, [defaultState.ownerId, defaultState.status]);
+  const defaultReady = defaultState.status === "ready";
+  const firstOwnedAccount =
+    defaultReady && defaultState.snapshot.activeAccountIds.length === 0;
+  const defaultIntent = firstOwnedAccount || requestedDefaultIntent;
   const { isEligible: isKnownProviderEligible } =
     useEgyptianInstitutionEligibility();
 
@@ -203,10 +226,11 @@ export default function AddAccount(): React.ReactNode {
    * Handles the save action by validating the form and calling the creation hook.
    */
   const handleSave = async (): Promise<void> => {
-    if (isSubmitting) return;
+    if (isSubmitting || defaultState.status !== "ready") return;
 
     if (validate()) {
-      await createAccount(formData);
+      const data = { ...formData, defaultIntent };
+      await createAccount(data);
     }
   };
 
@@ -236,7 +260,8 @@ export default function AddAccount(): React.ReactNode {
             void handleSave();
           },
           loading: isSubmitting,
-          disabled: isSubmitting || isCheckingUniqueness || !isValid,
+          disabled:
+            isSubmitting || isCheckingUniqueness || !isValid || !defaultReady,
         }}
       />
 
@@ -326,6 +351,41 @@ export default function AddAccount(): React.ReactNode {
               keyboardType="numeric"
               onFocus={handleBalanceFieldFocus}
             />
+          </View>
+
+          <View testID={"account-default-state-" + defaultState.status}>
+            {defaultState.status === "loading" ? (
+              <View
+                testID="account-default-loading-skeleton"
+                accessibilityRole="progressbar"
+                accessibilityLabel={tCommon("loading")}
+                className="mb-3 min-h-11 flex-row items-center justify-between px-1 py-4"
+              >
+                <Skeleton width={22} height={22} borderRadius={11} />
+                <View className="ms-3 min-w-0 flex-1 gap-2">
+                  <Skeleton width="55%" height={24} borderRadius={6} />
+                  <Skeleton width="85%" height={18} borderRadius={6} />
+                  <Skeleton width="70%" height={18} borderRadius={6} />
+                </View>
+                <View className="ms-3">
+                  <Skeleton width={48} height={28} borderRadius={14} />
+                </View>
+              </View>
+            ) : (
+              <AccountDefaultField
+                accountType={formData.accountType}
+                checked={defaultIntent}
+                disabled={!defaultReady || isSubmitting || firstOwnedAccount}
+                firstOwnedAccount={firstOwnedAccount}
+                previousDefaultName={
+                  defaultReady ? defaultState.defaultAccountName : null
+                }
+                onChange={setRequestedDefaultIntent}
+              />
+            )}
+            {defaultState.status === "recovery" ? (
+              <AccountDefaultRecoveryNotice onRetry={retryDefaultState} />
+            ) : null}
           </View>
 
           <View ref={smsMatchingSectionRef}>

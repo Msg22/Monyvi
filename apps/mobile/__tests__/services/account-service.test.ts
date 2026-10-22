@@ -32,6 +32,11 @@ import {
   ensureCashAccount,
   getDefaultCashAccountName,
 } from "@/services/account-service";
+import type { AccountDefaultIntentService } from "@/services/account-default-intent-service";
+import {
+  prepareAccountDefaultCommand,
+  type AccountDefaultPreparedCommand,
+} from "@/services/account-default-intent-command";
 
 // =============================================================================
 // Mocks
@@ -43,6 +48,34 @@ import {
 // satisfies the `import` chain without bringing the runtime in.
 const mockDatabaseGet = jest.fn();
 const mockDatabaseWrite = jest.fn();
+const mockDefaultIntentPrepare: jest.MockedFunction<
+  AccountDefaultIntentService["prepare"]
+> = jest.fn();
+const mockDefaultIntentCommitPrepared: jest.MockedFunction<
+  AccountDefaultIntentService["commitPrepared"]
+> = jest.fn();
+const CASH_CREATOR_ACTION_ID = "00000000-0000-4000-8000-0000000000a0";
+const CASH_CREATOR_ACCOUNT_ID = "00000000-0000-4000-8000-0000000000a1";
+const mockCashCreatorIds = [CASH_CREATOR_ACTION_ID, CASH_CREATOR_ACCOUNT_ID];
+const mockPreparedCashCommand: AccountDefaultPreparedCommand =
+  prepareAccountDefaultCommand({
+    ownerId: "00000000-0000-4000-8000-0000000000a2",
+    form: {
+      name: "Cash",
+      accountType: "CASH",
+      currency: "EGP",
+      balance: "0",
+      defaultIntent: false,
+    },
+    snapshot: { activeAccountIds: [], defaultAccount: null },
+    dependencyActionIds: [],
+    createId: (): string => {
+      const id = mockCashCreatorIds.shift();
+      if (!id) throw new Error("Cash creator fixture exhausted IDs");
+      return id;
+    },
+    occurredAt: "2026-10-18T00:00:00.000Z",
+  });
 const mockCreateGuardedAccount = jest.fn(
   async (input: {
     readonly account: unknown;
@@ -94,6 +127,19 @@ jest.mock("@/services/account-core-writer-production", () => ({
   }): Promise<void> => mockCreateGuardedAccount(input),
 }));
 
+// Only the new protected Add command transport is stubbed here. The actual
+// Cash naming, owner checks and idempotent lookup remain under test.
+jest.mock("@/services/account-default-intent-service", () => ({
+  createAccountDefaultIntentService: (): AccountDefaultIntentService => ({
+    prepare: (userId, form) => mockDefaultIntentPrepare(userId, form),
+    commitPrepared: (command) => mockDefaultIntentCommitPrepared(command),
+    create: async (userId, form) =>
+      mockDefaultIntentCommitPrepared(
+        await mockDefaultIntentPrepare(userId, form)
+      ),
+  }),
+}));
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -111,6 +157,21 @@ interface MockAccountRow {
 function getIntroFlagMocks(): { readIntroLocaleOverride: jest.Mock } {
   return jest.requireMock<{ readIntroLocaleOverride: jest.Mock }>(
     "@/services/intro-flag-service"
+  );
+}
+
+function expectPreparedCashIntent(name: string): void {
+  expect(mockDefaultIntentPrepare).toHaveBeenCalledTimes(1);
+  expect(mockDefaultIntentPrepare).toHaveBeenCalledWith("user-1", {
+    name,
+    accountType: "CASH",
+    currency: "EGP",
+    balance: "0",
+    defaultIntent: false,
+  });
+  expect(mockDefaultIntentCommitPrepared).toHaveBeenCalledTimes(1);
+  expect(mockDefaultIntentCommitPrepared).toHaveBeenCalledWith(
+    mockPreparedCashCommand
   );
 }
 
@@ -401,6 +462,11 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
 describe("ensureCashAccount - localized seed name", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDefaultIntentPrepare.mockResolvedValue(mockPreparedCashCommand);
+    mockDefaultIntentCommitPrepared.mockResolvedValue({
+      kind: "committed",
+      accountId: CASH_CREATOR_ACCOUNT_ID,
+    });
     mockDatabaseWrite.mockImplementation((writer: () => Promise<void>) =>
       writer()
     );
@@ -435,6 +501,8 @@ describe("ensureCashAccount - localized seed name", () => {
       error: "AUTH_SCOPE_CHANGED",
     });
     expect(createCalls).toHaveLength(0);
+    expect(mockDefaultIntentPrepare).not.toHaveBeenCalled();
+    expect(mockDefaultIntentCommitPrepared).not.toHaveBeenCalled();
   });
 
   it("stores the default Cash account name using the user's preferred language", async () => {
@@ -456,8 +524,13 @@ describe("ensureCashAccount - localized seed name", () => {
 
     const result = await ensureCashAccount("user-1", "EGP");
 
-    expect(result.created).toBe(true);
-    expect(createCalls[0].name).toBe(getDefaultCashAccountName("ar"));
+    expect(result).toEqual({
+      created: true,
+      accountId: CASH_CREATOR_ACCOUNT_ID,
+    });
+    expectPreparedCashIntent(getDefaultCashAccountName("ar"));
+    expect(createCalls).toHaveLength(0);
+    expect(getIntroFlagMocks().readIntroLocaleOverride).not.toHaveBeenCalled();
   });
 
   it("falls back to the pre-auth intro locale when no profile language exists", async () => {
@@ -479,9 +552,15 @@ describe("ensureCashAccount - localized seed name", () => {
       throw new Error(`Unexpected collection: ${collectionName}`);
     });
 
-    await ensureCashAccount("user-1", "EGP");
+    const result = await ensureCashAccount("user-1", "EGP");
 
-    expect(createCalls[0].name).toBe(getDefaultCashAccountName("ar"));
+    expect(result).toEqual({
+      created: true,
+      accountId: CASH_CREATOR_ACCOUNT_ID,
+    });
+    expectPreparedCashIntent(getDefaultCashAccountName("ar"));
+    expect(createCalls).toHaveLength(0);
+    expect(readIntroLocaleOverride).toHaveBeenCalledTimes(1);
   });
 
   it("keeps an explicit caller-provided cash account name as-is", async () => {
@@ -495,8 +574,14 @@ describe("ensureCashAccount - localized seed name", () => {
       throw new Error(`Unexpected collection: ${collectionName}`);
     });
 
-    await ensureCashAccount("user-1", "EGP", "Cash");
+    const result = await ensureCashAccount("user-1", "EGP", "Pocket Money");
 
-    expect(createCalls[0].name).toBe("Cash");
+    expect(result).toEqual({
+      created: true,
+      accountId: CASH_CREATOR_ACCOUNT_ID,
+    });
+    expectPreparedCashIntent("Pocket Money");
+    expect(createCalls).toHaveLength(0);
+    expect(getIntroFlagMocks().readIntroLocaleOverride).not.toHaveBeenCalled();
   });
 });

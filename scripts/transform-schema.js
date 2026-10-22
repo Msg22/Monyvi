@@ -23,6 +23,16 @@ const ESLINT_BIN = path.join(
 const prettier = require("prettier");
 const { atomicReplaceFile } = require("./generate-local-supabase-types.cjs");
 
+require("tsx/cjs");
+const {
+  ACCOUNT_REVIEW_LOCAL_RECOVERY_ROOT_TABLE,
+  ACCOUNT_REVIEW_LOCAL_RECOVERY_COLUMNS,
+} = require("../packages/db/src/local-schema/account-review-local-recovery-schema.ts");
+const DEVICE_LOCAL_COLUMNS_BY_TABLE = {
+  [ACCOUNT_REVIEW_LOCAL_RECOVERY_ROOT_TABLE]:
+    ACCOUNT_REVIEW_LOCAL_RECOVERY_COLUMNS,
+};
+
 async function formatContent(filePath, content, prettierModule = prettier) {
   const config = await prettierModule.resolveConfig(filePath);
   return prettierModule.format(content, {
@@ -402,13 +412,27 @@ function parseColumnType(rawType, columnName, tableName, enums) {
 // GENERATORS
 // =============================================================================
 
+function localWatermelonColumns(tableName, serverColumns) {
+  const local = DEVICE_LOCAL_COLUMNS_BY_TABLE[tableName] || [];
+  const names = new Set(serverColumns.map((col) => col.name));
+  const normalized = local.map(({ name, type, ...flags }) => {
+    if (names.has(name))
+      throw new Error(`Device-only column collides: ${tableName}.${name}`);
+    if (!["string", "number", "boolean"].includes(type))
+      throw new Error(`Invalid device-only column type: ${tableName}.${name}`);
+    names.add(name);
+    return { name, wmType: type, ...flags };
+  });
+  return [...serverColumns, ...normalized];
+}
+
 /**
  * Generate schema.ts content
  */
 function generateSchema(tables) {
   const tableSchemas = Object.entries(tables)
     .map(([tableName, { columns }]) => {
-      const columnDefs = columns
+      const columnDefs = localWatermelonColumns(tableName, columns)
         .map((col) => {
           const parts = [`{ name: "${col.name}", type: "${col.wmType}"`];
           if (col.isOptional) parts.push("isOptional: true");

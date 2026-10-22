@@ -176,6 +176,7 @@
   "search_categories": "بحث عن فئات...",
   "search_category_level": "بحث في {{label}}...",
   "no_categories_found": "لا توجد فئات",
+  "categories_unavailable": "الفئات غير متاحة حاليًا. يرجى المحاولة مرة أخرى.",
   "no_categories_match_search": "لا توجد فئات تطابق بحثك",
   "vs_last_month": "مقابل الشهر الماضي",
   "last_updated": "آخر تحديث",

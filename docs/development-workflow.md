@@ -1,9 +1,66 @@
 # Delivery workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- **Current worker source:** Before remote authoring, provide the exact relevant
+  current file revisions or minimal safe patches when local work differs from
+  the published branch. The worker must identify its source preimages. At
+  integration, match them or perform a preserving merge; never replace newer
+  local UI or instructions with a full file based on an older remote snapshot.
+  Source freshness is separate from the trusted governing revision and adds no
+  design-approval gate.
+
+## Typography diagnosis during UI follow-up (2026-10-21)
+
+Follow the loaded locale-font contract in `docs/design/design-system.md`;
+font-weight utilities alone do not choose the app font. If text is missing while
+its layout space remains, verify the full string, native line measurements and
+actual rendering before changing margins. Keep diagnostic data limited to safe
+layout metadata, remove temporary logging, and record the exact owner-confirmed
+device case separately from other pending widths/locales. Do not introduce a
+native upgrade, global font migration or new approval gate for a scoped UI fix.
+
+## Global form interaction standards (owner-approved 2026-10-20)
+
+All new or modified dropdown/picker selected options MUST show the current
+choice immediately on open with a filled approved Nile-green selected
+background, WHITE readable text in both light and dark modes, and a contrasting
+white selected check/icon (never green on green). Use shared `Dropdown`,
+`CurrencyPicker` and their state/accessibility contracts rather than local
+duplicates. Add a focused source/render-contract regression of the real opened
+selected option after implementation; verify visual contrast/RTL separately when
+native evidence is authorized.
+
+All form text inputs (pages, modal/sheets, last fields) MUST remain visible,
+focusable and scrollable above the keyboard on Android and iOS, compact screens,
+landscape and enlarged fonts, despite modal headers, safe areas and fixed
+footers. Use measured available keyboard-adjusted viewport/layout space and
+shared keyboard-aware/scrollable form patterns, not fixed screen-height or
+keyboard-padding guesses. Focus/scroll the field and label/error into view;
+ensure submit/cancel can be reached. Cover deterministic contracts in affected
+tests, and record **native/manual keyboard, font-scale and RTL** checks as **NOT
+RUN** until actually performed. Do not infer device PASS from source/tests.
+
+This is a **global standard**, not proof that existing bespoke pickers/forms
+have been migrated. Shared component enforcement is a separate owned effort;
+audit/adopt older bespoke usages incrementally in their scoped changes. It adds
+no new mockup approval, binding artifact, TDD sequence or broad refactor gate.
+
 **Owner-approved policy: 2026-10-18.** Applies to new work and unfinished work,
 including #395. Replaces mandatory TDD sequencing in older project guidance.
 Product approval, approved mockups, Speckit analysis, architecture, financial
 invariants, privacy, sync protection and worker authorization still apply.
+
+**Prospective UI design policy (approved 2026-10-20):** Before implementing
+meaningful visible changes, present a runnable, revisioned interactive design
+under the feature's `mockups/`, with a short README for version, run steps,
+scenarios and native-only differences. Approve the **reviewed runnable design
+once**; it is the layout/visual authority and requires no new binding sidecar,
+metadata/hash tuple or duplicate approval. See
+[interactive design workflow](design/interactive-design-workflow.md) and the
+sprint-issue micro-UI exception. Browser behavior is simulated; actual native
+render/device acceptance remains separate. Historical approved images, sidecars
+and evidence are untouched.
 
 ## Delivery sequence
 
@@ -15,7 +72,20 @@ invariants, privacy, sync protection and worker authorization still apply.
    boundary, run TypeScript, lint and relevant existing automated tests
    together, plus applicable repository hooks and required safety checks. Do not
    run checks after every file edit. Report exact results, known gaps and manual
-   steps.
+   steps. Responsive UI follows `AGENTS.md`'s available-container rule; use
+   existing checks and owner manual review of representative small, ordinary,
+   wide and enlarged-text states, not mandatory cosmetic layout-test matrices.
+   For new/changed app feedback, also follow `AGENTS.md`'s prospective sticky
+   inline notice and dark informational-contrast policy; gradual legacy
+   migration does not introduce an extra delivery ceremony. After authoring,
+   **before replacing a live/running checkout with released worker source
+   artifacts**, Root uses the existing intake guard to check staged TS/JS/JSX
+   syntax validity (including braces, quotes and JSX). Reject malformed
+   artifacts before applying them; this is post-implementation intake, **not**
+   tests-first/TDD or a new framework, test matrix or native-device gate. Source
+   `className` assertions verify authored props only, not Babel/ NativeWind
+   transformation or the rendered UI; report those evidence types separately,
+   leaving visual acceptance to owner manual review.
 3. **Owner manual testing.** Mohamed tests the implemented behavior. Capture his
    feedback, fix confirmed defects, and repeat affected manual scenarios until
    he accepts the behavior. Agents must not invent a manual pass. No emulator or
@@ -76,9 +146,10 @@ batch.
 
 ## Planning, workers and evidence
 
-- Keep approved spec, contracts, design bindings and existing task IDs.
-  Reconcile unfinished task dependencies with this sequence rather than
-  regenerating plans or discarding completed work.
+- Keep approved spec, contracts, historical image bindings, reviewed interactive
+  design versions and existing task IDs. Reconcile unfinished task dependencies
+  with this sequence rather than regenerating plans or discarding completed
+  work.
 - Plan explicit implementation, batched verification, owner manual feedback,
   regression coverage and final validation stages. Coverage tasks remain
   required where the spec or safety boundary requires them; they need not

@@ -1,7 +1,4 @@
-import {
-  database as productionDatabase,
-  type FinancialActionGroup,
-} from "@monyvi/db";
+import type { FinancialActionGroup } from "@monyvi/db";
 import {
   FINANCIAL_ACTION_STATES,
   assertFinancialActionStateEvidence,
@@ -32,8 +29,17 @@ import {
   cloneWatermelonRaw,
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
-import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import { getBoundFinancialActionTransition } from "./sync/account-sync-ack-scope";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
+import {
+  captureExistingOperationExpectations,
+  captureLocalRecoverySnapshotJson,
+  capturePreparedExpectations,
+  createImmutablePostimages,
+  createImmutablePreimages,
+  type ExistingOperationExpectation,
+  type PreparedOperationExpectation,
+} from "./financial-action-local-recovery-capture";
 import {
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
   type CommitFinancialActionGroupLocallyInput,
@@ -44,8 +50,6 @@ import {
   type FinancialActionFoundationRepositoryDependencies,
   type FinancialActionLinkedExistingOperation,
   type FinancialActionLinkedOperationPlan,
-  type FinancialActionLinkedOperationPostimage,
-  type FinancialActionLinkedOperationPreimage,
   type FinancialActionUserDataScope,
   resolveFinancialActionServerOutcomeState,
 } from "./financial-action-foundation-contracts";
@@ -76,24 +80,6 @@ interface PreparedFinancialActionContext {
 interface PreparedLocalRoot {
   readonly operation: Model;
   readonly record: FinancialActionGroup;
-}
-
-interface ExistingOperationExpectation {
-  readonly model: Model;
-  readonly table: string;
-  readonly id: string;
-  readonly kind: FinancialActionLinkedExistingOperation["kind"];
-  readonly expectedPreparedState: "update" | "markAsDeleted";
-}
-
-interface PreparedOperationExpectation {
-  readonly model: Model;
-  readonly table: string;
-  readonly id: string;
-  readonly kind: FinancialActionLinkedOperationPostimage["kind"];
-  readonly expectedPreparedState: "create" | "update" | "markAsDeleted";
-  readonly raw: Readonly<Model["_raw"]>;
-  readonly isEditing: boolean;
 }
 
 interface PreparedCreateSnapshot {
@@ -188,7 +174,8 @@ export function createFinancialActionFoundationRepository(
   function prepareNewRoot(
     context: PreparedFinancialActionContext,
     state: FinancialActionState,
-    now: Date
+    now: Date,
+    localSnapshotJson: string | null = null
   ): FinancialActionGroup {
     return collection().prepareCreate((candidate) => {
       candidate.actionId = context.envelope.actionId;
@@ -207,6 +194,10 @@ export function createFinancialActionFoundationRepository(
       candidate.rejectionCode = null;
       candidate.deleted = false;
       candidate.updatedAt = now;
+      // Decorated WatermelonDB fields are writable only while prepareCreate
+      // invokes this callback (or inside an actual prepareUpdate callback).
+      if (localSnapshotJson !== null)
+        candidate.localRecoverySnapshotJson = localSnapshotJson;
     });
   }
 
@@ -298,22 +289,6 @@ export function createFinancialActionFoundationRepository(
     snapshot.model._isEditing = snapshot.isEditing;
   }
 
-  function captureExistingOperationExpectations(
-    operations: readonly FinancialActionLinkedExistingOperation[]
-  ): readonly ExistingOperationExpectation[] {
-    return Object.freeze(
-      operations.map((operation) =>
-        Object.freeze({
-          model: operation.model,
-          table: operation.model.table,
-          id: operation.model.id,
-          kind: operation.kind,
-          expectedPreparedState: operation.kind,
-        })
-      )
-    );
-  }
-
   function assertPreparedCreateIntegrity(
     models: readonly Model[],
     expectedIdentities: readonly string[]
@@ -362,44 +337,6 @@ export function createFinancialActionFoundationRepository(
     assertDisjointModelIdentities(models, preparedCreates);
   }
 
-  function capturePreparedExpectations(
-    preparedCreates: readonly Model[],
-    preparedExistingOperations: readonly Model[],
-    existingExpectations: readonly ExistingOperationExpectation[]
-  ): readonly PreparedOperationExpectation[] {
-    const createExpectations = preparedCreates.map((model) =>
-      Object.freeze({
-        model,
-        table: model.table,
-        id: model.id,
-        kind: "create" as const,
-        expectedPreparedState: "create" as const,
-        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-        isEditing: false,
-      })
-    );
-    const updateExpectations = preparedExistingOperations.map(
-      (model, index) => {
-        const existing = existingExpectations[index];
-        if (!existing || model !== existing.model) {
-          throw new Error(
-            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
-          );
-        }
-        return Object.freeze({
-          model,
-          table: existing.table,
-          id: existing.id,
-          kind: existing.kind,
-          expectedPreparedState: existing.expectedPreparedState,
-          raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-          isEditing: false,
-        });
-      }
-    );
-    return Object.freeze([...createExpectations, ...updateExpectations]);
-  }
-
   function assertPreparedOperationsMatch(
     operations: readonly Model[],
     expectations: readonly PreparedOperationExpectation[]
@@ -425,47 +362,6 @@ export function createFinancialActionFoundationRepository(
     assertUniqueModelIdentities(operations);
   }
 
-  function immutableRaw(raw: Readonly<Model["_raw"]>): Readonly<Model["_raw"]> {
-    return Object.freeze(cloneWatermelonRaw(raw));
-  }
-
-  function createImmutablePreimages(
-    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>,
-    expectations: readonly ExistingOperationExpectation[]
-  ): readonly FinancialActionLinkedOperationPreimage[] {
-    return Object.freeze(
-      snapshots.map((snapshot, index) => {
-        const expectation = expectations[index];
-        if (!expectation) {
-          throw new Error(
-            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
-          );
-        }
-        return Object.freeze({
-          id: expectation.id,
-          kind: expectation.kind,
-          table: expectation.table,
-          raw: immutableRaw(snapshot.raw),
-        });
-      })
-    );
-  }
-
-  function createImmutablePostimages(
-    expectations: readonly PreparedOperationExpectation[]
-  ): readonly FinancialActionLinkedOperationPostimage[] {
-    return Object.freeze(
-      expectations.map((expectation) =>
-        Object.freeze({
-          id: expectation.id,
-          kind: expectation.kind,
-          table: expectation.table,
-          raw: immutableRaw(expectation.raw),
-        })
-      )
-    );
-  }
-
   function prepareExistingOperation(
     operation: FinancialActionLinkedExistingOperation
   ): Model {
@@ -480,15 +376,19 @@ export function createFinancialActionFoundationRepository(
 
   function prepareLocalRoot(
     context: PreparedFinancialActionContext,
-    foundRecord: FinancialActionGroup | null
+    foundRecord: FinancialActionGroup | null,
+    localSnapshotJson: string | null
   ): PreparedLocalRoot {
     const now = new Date();
     const record =
-      foundRecord ?? prepareNewRoot(context, "local_complete", now);
+      foundRecord ??
+      prepareNewRoot(context, "local_complete", now, localSnapshotJson);
     const operation = foundRecord
       ? record.prepareUpdate((candidate) => {
           candidate.state = "local_complete";
           candidate.updatedAt = now;
+          if (localSnapshotJson !== null)
+            candidate.localRecoverySnapshotJson = localSnapshotJson;
         })
       : record;
     return { operation, record };
@@ -645,17 +545,30 @@ export function createFinancialActionFoundationRepository(
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       const preparedPostimages =
         createImmutablePostimages(preparedExpectations);
-      await assertPreparedOwnership(
-        Object.freeze({
-          userId: context.scope.userId,
-          cachedPreimages,
-          preparedPostimages,
-        })
-      );
+      const physicalEvidence = Object.freeze({
+        userId: context.scope.userId,
+        cachedPreimages,
+        preparedPostimages,
+        payloadHash: context.payload.payloadHash,
+      });
+      await assertPreparedOwnership(physicalEvidence);
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
         FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
+      await reassertExpectedCurrentUser(context.scope.userId);
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
+      assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
+      const localSnapshotJson = await captureLocalRecoverySnapshotJson(
+        context.envelope,
+        context.scope.userId,
+        plan,
+        physicalEvidence
       );
       await reassertExpectedCurrentUser(context.scope.userId);
       assertPendingFinancialActionRootUnchanged(
@@ -670,7 +583,7 @@ export function createFinancialActionFoundationRepository(
         pendingRootExpectation,
         FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
       );
-      const root = prepareLocalRoot(context, foundRecord);
+      const root = prepareLocalRoot(context, foundRecord, localSnapshotJson);
       const preparedRootSnapshot = foundRecord
         ? captureCachedModelSnapshot(foundRecord)
         : null;
@@ -692,6 +605,11 @@ export function createFinancialActionFoundationRepository(
           FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
         );
       }
+      // Load the real atomic helper only at the prepared commit boundary.
+      // The injected repository and pure imports never load native SQLite.
+      const { commitPreparedBatch } =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("./watermelon-atomic-batch") as typeof import("./watermelon-atomic-batch");
       await commitPreparedBatch(
         [root.operation, ...linkedOperations],
         dependencies.database
@@ -793,6 +711,22 @@ export function createFinancialActionFoundationRepository(
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.NOT_FOUND);
       }
       const record = scope.assertOwned(foundRecord);
+      const originalBinding = getBoundFinancialActionTransition(
+        dependencies.database,
+        actionId
+      );
+      if (
+        originalBinding &&
+        (originalBinding.ownerId !== scope.userId ||
+          originalBinding.physicalRootId !== record.id ||
+          originalBinding.payloadHash !== record.payloadHash ||
+          originalBinding.payloadJson !== record.payloadJson ||
+          originalBinding.actionId !== record.actionId)
+      ) {
+        throw new Error(
+          FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+        );
+      }
       const operation = record.prepareUpdate((candidate) => {
         update(candidate);
         candidate.updatedAt = new Date();
@@ -913,24 +847,47 @@ export function createFinancialActionFoundationRepository(
   });
 }
 
-const productionRepository = createFinancialActionFoundationRepository({
-  database: productionDatabase,
-  getCurrentUserDataScope: getProductionCurrentUserDataScope,
-  assertExpectedCurrentUser: assertProductionCurrentUser,
-  registry: APPROVED_FINANCIAL_ACTION_REGISTRY,
-});
+// The injected repository factory is import-safe for pure unit tests. Build
+// the production singleton only when one of its exported methods is invoked.
+let cachedProductionRepository: FinancialActionFoundationRepository | null =
+  null;
+function getProductionRepository(): FinancialActionFoundationRepository {
+  if (cachedProductionRepository === null) {
+    const { database: productionDatabase } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("@monyvi/db") as typeof import("@monyvi/db");
+    cachedProductionRepository = createFinancialActionFoundationRepository({
+      database: productionDatabase,
+      getCurrentUserDataScope: getProductionCurrentUserDataScope,
+      assertExpectedCurrentUser: assertProductionCurrentUser,
+      registry: APPROVED_FINANCIAL_ACTION_REGISTRY,
+    });
+  }
+  return cachedProductionRepository;
+}
 
-export const createFinancialActionGroup =
-  productionRepository.createFinancialActionGroup;
-export const commitFinancialActionGroupLocally =
-  productionRepository.commitFinancialActionGroupLocally;
-export const getFinancialActionGroup =
-  productionRepository.getFinancialActionGroup;
-export const markFinancialActionGroupSyncFailed =
-  productionRepository.markFinancialActionGroupSyncFailed;
-export const markFinancialActionGroupSyncPending =
-  productionRepository.markFinancialActionGroupSyncPending;
-export const recordFinancialActionGroupServerOutcome =
-  productionRepository.recordFinancialActionGroupServerOutcome;
-export const retryFinancialActionGroup =
-  productionRepository.retryFinancialActionGroup;
+export const createFinancialActionGroup: FinancialActionFoundationRepository["createFinancialActionGroup"] =
+  (input) => getProductionRepository().createFinancialActionGroup(input);
+export const commitFinancialActionGroupLocally: FinancialActionFoundationRepository["commitFinancialActionGroupLocally"] =
+  (input) => getProductionRepository().commitFinancialActionGroupLocally(input);
+export const getFinancialActionGroup: FinancialActionFoundationRepository["getFinancialActionGroup"] =
+  (actionId) => getProductionRepository().getFinancialActionGroup(actionId);
+export const markFinancialActionGroupSyncFailed: FinancialActionFoundationRepository["markFinancialActionGroupSyncFailed"] =
+  (actionId, rejectionCode) =>
+    getProductionRepository().markFinancialActionGroupSyncFailed(
+      actionId,
+      rejectionCode
+    );
+export const markFinancialActionGroupSyncPending: FinancialActionFoundationRepository["markFinancialActionGroupSyncPending"] =
+  (actionId) =>
+    getProductionRepository().markFinancialActionGroupSyncPending(actionId);
+export const recordFinancialActionGroupServerOutcome: FinancialActionFoundationRepository["recordFinancialActionGroupServerOutcome"] =
+  (actionId, serverOutcome, outcomeJson, rejectionCode) =>
+    getProductionRepository().recordFinancialActionGroupServerOutcome(
+      actionId,
+      serverOutcome,
+      outcomeJson,
+      rejectionCode
+    );
+export const retryFinancialActionGroup: FinancialActionFoundationRepository["retryFinancialActionGroup"] =
+  (actionId) => getProductionRepository().retryFinancialActionGroup(actionId);

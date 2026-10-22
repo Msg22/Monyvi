@@ -4,8 +4,28 @@ description: Run styling checks and common refactorings for Monyvi UI
 
 # 🎨 Monyvi Styling Workflow
 
+## Shared selection and keyboard standards (2026-10-20)
+
+- [ ] Open picker/dropdown visibly distinguishes its ACTUAL selected option:
+      filled Nile-green background, WHITE selected text on light/dark and a
+      white contrasting check/icon; selected/checked accessibility state matches
+      the bound value (not tint-only or green on green).
+- [ ] Forms and modal/sheet text fields (including the last) stay focusable and
+      scroll-reachable above the Android/iOS keyboard at compact viewport,
+      enlarged font and RTL. Use measured keyboard-adjusted viewport and
+      header/footer/insets, not arbitrary offsets; actions remain reachable.
+- [ ] Reuse shared selector/text input/form primitives; cover selected state in
+      focused source/render tests and record native dark/keyboard/font/RTL
+      checks as PASS/FAIL only with execution, otherwise NOT RUN. Audit bespoke
+      legacy uses incrementally; do not claim whole-app migration or TDD gate.
+
 This workflow helps ensure that building components follow the established
-styling rules:
+styling rules. Apply `AGENTS.md`, `docs/development-workflow.md`,
+`docs/design/design-system.md`, and `.agent/rules/styling-rules.md` before
+making UI changes. Current owner-approved UI/feedback decisions take precedence
+over generic checklist examples; this is not another approval gate.
+
+The basic checks are:
 
 1. Tailwind CSS first
 2. Dark mode compliance (using `dark:` variant)
@@ -40,3 +60,10 @@ When creating a new screen:
 - [ ] Text uses `text-slate-800 dark:text-white` (or similar slate variants).
 - [ ] No static hex codes used.
 - [ ] Interactive elements have proper `activeOpacity` or `Pressable` feedback.
+- [ ] Labels fit their **actual container** with font scaling and 44/48 dp hit
+      areas; status/count wraps without an orphan dot. Reused rows agree.
+- [ ] Informational dark text remains legible; selected/alert fills are
+      preserved.
+- [ ] New/changed error, warning and success feedback uses dismissible page
+      notice below the header, outside scrolling, or the active modal's top—not
+      a new toast. Keyboard and footer remain reachable with one inset.

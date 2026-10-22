@@ -31,7 +31,7 @@ import {
   type AudioRecorder,
   type RecordingOptions,
 } from "expo-audio";
-import * as FileSystem from "expo-file-system";
+import { File } from "expo-file-system";
 import { Platform } from "react-native";
 import {
   useMicrophonePermission,
@@ -722,15 +722,14 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   // Cleanup (FR-021: temp file MUST be deleted)
   // ---------------------------------------------------------------------------
 
-  const deleteAudioFile = useCallback(async (uri: string): Promise<void> => {
+  const deleteAudioFile = useCallback((uri: string): Promise<void> => {
     try {
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      if (fileInfo.exists) {
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-      }
+      const file = new File(uri);
+      if (file.exists) file.delete();
     } catch (err: unknown) {
       logger.warn("voice.recorder.tempAudioDeleteFailed", { error: err });
     }
+    return Promise.resolve();
   }, []);
 
   const cleanupRecorderResources = useCallback(

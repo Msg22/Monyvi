@@ -5,33 +5,41 @@ description:
 
 # 🎨 Style Audit Workflow
 
-## Approved Mockup Binding Gate
+## Shared selection and keyboard standards (2026-10-20)
 
-When this workflow consumes an approved mockup or sidecar, run
-`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
-binding facts, rendered evidence, or approval status. Require exit status zero:
-current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
-revisions, and approval evidence for the approved combined
-`Binding approval revision` must all verify. A failed verifier blocks governed
-UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+**Global selected-state and keyboard audit (owner-approved 2026-10-20):** For
+every open dropdown/picker check the ACTUAL controlled selected row: solid
+Nile-green selected background, WHITE readable text and white contrasting
+check/icon in light and dark themes (never green on green or only a tinted
+border). Verify its accessible checked/selected semantics, EN/AR and RTL using
+focused source/render-contract evidence. For new/touched forms inspect focus
+scrolling with the Android/iOS soft keyboard at small available heights and
+enlarged fonts: every field/label/error and the last input stays reachable, as
+do submit/cancel beneath modal headers/footers. Check actual measured
+keyboard-adjusted viewport and safe-area handling, not guessed offsets or Jest
+geometry. Record native/manual keyboard, dark contrast, font/RTL evidence
+separately or mark NOT RUN. Shared primitives should be reused; legacy bespoke
+usages are audited in focused changes, not declared migrated. No new binding or
+approval gate is created.
 
-This workflow produces a property-by-property comparison of approved mockup
-designs against the actual implementation styles (Tailwind classes, inline
-styles, colors, typography, spacing, borders, layout, icons). The output is a
-structured **Style Audit Report** identifying all gaps and mismatches.
+## Approved design authority
 
-First determine whether the target diff changes visual UI governed by an
-approved scoped mockup. If it does not, report the style audit and visual
-fidelity as `N/A — no governed visual UI change`, skip the per-mockup steps
-below, and do not block the change merely because the feature folder contains
-mockups.
+For prospective UI, review the **single owner-approved runnable interactive
+design** in the feature's `mockups/` with its short README for version,
+entry/run, scenarios and native-only limits. The artifact itself defines visual
+structure and responsive behavior; **no prospective sidecar, normative Binding
+Facts, hash manifest, combined approval or verifier step**. See
+`docs/design/interactive-design-workflow.md`.
 
-> [!CAUTION] **EVERY APPLICABLE SECTION IS MANDATORY. The agent MUST execute
-> EVERY applicable step. If a governing mockup has no deviations, the agent MUST
-> explicitly state "✅ No deviations found." Skipping or summarizing without
-> property-level evidence is a CRITICAL FAILURE.**
+For historically approved **image** references on their original UI surfaces
+only, preserve the original `*.binding.md` and run the unchanged
+`scripts/verify-mockup-binding.js` before using legacy Binding Facts. A
+missing/invalid historical sidecar blocks review of that historical governed
+surface, not new interactive HTML. Do not alter historical approvals.
 
----
+This workflow compares rendered design to actual RN styles and **native
+screenshots**, producing scoped property-level findings. Browser previews or
+source alone are not native visual evidence. For non-governed UI, report N/A.
 
 ## 1. Context Loading (MANDATORY)
 
@@ -52,8 +60,8 @@ Before analyzing ANY component, load the following:
   README files
 - **RECURSIVELY DISCOVER** candidate mockup assets in the selected feature
   folder, including nested paths such as `design/mockups/`
-- Defer image loading and per-mockup processing until Section 1.3 maps
-  candidates to changed governed visual UI.
+- Defer loading full interactive/image references and per-mockup processing
+  until Section 1.3 maps candidates to changed governed visual UI.
 
 ### 1.3 Identify Changed Components
 
@@ -61,24 +69,15 @@ Before analyzing ANY component, load the following:
 - Filter to only **UI files**: `.tsx` components, screen files, and any shared
   UI utilities
 - **READ** every changed UI file in full
-- Load candidate sidecar metadata, but not candidate images. Before using a
-  sidecar to include or exclude a reference, verify it records
-  `Binding metadata approval: APPROVED`, has a valid recomputed current
-  fingerprint, has matching current and approved revisions, and has approval
-  evidence that identifies that revision.
-- Use declared traceability and only authoritative candidate sidecars to map
-  references that govern changed visual UI. A candidate linked by declared
-  traceability to changed UI but missing an authoritative sidecar remains a
-  blocker; do not silently exclude it. Exclude references for unrelated or
-  unchanged surfaces before any per-mockup loop; non-visual files do not
-  activate the rendered-evidence gate.
-- **LOAD** only mapped approved mockup images and their matching binding
-  sidecars. A sidecar that fails any approval or revision check is
-  non-authoritative; follow the legacy migration/approval path when applicable
-  before treating reconstructed metadata as binding.
-- Record the declared **binding product surface**, UI viewport or component
-  context, and every sidecar region marked **non-binding** for each mapped
-  reference.
+- Map changed UI to its **approved runnable design/version** (or historical
+  image) through the feature handoff and README. Open its working entry, not a
+  raw fragment; exercise relevant approved interactions/states.
+- For **historical image-backed** surfaces, load only applicable original
+  sidecars, check current approval evidence and require legacy verifier PASS.
+- Ignore unrelated references and unchanged governed UI. No new interactive
+  sidecar, metadata reconstruction or second approval is required.
+- Record the reviewed interactive screen/component context or original
+  historical binding surface, excluding preview-only framing/controls.
 - Create a numbered mapping only for audit targets:
   `Mockup N → <filename> → <changed governed UI>`.
 - When no candidate assets exist, report `No mockups found — N/A`. When
@@ -93,19 +92,16 @@ For **each loaded mockup mapped to changed governed visual UI**, the agent MUST
 compare the following visual properties against the corresponding component(s).
 Present findings in a markdown table.
 
-**Scope rule:** perform every property comparison only inside the approved
-sidecar's **binding product surface**. Presentation-only regions explicitly
-marked non-binding are outside the audit target and MUST NOT produce a mismatch
-because product code omits or differs from them. Crop/mentally mask those
-regions before comparing properties; never turn phone hardware, device frame,
-outer canvas, browser chrome, export padding, or outside background into product
-UI requirements unless the explicitly approved sidecar marks that region
-binding.
+**Scope rule:** compare only the **actual approved product UI** in the runnable
+artifact (or historical sidecar-governed image). Exclude preview controls,
+decorative device framing, browser chrome and outer canvas; the original
+historical sidecar exclusions still apply to their surfaces.
 
 ### 2.1 Properties to Compare
 
-For each UI element visible **inside the binding product surface** of the
-mockup, check:
+For each UI element in the approved reference's **binding product surface**,
+including applicable interactive states documented by its approved handoff,
+check:
 
 | Property Category   | Specific Checks                                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -146,19 +142,18 @@ For each mockup, produce a table per UI section:
 
 ## 3. Missing Elements Check (MANDATORY)
 
-For each mockup, the agent MUST list missing/extra UI **only within the governed
-binding product surface**:
+For each mockup, list missing/extra UI **only within the approved product UI
+surface** shown in the interactive entry or historical image:
 
-- **Elements inside the binding product surface but NOT in code** (completely
+- **Elements inside the approved product surface but NOT in code** (completely
   missing product UI)
-- **Elements in the governed code surface but NOT in the binding product
+- **Elements in the governed code surface but NOT in the approved product
   surface** (extra/unapproved product UI)
 
-Do **not** report presentation-only phone hardware, device frame, outer canvas,
-browser chrome, export padding, or any other sidecar-declared non-binding region
-as missing product UI. Likewise, do not compare unrelated code outside the
-mockup's governed binding surface merely because it is visible on the same route
-or exists in the same component tree.
+Do **not** report presentation-only hardware, browser chrome, export padding,
+outer canvas or preview controls as missing product UI. For historical images,
+retain original sidecar exclusions. Do not compare unrelated code outside the
+governed product surface.
 
 ---
 
@@ -170,23 +165,25 @@ Write the report to the artifact directory as `style-audit.md` with:
 
 1. **Color Reference** — dark mode palette used in the project
 2. **Per-Mockup Sections** — each with comparison tables and a verdict scoped to
-   the approved binding product surface; list excluded non-binding framing for
+   the approved product surface; list excluded preview-only framing for
    traceability
-3. **Rendered Visual Evidence** — a side-by-side or overlay comparison at the
-   declared binding UI context, plus every in-scope compact-phone,
-   ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and enlarged-text
-   visual variant
+3. **Rendered Visual Evidence** — actual native-app screenshots compared
+   side-by-side or overlaid against the rendered approved interactive entry (or
+   historical approved image) at the reviewed UI context, plus every in-scope
+   compact-phone, ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and
+   enlarged-text visual variant
 4. **Accessibility Evidence** — accessibility-tree inspection, screen-reader
    validation, or automated accessibility results for labels and semantics;
    screenshots alone do not prove accessibility labels
 5. **Functional Readiness** — `READY` or `NOT READY`, with test evidence
-6. **Visual Fidelity** — `COMPLETE`, `INCOMPLETE`, or `N/A`, with the binding
+6. **Visual Fidelity** — `COMPLETE`, `INCOMPLETE`, or `N/A`, with the reviewed
    context and evidence paths or the reason it does not apply
 7. **Summary Table** — all findings grouped by severity
 
-Source and component inspection alone cannot prove visual completion. For a
-changed visual UI governed by an approved mockup, missing baseline or in-scope
-variant rendered evidence makes visual fidelity `INCOMPLETE`.
+Browser prototypes, source/component inspection and static screenshots alone
+cannot prove native visual completion. For changed governed UI, missing actual
+native baseline or scoped rendered evidence makes visual fidelity `INCOMPLETE`;
+record any unperformed device/render checks as `NOT RUN`, not as a visual pass.
 
 ### 4.2 Severity Classification
 

@@ -55,6 +55,14 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 [Gates determined based on constitution file]
 
+For meaningful visible UI changes, identify the approved **runnable design
+revision** and its short README (entry/run, scenarios, native-only limits) under
+the feature's `mockups/`, per `docs/design/interactive-design-workflow.md`. Its
+actual visuals, states and responsive rules govern implementation; do not
+generate separate layout bindings, hash/metadata approvals or duplicate
+design-approval tasks. Historical image sidecars retain their original scope;
+preserve micro-UI exceptions.
+
 ## Project Structure
 
 ### Documentation (this feature)

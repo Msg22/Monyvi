@@ -1,4 +1,13 @@
+import { createHash } from "node:crypto";
 import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
+import {
+  parseFinancialActionEnvelopeJson,
+  serializeFinancialActionEnvelope,
+} from "@monyvi/logic";
+import {
+  CANONICAL_ACCOUNT_PUSH_OWNER,
+  canonicalLegacyAccountEdit,
+} from "./sync-push-legacy-test-fixtures";
 
 import {
   createFinancialActionPushCoordinator,
@@ -15,65 +24,103 @@ const ACCOUNT_ID = "018f0c7a-1234-7abc-8def-000000000211";
 const TRANSACTION_ID = "018f0c7a-1234-7abc-8def-000000001301";
 const RECURRING_ID = "018f0c7a-1234-7abc-8def-000000001401";
 
-function payloadJson(input: {
-  readonly accountId: string;
+const EFFECT_ID = "018f0c7a-1234-7abc-8def-000000001501";
+const CATEGORY_ID = "00000000-0000-0000-0001-000000000201";
+
+/** A registered recurring Pay Now carries BOTH the schedule revision and its
+ * linked financial transaction; one reduced recurring stub is not authority.
+ */
+function recurringPayNowEnvelope(input: {
   readonly actionId: string;
   readonly expectedRevision: string;
-  readonly recurringId?: string;
+  readonly recurringId: string;
   readonly transactionId: string;
-}): string {
-  const records: Array<Readonly<Record<string, unknown>>> = [
-    {
-      after: { id: input.transactionId },
-      entity: "transaction",
-      expectedUpdatedAt: null,
-      mode: "create",
-    },
-  ];
-  if (input.recurringId) {
-    records.push({
-      after: { id: input.recurringId },
-      before: { id: input.recurringId },
-      entity: "recurring_payment",
-      expectedUpdatedAt: "2026-09-06T11:00:00.000Z",
-      mode: "update",
-    });
-  }
-  return JSON.stringify({
-    accountGuards: [
-      {
-        accountId: input.accountId,
-        expectedRevision: input.expectedRevision,
-      },
-    ],
+}): ReturnType<typeof parseFinancialActionEnvelopeJson> {
+  const original = canonicalLegacyAccountEdit({
     actionId: input.actionId,
-    domain: "transactions",
-    domainReferenceId: input.transactionId,
-    envelopeVersion: "monyvi.financial-action/v1",
-    kind: "create",
-    occurredAt: "2026-09-06T12:00:00.000Z",
-    payload: {
-      accountEffects: [
-        {
-          accountId: input.accountId,
-          amountMinorUnits: "-100",
-          currency: "EGP",
-        },
-      ],
-      domainMutation: { records },
-      domainRecordRefs: records.map((record) => {
-        const after = record.after as Readonly<Record<string, unknown>>;
-        return String(after.id);
-      }),
-      operationCode: input.recurringId
-        ? "recurring.pay-now"
-        : "transaction.create",
-      schemaVersion: "account.balance-effects/v1",
-    },
-    payloadVersion: "account.balance-effects/v1",
-    userId: "018f0c7a-1234-7abc-8def-000000000201",
+    accountId: ACCOUNT_ID,
+    effectId: EFFECT_ID,
+    transactionId: input.transactionId,
   });
+  const baseline = parseFinancialActionEnvelopeJson(original.payloadJson);
+  return parseFinancialActionEnvelopeJson(
+    serializeFinancialActionEnvelope({
+      ...baseline,
+      accountGuards: [
+        { accountId: ACCOUNT_ID, expectedRevision: input.expectedRevision },
+      ],
+      domain: "recurring_payments",
+      kind: "pay_now",
+      domainReferenceId: input.recurringId,
+      payload: {
+        schemaVersion: "account.balance-effects/v1",
+        operationCode: "recurring.pay-now",
+        accountEffects: [
+          {
+            accountId: ACCOUNT_ID,
+            amountMinorUnits: "-100",
+            currency: "EGP",
+            effectId: EFFECT_ID,
+          },
+        ],
+        domainMutation: {
+          records: [
+            {
+              entity: "recurring_payment",
+              mode: "update",
+              expectedRevision: "0",
+              before: {
+                financialRevision: "0",
+                nextDueDate: "2026-09-06",
+                status: "ACTIVE",
+              },
+              after: {
+                id: input.recurringId,
+                financialRevision: "1",
+                nextDueDate: "2026-10-06",
+                status: "ACTIVE",
+              },
+            },
+            {
+              entity: "transaction",
+              mode: "create",
+              expectedUpdatedAt: null,
+              after: {
+                id: input.transactionId,
+                accountId: ACCOUNT_ID,
+                amountMinorUnits: "100",
+                categoryId: CATEGORY_ID,
+                counterparty: null,
+                createdAt: "2026-09-06T12:00:00.000Z",
+                currency: "EGP",
+                date: "2026-09-06",
+                deleted: false,
+                isDraft: false,
+                linkedAssetId: null,
+                linkedDebtId: null,
+                linkedRecurringId: input.recurringId,
+                note: null,
+                smsFingerprint: null,
+                source: "RECURRING",
+                type: "EXPENSE",
+              },
+            },
+          ],
+        },
+        domainRecordRefs: [input.recurringId, input.transactionId].sort(),
+      },
+    })
+  );
 }
+
+/** Every test root is a registered canonical envelope with its real SHA256.
+ * The legacy dirty-group protections remain under their original contract.
+ */
+type CanonicalRootFixture = Readonly<Record<string, unknown>> & {
+  readonly action_id: string;
+  readonly payload_hash: string;
+  readonly payload_json: string;
+};
 
 function rootRecord(input: {
   readonly actionId: string;
@@ -81,19 +128,41 @@ function rootRecord(input: {
   readonly recurringId?: string;
   readonly state?: string;
   readonly transactionId: string;
-}): Readonly<Record<string, unknown>> {
+}): CanonicalRootFixture {
+  const legacy = canonicalLegacyAccountEdit({
+    actionId: input.actionId,
+    accountId: ACCOUNT_ID,
+    effectId: EFFECT_ID,
+    transactionId: input.transactionId,
+  });
+  const baseline = parseFinancialActionEnvelopeJson(legacy.payloadJson);
+  const envelope = input.recurringId
+    ? recurringPayNowEnvelope({
+        actionId: input.actionId,
+        expectedRevision: input.expectedRevision,
+        recurringId: input.recurringId,
+        transactionId: input.transactionId,
+      })
+    : {
+        ...baseline,
+        accountGuards: [
+          { accountId: ACCOUNT_ID, expectedRevision: input.expectedRevision },
+        ],
+      };
+  const payloadJson = serializeFinancialActionEnvelope(envelope);
+  const payloadHash = createHash("sha256")
+    .update(payloadJson, "utf8")
+    .digest("hex");
   return {
     action_id: input.actionId,
-    id: `root-${input.actionId}`,
-    payload_hash: "a".repeat(64),
-    payload_json: payloadJson({
-      accountId: ACCOUNT_ID,
-      actionId: input.actionId,
-      expectedRevision: input.expectedRevision,
-      recurringId: input.recurringId,
-      transactionId: input.transactionId,
-    }),
-    state: input.state ?? "local_pending",
+    domain: envelope.domain,
+    domain_reference_id: envelope.domainReferenceId,
+    id: input.actionId,
+    kind: envelope.kind,
+    payload_hash: payloadHash,
+    payload_json: payloadJson,
+    state: input.state ?? "local_complete",
+    user_id: CANONICAL_ACCOUNT_PUSH_OWNER,
   };
 }
 
@@ -152,9 +221,9 @@ describe("issue #242 foundation review regressions", () => {
       changes({ createdRoots: [root] })
     );
 
-    expect(readRejectedIdsForTable(protectedIds, "recurring_payments")).toEqual([
-      RECURRING_ID,
-    ]);
+    expect(readRejectedIdsForTable(protectedIds, "recurring_payments")).toEqual(
+      [RECURRING_ID]
+    );
   });
 
   it("orders guarded push candidates by account revision instead of Watermelon created/updated buckets", () => {
@@ -183,18 +252,27 @@ describe("issue #242 foundation review regressions", () => {
 
   it("resumes an already sync-pending candidate without repeating the state transition", async () => {
     const markPending = jest.fn().mockResolvedValue(undefined);
-    const candidate: FinancialActionPushCandidate = {
+    const invokeRpc = jest.fn().mockResolvedValue({
       actionId: "018f0c7a-1234-7abc-8def-000000000303",
-      payloadHash: "b".repeat(64),
-      payloadJson: "{}",
+      status: "accepted",
+    });
+    const canonical = rootRecord({
+      actionId: "018f0c7a-1234-7abc-8def-000000000303",
+      expectedRevision: "0",
+      transactionId: TRANSACTION_ID,
+      state: "sync_pending",
+    });
+    const candidate: FinancialActionPushCandidate = {
+      actionId: canonical.action_id,
+      payloadHash: canonical.payload_hash,
+      payloadJson: canonical.payload_json,
       state: "sync_pending",
     };
     const coordinator = createFinancialActionPushCoordinator({
-      invokeAccountFinancialActionRpc: jest.fn().mockResolvedValue({
-        actionId: candidate.actionId,
-        status: "accepted",
-      }),
-      markFinancialActionGroupSyncFailed: jest.fn().mockResolvedValue(undefined),
+      invokeAccountFinancialActionRpc: invokeRpc,
+      markFinancialActionGroupSyncFailed: jest
+        .fn()
+        .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       recordFinancialActionGroupServerOutcome: jest
         .fn()
@@ -204,6 +282,11 @@ describe("issue #242 foundation review regressions", () => {
     const result = await coordinator.coordinatePush([candidate]);
 
     expect(markPending).not.toHaveBeenCalled();
+    expect(invokeRpc).toHaveBeenCalledTimes(1);
+    expect(invokeRpc).toHaveBeenCalledWith({
+      payloadHash: candidate.payloadHash,
+      payloadJson: candidate.payloadJson,
+    });
     expect(result.decisions).toEqual([
       expect.objectContaining({
         actionId: candidate.actionId,
@@ -218,15 +301,23 @@ describe("issue #242 foundation review regressions", () => {
       actionId: "018f0c7a-1234-7abc-8def-000000000305",
       status: "accepted",
     });
-    const candidate: FinancialActionPushCandidate = {
+    const canonical = rootRecord({
       actionId: "018f0c7a-1234-7abc-8def-000000000305",
-      payloadHash: "c".repeat(64),
-      payloadJson: "{}",
+      expectedRevision: "0",
+      transactionId: TRANSACTION_ID,
+      state: "reconciled",
+    });
+    const candidate: FinancialActionPushCandidate = {
+      actionId: canonical.action_id,
+      payloadHash: canonical.payload_hash,
+      payloadJson: canonical.payload_json,
       state: "reconciled",
     };
     const coordinator = createFinancialActionPushCoordinator({
       invokeAccountFinancialActionRpc: invokeRpc,
-      markFinancialActionGroupSyncFailed: jest.fn().mockResolvedValue(undefined),
+      markFinancialActionGroupSyncFailed: jest
+        .fn()
+        .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       recordFinancialActionGroupServerOutcome: jest
         .fn()

@@ -118,6 +118,25 @@ components:
 
 # Design System: Monyvi
 
+## Shared selection and keyboard standards (2026-10-20)
+
+**Global picker/form behavior (owner-approved 2026-10-20):**
+
+- Reuse the shared `Dropdown`/`CurrencyPicker` and `TextField` patterns. The
+  CURRENT option on any opened dropdown/picker has a **filled Nile-green
+  background with white readable text** in light/dark; selected icons/checks are
+  white and high-contrast, never green on green. Show the real selected
+  value/accessibility state on open, not a default guess or tint-only signal.
+- Keep ALL focused text inputs, including the last one in a form/sheet, visible
+  and reachable when the iOS/Android keyboard opens on small screens and large
+  fonts. Use measured available keyboard-adjusted viewport and header/footer/
+  safe-area space with focus scrolling; don't rely on hardcoded keyboard gaps or
+  fixed nominal screen height. Keep cancel/submit reachable.
+- Verify chosen-option state in real source/render contracts; obtain explicit
+  native/manual dark-mode contrast, keyboard, RTL and font-size evidence before
+  marking visual/accessibility PASS. Shared enforcement and gradual audits of
+  bespoke controls remain separate work; no all-screen compliance is implied.
+
 ## 1. Overview
 
 **Creative North Star: "The Trusted Ledger"**

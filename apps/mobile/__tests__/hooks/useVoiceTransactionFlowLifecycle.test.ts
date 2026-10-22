@@ -4,6 +4,11 @@ import type { VoiceAvailabilitySnapshot } from "@monyvi/logic";
 import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import type { MicrophonePermissionStatus } from "@/hooks/useMicrophonePermission";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
+import {
+  createCanonicalVoiceSessionFixture,
+  TEST_VOICE_OWNER_ID,
+  TEST_VOICE_TRANSACTION_FIXTURE,
+} from "./voice-review-production-wiring-fixtures";
 
 class MockAppStateSubscription {
   constructor(private readonly onRemove: () => void) {}
@@ -54,7 +59,7 @@ const mockAvailabilityRefresh = jest.fn<
 >();
 const mockParseVoiceWithAi = jest.fn<Promise<unknown>, [unknown]>();
 const mockRandomUUID = jest.fn<string, []>();
-let mockUserId: string | null = "user-1";
+let mockUserId: string | null = TEST_VOICE_OWNER_ID;
 
 const allowedSnapshot: VoiceAvailabilitySnapshot = {
   serverNow: "2026-10-12T00:00:00.000Z",
@@ -119,7 +124,7 @@ jest.mock("@/services/profile-service", () => ({
       version: "2026-07-ai-processing-v1",
     },
     isConsented: true,
-    userId: "user-1",
+    userId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
   }),
 }));
 
@@ -128,6 +133,21 @@ jest.mock("@/services/ai-voice-parser-service", () => ({
     mockParseVoiceWithAi(options),
   isVoiceParserError: (): boolean => false,
   isVoiceQuotaParserError: (): boolean => false,
+}));
+
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn(() =>
+    Promise.resolve({
+      ownerId: mockUserId ?? "00000000-0000-4000-8000-000000000101",
+      preferredCurrency: "EGP",
+      accounts: [],
+      providerContext: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: "EGP",
+        accounts: [],
+      },
+    })
+  ),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -201,7 +221,7 @@ function renderFlow(
 describe("useVoiceTransactionFlow AppState and lifecycle transitions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUserId = "user-1";
+    mockUserId = TEST_VOICE_OWNER_ID;
     mockRecorderState.status = "idle";
     mockRecorderState.durationMs = 0;
     mockRecorderState.isRecording = false;
@@ -225,6 +245,10 @@ describe("useVoiceTransactionFlow AppState and lifecycle transitions", () => {
       transcript: "sample transcript",
       originalTranscript: "sample transcript",
       detectedLanguage: "en",
+      reviewSession: createCanonicalVoiceSessionFixture({
+        ownerId: TEST_VOICE_OWNER_ID,
+        transactions: [],
+      }),
     });
     mockRecorderStart
       .mockReset()
@@ -565,19 +589,14 @@ describe("useVoiceTransactionFlow AppState and lifecycle transitions", () => {
     // Legitimate parse success resolves and navigates
     await act(async () => {
       deferredParse.resolve({
-        transactions: [
-          {
-            amount: 100,
-            currency: "EGP",
-            type: "expense",
-            categoryName: "Food",
-            note: "Groceries",
-            date: "2026-10-12",
-          },
-        ],
+        transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
         transcript: "completed test",
         originalTranscript: "completed test",
         detectedLanguage: "en",
+        reviewSession: createCanonicalVoiceSessionFixture({
+          ownerId: mockUserId ?? TEST_VOICE_OWNER_ID,
+          transactions: [TEST_VOICE_TRANSACTION_FIXTURE],
+        }),
       });
       await submitPromise;
     });
