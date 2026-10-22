@@ -3,6 +3,7 @@ import { OptionalSection } from "@/components/add-transaction/OptionalSection";
 import { palette } from "@/constants/colors";
 import type { TransactionValidationErrors } from "@/validation/transaction-validation";
 import { Ionicons } from "@expo/vector-icons";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import type { Category, TransactionType } from "@monyvi/db";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -11,6 +12,8 @@ interface AccountOption {
   readonly id: string;
   readonly name: string;
   readonly type: "CASH" | "BANK" | "DIGITAL_WALLET";
+  readonly institutionId?: string | null;
+  readonly providerDisplayName?: string | null;
 }
 
 interface OptionalFieldUpdates {
@@ -292,10 +295,11 @@ function AccountPickerField({
               : undefined,
           }}
         >
-          <Ionicons
-            name={getAccountIconName(account)}
-            size={18}
-            color={
+          <AccountIdentityMark
+            account={account ?? null}
+            size="field"
+            testID="edit-transaction-selected-account-identity"
+            fallbackColor={
               selectedCategory?.color ||
               (isDark ? palette.slate[400] : palette.slate[500])
             }
@@ -340,12 +344,4 @@ function CategoryIcon({
       />
     </View>
   );
-}
-
-function getAccountIconName(
-  account: AccountOption | undefined
-): keyof typeof Ionicons.glyphMap {
-  if (account?.type === "BANK") return "business-outline";
-  if (account?.type === "DIGITAL_WALLET") return "card-outline";
-  return "wallet-outline";
 }

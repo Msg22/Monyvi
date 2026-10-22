@@ -6,8 +6,10 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
-import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
-import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
+import {
+  ACCOUNT_IDENTITY_COLORED_SURFACE_INK,
+  AccountIdentityMark,
+} from "@/components/institutions/AccountIdentityMark";
 import { useTheme } from "@/context/ThemeContext";
 import {
   formatAccountPreviewBalance,
@@ -24,34 +26,6 @@ interface AccountPreviewCardProps {
   readonly currency: string;
   readonly institutionId: string | null;
   readonly providerDisplayName: string;
-}
-
-interface PreviewLogoProps {
-  readonly accountType: AccountType;
-  readonly logo: InstitutionLogo | null;
-}
-
-function PreviewLogo({ accountType, logo }: PreviewLogoProps): JSX.Element {
-  return (
-    <InstitutionLogoMark
-      logo={logo}
-      size="preview"
-      surfaceContext="colored-card"
-      testID="account-preview-institution-logo"
-      defaultSurfaceClassName="border-transparent bg-transparent"
-      fallback={
-        <Ionicons
-          name={getAccountPreviewFallbackIcon(accountType)}
-          size={24}
-          // The Cash card renders on the dark green gradient, so its fallback
-          // icon needs the light surface colour to stay readable.
-          color={
-            accountType === "CASH" ? palette.slate[25] : palette.nileGreen[700]
-          }
-        />
-      }
-    />
-  );
 }
 
 export function AccountPreviewCard({
@@ -92,7 +66,20 @@ export function AccountPreviewCard({
     >
       <View className="flex-row items-center justify-between">
         <View className="flex-1 flex-row items-center">
-          <PreviewLogo accountType={accountType} logo={logo} />
+          <AccountIdentityMark
+            account={{ type: accountType, institutionId, providerDisplayName }}
+            size="preview"
+            surfaceContext="colored-card"
+            testID="account-preview-institution-logo"
+            defaultSurfaceClassName="border-transparent bg-transparent"
+            fallback={
+              <Ionicons
+                name={getAccountPreviewFallbackIcon(accountType)}
+                size={24}
+                color={ACCOUNT_IDENTITY_COLORED_SURFACE_INK}
+              />
+            }
+          />
           <View className="ms-3 flex-1">
             <Text className="text-base font-black text-white" numberOfLines={1}>
               {displayName}

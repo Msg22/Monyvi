@@ -170,10 +170,12 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     });
     renderRow(props);
     expect(
-      screen.getByTestId("account-review-account-type-icon", {
-        includeHiddenElements: true,
-      })
-    ).toHaveProp("name", "business-outline");
+      within(
+        screen.getByTestId("account-review-account-type-icon", {
+          includeHiddenElements: true,
+        })
+      ).UNSAFE_getByProps({ name: "business-outline" }).props.name
+    ).toBe("business-outline");
     expect(screen.getByTestId("account-review-row-category")).toBeTruthy();
     expect(
       screen.getByTestId("account-review-resolved-category-icon")
@@ -264,10 +266,12 @@ describe("#395 T021 — accepted default is an editable account label, not an ac
     const props = makeDefaultItem({}, sourceActions);
     renderRow(props);
     expect(
-      screen.getByTestId("account-review-account-type-icon", {
-        includeHiddenElements: true,
-      })
-    ).toHaveProp("name", "cash-outline");
+      within(
+        screen.getByTestId("account-review-account-type-icon", {
+          includeHiddenElements: true,
+        })
+      ).UNSAFE_getByProps({ name: "cash-outline" }).props.name
+    ).toBe("cash-outline");
     expect(screen.queryByTestId("transaction-review-provider-logo")).toBeNull();
   });
 

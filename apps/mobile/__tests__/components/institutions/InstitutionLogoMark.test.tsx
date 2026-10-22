@@ -1,3 +1,4 @@
+import { palette } from "@/constants/colors";
 import { render, screen } from "@testing-library/react-native";
 
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
@@ -29,4 +30,34 @@ describe("InstitutionLogoMark", () => {
     expect(screen.getByTestId("institution-logo image")).toBeTruthy();
     expect(screen.queryByTestId("logo-skeleton")).toBeNull();
   });
+});
+
+it("honors institution contrast metadata inside a colored selected-account slot", () => {
+  const logo: InstitutionLogo = {
+    format: "image",
+    source: 2,
+    appSource: 1,
+    presentation: { needsColoredCardSurface: true },
+  };
+  const view = render(
+    <InstitutionLogoMark
+      logo={logo}
+      surfaceContext="colored-card"
+      testID="selected-institution-logo"
+    />
+  );
+  expect(screen.getByTestId("selected-institution-logo")).toHaveStyle({
+    backgroundColor: palette.slate[25],
+    borderColor: palette.slate[300],
+  });
+  view.rerender(
+    <InstitutionLogoMark
+      logo={logo}
+      surfaceContext="default"
+      testID="selected-institution-logo"
+    />
+  );
+  expect(
+    screen.getByTestId("selected-institution-logo").props.style
+  ).toBeUndefined();
 });

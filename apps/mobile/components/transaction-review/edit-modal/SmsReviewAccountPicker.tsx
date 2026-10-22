@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import type { AccountOption } from "./AccountSelector";
-import { SmsEditIcon } from "./SmsEditIcon";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 
 interface SmsReviewAccountPickerProps {
   readonly visible: boolean;
@@ -83,9 +83,13 @@ export function SmsReviewAccountPicker({
                         : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
                     }`}
                   >
-                    <SmsEditIcon
-                      name="business-outline"
-                      color={palette.blue[500]}
+                    <AccountIdentityMark
+                      account={{
+                        type: option.type ?? null,
+                        institutionId: option.institutionId,
+                      }}
+                      size="group"
+                      testID={"sms-review-account-option-logo-" + option.id}
                     />
                     <View className="ms-3 flex-1">
                       <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">

@@ -16,7 +16,7 @@ import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { AccountsSectionSkeleton } from "@/components/dashboard/skeletons/AccountsSectionSkeleton";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
-import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { useTheme } from "@/context/ThemeContext";
 import { buildAccountDisplayNames } from "@/utils/account-display";
 import { formatAccountBalance } from "@/utils/financial-display";
@@ -57,6 +57,8 @@ interface AccountCardData {
   name: string;
   balance: string;
   type: AccountType;
+  institutionId: string | null;
+  providerDisplayName: string | null;
   cardGradient: readonly [string, string];
   iconName: string;
   institutionLogo: InstitutionLogo | null;
@@ -221,8 +223,13 @@ function AccountCard({ data, cardWidth }: AccountCardProps): React.JSX.Element {
         testID={`dashboard-account-card-${data.id}`}
       >
         <View className="relative min-h-9">
-          <InstitutionLogoMark
-            logo={data.institutionLogo}
+          <AccountIdentityMark
+            account={{
+              type: data.type,
+              institutionId: data.institutionId,
+              providerDisplayName: data.providerDisplayName,
+            }}
+            resolvedLogo={data.institutionLogo}
             size="dashboard"
             surfaceContext="colored-card"
             defaultSurfaceClassName="border-transparent bg-transparent"
@@ -322,6 +329,8 @@ function AccountsSectionComponent({
           maximumFractionDigits: 0,
         }),
         type: account.type,
+        institutionId: account.institutionId ?? null,
+        providerDisplayName: account.providerDisplayName ?? null,
         cardGradient: getCardGradient({
           accentColor,
           institutionLogo,

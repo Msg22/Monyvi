@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Text, TouchableOpacity, View, type TextStyle } from "react-native";
 import { useColorScheme } from "nativewind";
 import { palette } from "@/constants/colors";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import { useTranslation } from "react-i18next";
 import type { SharedSuggestedGroupView } from "./SharedAccountSuggestions";
 import {
@@ -239,12 +240,23 @@ export function SharedAccountGroupRow(
     >
       <View className={"min-w-0 items-start gap-2 " + ordering}>
         <View className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
-          <Ionicons
-            name={groupIcon(group.typeIconName)}
-            size={20}
-            color={iconInk}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
+          <AccountIdentityMark
+            account={{
+              type: group.accountType ?? null,
+              institutionId: group.institutionId,
+              providerDisplayName: group.providerDisplayName,
+            }}
+            size="metadata"
+            testID={"account-review-group-identity-mark-" + group.groupId}
+            fallback={
+              <Ionicons
+                name={groupIcon(group.typeIconName)}
+                size={20}
+                color={iconInk}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+            }
           />
         </View>
         <View

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMemo } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { buildAccountDisplayNames } from "@/utils/account-display";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 
 interface AccountSelectorProps {
   accounts: Account[];
@@ -44,11 +45,6 @@ export function AccountSelector({
         {accounts.map((account) => {
           const isSelected = account.id === selectedId;
 
-          // Determine icon based on account type
-          let iconName: keyof typeof Ionicons.glyphMap = "wallet-outline";
-          if (account.type === "BANK") iconName = "business-outline";
-          if (account.type === "DIGITAL_WALLET") iconName = "card-outline";
-
           return (
             <TouchableOpacity
               key={account.id}
@@ -81,10 +77,12 @@ export function AccountSelector({
                   backgroundColor: isSelected ? mainColor : undefined,
                 }}
               >
-                <Ionicons
-                  name={iconName}
-                  size={20}
-                  color={
+                <AccountIdentityMark
+                  account={account}
+                  size="group"
+                  surfaceContext={isSelected ? "colored-card" : "default"}
+                  testID={"manual-account-selector-logo-" + account.id}
+                  fallbackColor={
                     isSelected
                       ? "white"
                       : isDark

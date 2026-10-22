@@ -110,6 +110,7 @@ export function CanonicalReviewRow({
           accountActionLabel: details.accountActionLabel,
           accountStatusLabel: details.accountStatusLabel,
           accountType: details.accountType,
+          accountIdentity: details.accountIdentity,
           sharedSelectionDisclosure: null,
           currencyActionLabel: details.currencyActionLabel,
           currencyContextLabel: details.currencyContextLabel,

@@ -1,19 +1,11 @@
 /**
- * TransactionEditModal
- *
- * Inline bottom-sheet modal for editing a parsed SMS transaction directly
- * from the review page. Allows editing: amount, category, account, counterparty,
- * date, and transaction type — without navigating away.
- *
- * Account modes:
- * 1. Dropdown (default) — when bank accounts exist, shows tappable list
- * 2. Text input — when no accounts exist OR user taps "+ New"
- * 3. "+ New" toggle — creates a PendingAccount on save
- *
- * @module TransactionEditModal
+ * TransactionEditModal: inline parsed-SMS review editing.
+ * Canonical V2 uses a separate controlled editor; the legacy sheet supports
+ * existing-account choices, new-account entry and pending-account drafts.
  */
 
 import { palette } from "@/constants/colors";
+import { AccountIdentityMark } from "@/components/institutions/AccountIdentityMark";
 import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
@@ -41,7 +33,7 @@ import {
 import { TypeTabs } from "../../add-transaction/TypeTabs";
 import { CurrencyPicker } from "../../currency/CurrencyPicker";
 import { CategorySelectorModal } from "../../modals/CategorySelectorModal";
-import { AccountSelector } from "./AccountSelector";
+import { AccountSelector, type AccountOption } from "./AccountSelector";
 import { SmsEditIcon } from "./SmsEditIcon";
 import { SmsReviewAccountPicker } from "./SmsReviewAccountPicker";
 import {
@@ -140,6 +132,18 @@ function LegacyTransactionEditModal(
     ...props,
     allowTransactionCurrencyEdit: isSmsWorkspace,
   });
+  // Brand by concrete persisted or pending identity, never by a nickname.
+  const branded = (
+    options: readonly AccountOption[]
+  ): readonly AccountOption[] =>
+    options.map((option) => {
+      const account = props.accounts.find((item) => item.id === option.id);
+      const institutionId =
+        account?.institutionId ??
+        props.pendingAccounts.find((pending) => pending.tempId === option.id)
+          ?.institutionId;
+      return institutionId ? { ...option, institutionId } : option;
+    });
 
   return (
     <Modal
@@ -240,6 +244,7 @@ function LegacyTransactionEditModal(
                 setters={setters}
                 accountHandlers={accountHandlers}
                 selectedSnapshot={selectedSnapshot}
+                brandedOptions={branded}
               />
             ) : (
               <>
@@ -422,7 +427,7 @@ function LegacyTransactionEditModal(
                       ? t("from_account_label")
                       : t("account_label")
                   }
-                  options={state.accountOptions}
+                  options={branded(state.accountOptions)}
                   placeholder={
                     state.formConfig.showToAccount
                       ? t("select_source_bank")
@@ -456,8 +461,8 @@ function LegacyTransactionEditModal(
                   newAccountError={state.newAccountError}
                   onStartNew={accountHandlers.handleStartNew}
                   onCancelNew={accountHandlers.handleCancelNew}
-                  matchingAccounts={state.matchingAccounts}
-                  otherAccounts={state.otherAccounts}
+                  matchingAccounts={branded(state.matchingAccounts)}
+                  otherAccounts={branded(state.otherAccounts)}
                   showSectionHeaders={state.showSectionHeaders}
                   matchingSectionLabel={t("matching_accounts_label", {
                     currency: transaction.currency,
@@ -517,7 +522,7 @@ function LegacyTransactionEditModal(
                 {state.formConfig.showToAccount && (
                   <AccountSelector
                     label={t("to_account_label")}
-                    options={state.cashAccountOptions}
+                    options={branded(state.cashAccountOptions)}
                     placeholder={t("select_cash_account")}
                     hintMessage={t("cash_account_hint", {
                       name: state.newToAccountName.trim() || t("cash_default"),
@@ -584,6 +589,9 @@ interface SmsReviewEditFieldsProps {
   readonly setters: UseTransactionEditStateReturn["setters"];
   readonly accountHandlers: UseTransactionEditStateReturn["accountHandlers"];
   readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
+  readonly brandedOptions: (
+    options: readonly AccountOption[]
+  ) => readonly AccountOption[];
 }
 
 type SmsEditableField = "amount" | "merchant" | null;
@@ -593,9 +601,13 @@ function SmsReviewEditFields({
   setters,
   accountHandlers,
   selectedSnapshot,
+  brandedOptions,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
   const { t, i18n } = useTranslation("transactions");
   const [focusedField, setFocusedField] = useState<SmsEditableField>(null);
+  const selectedAccount = brandedOptions(state.accountOptions).find(
+    (option) => option.id === state.selectedAccountId
+  );
 
   const openCategory = (): void => {
     if (state.formErrors.categoryId) {
@@ -727,7 +739,15 @@ function SmsReviewEditFields({
           activeOpacity={0.7}
           className="min-h-16 flex-row items-center border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
         >
-          <SmsEditIcon name="business-outline" color={palette.blue[500]} />
+          <AccountIdentityMark
+            account={{
+              type: selectedAccount?.type ?? "BANK",
+              institutionId: selectedAccount?.institutionId,
+            }}
+            size="group"
+            testID="sms-edit-selected-account-identity"
+            defaultSurfaceClassName="border-transparent bg-slate-100 dark:bg-slate-700"
+          />
           <View className="ms-3 flex-1">
             <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
               {state.formConfig.showToAccount
@@ -833,7 +853,7 @@ function SmsReviewEditFields({
       {state.formConfig.showToAccount && (
         <AccountSelector
           label={t("to_account_label")}
-          options={state.cashAccountOptions}
+          options={brandedOptions(state.cashAccountOptions)}
           placeholder={t("select_cash_account")}
           hintMessage={t("cash_account_hint", {
             name: state.newToAccountName.trim() || t("cash_default"),
@@ -864,7 +884,7 @@ function SmsReviewEditFields({
 
       <SmsReviewAccountPicker
         visible={state.isAccountPickerOpen}
-        options={state.accountOptions}
+        options={brandedOptions(state.accountOptions)}
         selectedId={state.selectedAccountId}
         onSelect={accountHandlers.handleSelectAccount}
         onStartNew={accountHandlers.handleStartNew}

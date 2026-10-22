@@ -18,6 +18,10 @@ import {
   getSafeCategoryIconConfig,
 } from "@/utils/category-icon-config";
 import { CategoryIcon } from "@/components/common/CategoryIcon";
+import {
+  AccountIdentityMark,
+  type AccountIdentitySource,
+} from "@/components/institutions/AccountIdentityMark";
 import { useLocale } from "@/context/LocaleContext";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 
@@ -43,6 +47,8 @@ export interface AccountReviewRowPresentationProps {
   readonly currencyContextLabel: string | null;
   /** The canonical owned choice/suggested group type, never inferred from source. */
   readonly accountType?: AccountReviewSession["groups"][number]["type"];
+  /** Concrete owned/suggested account institution identity, never SMS sender. */
+  readonly accountIdentity?: AccountIdentitySource | null;
   /** An optional, parent-shaped semantic tone; never guessed from translated text. */
   readonly accountStatusTone?: AccountReviewRowStatusTone;
   readonly isBusy: boolean;
@@ -69,6 +75,10 @@ export function areAccountReviewRowPropsEqual(
     a.currencyActionLabel === b.currencyActionLabel &&
     a.currencyContextLabel === b.currencyContextLabel &&
     a.accountType === b.accountType &&
+    a.accountIdentity?.type === b.accountIdentity?.type &&
+    a.accountIdentity?.institutionId === b.accountIdentity?.institutionId &&
+    a.accountIdentity?.providerDisplayName ===
+      b.accountIdentity?.providerDisplayName &&
     a.accountStatusTone === b.accountStatusTone &&
     a.isBusy === b.isBusy &&
     a.onChooseAccount === b.onChooseAccount &&
@@ -111,7 +121,11 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
   const action = source.accountActionLabel;
   const title = name ?? action;
   const status = source.accountStatusLabel;
-  const hasIcon = title !== null || Boolean(source.accountType);
+  const metadataType = source.accountIdentity?.type ?? source.accountType;
+  const hasIcon =
+    title !== null ||
+    Boolean(source.accountType) ||
+    Boolean(source.accountIdentity?.type);
 
   return (
     <View
@@ -122,9 +136,9 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
         testID="account-review-account-name-and-pencil"
         className={
           "min-w-0 max-w-full gap-x-1 " +
-          (source.accountType === "DIGITAL_WALLET" ||
-          source.accountType === "CASH" ||
-          !source.accountType
+          (metadataType === "DIGITAL_WALLET" ||
+          metadataType === "CASH" ||
+          !metadataType
             ? "items-center "
             : "items-baseline ") +
           ordering
@@ -132,13 +146,25 @@ function AccountMetadata(props: AccountMetadataProps): React.JSX.Element {
       >
         {hasIcon ? (
           <View className="h-8 w-7 shrink-0 items-center justify-center">
-            <Ionicons
+            <AccountIdentityMark
+              account={
+                source.accountIdentity ?? {
+                  type: source.accountType ?? null,
+                }
+              }
+              size="metadata"
               testID="account-review-account-type-icon"
-              name={accountTypeIcon(source.accountType)}
-              color={palette.slate[500]}
-              size={20}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
+              fallback={
+                <Ionicons
+                  name={accountTypeIcon(
+                    source.accountIdentity?.type ?? source.accountType
+                  )}
+                  color={palette.slate[500]}
+                  size={20}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                />
+              }
             />
           </View>
         ) : null}
