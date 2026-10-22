@@ -157,14 +157,14 @@ function AccountOption(props: AccountOptionProps): React.JSX.Element {
           institutionId: props.option.institutionId,
           providerDisplayName: props.option.providerDisplayName,
         }}
-        size="metadata"
+        size="row"
         surfaceContext={props.selected ? "colored-card" : "default"}
         containerClassName="shrink-0"
         testID={"account-review-choice-mark-" + props.option.id}
         fallback={
           <Ionicons
             name={props.option.iconName ?? "help-circle-outline"}
-            size={22}
+            size={40}
             color={props.selected ? "white" : palette.slate[500]}
             accessibilityElementsHidden
             importantForAccessibility="no"
