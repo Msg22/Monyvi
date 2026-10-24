@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Monyvi serves individuals in Egypt who want a lower-friction way to understand
+Maleem serves individuals in Egypt who want a lower-friction way to understand
 their money across cash, bank accounts, digital wallets, recurring obligations,
 budgets, foreign currencies, and metal savings. They may think and speak in
 Arabic, English, or a mix of both. They often move money through cash, banks,
@@ -25,24 +25,26 @@ to the current user because local rows may remain on the device after logout.
 
 ## Product Purpose
 
-Monyvi is an authenticated, offline-first personal finance companion for the
+Maleem is an authenticated, offline-first personal finance companion for the
 Egyptian market. It tracks spendable money, transactions, budgets, recurring
 payments, debts, digital wallets, bank balances, and metal holdings while using
 voice and SMS automation to reduce boring manual entry.
 
 The product exists because traditional finance apps ask users to type too much.
-Monyvi should let users capture financial activity through the signals they
+Maleem should let users capture financial activity through the signals they
 already have: spoken notes, bank and wallet SMS messages, account balances, and
 everyday Arabic/English financial language.
 
-Success means users can trust Monyvi as a fast daily money companion: it works
+Success means users can trust Maleem as a fast daily money companion: it works
 offline, writes locally first, clearly separates automation from review, shows
 financial state without confusion, and never asks for sensitive credentials such
 as full card numbers, PINs, or passwords.
 
+The approved user-facing names are **Maleem** in English and **مليم** in Arabic. Internal technical identifiers remain unchanged for existing-install continuity. The current logo is retained until owner selection.
+
 ## Brand Personality
 
-Monyvi should feel calm, trustworthy, practical, and quietly premium. Its
+Maleem should feel calm, trustworthy, practical, and quietly premium. Its
 personality is: **clear**, **capable**, and **grounded**.
 
 The voice should be friendly and direct, especially around permissions,
@@ -57,7 +59,7 @@ of confidence, feedback, and reduced effort.
 
 ## Anti-references
 
-Monyvi should not look or behave like:
+Maleem should not look or behave like:
 
 - A generic fintech dashboard with navy-and-gold cliches.
 - A crypto app, trading app, or speculative wealth product.
@@ -98,7 +100,7 @@ Monyvi should not look or behave like:
 
 ## Accessibility & Inclusion
 
-Monyvi supports English and Arabic, including RTL layout. Arabic text should use
+Maleem supports English and Arabic, including RTL layout. Arabic text should use
 Noto Sans Arabic; English and LTR UI should use Inter. Search and matching
 experiences that involve Egyptian institutions should respect both English and
 Arabic provider names when metadata exists.
@@ -114,5 +116,5 @@ should use skeletons rather than spinners, with short action progress reserved
 for buttons or already-visible content.
 
 Financial safety copy must be plain-language and reassuring. Permission and SMS
-automation flows should use Monyvi-owned explanatory UI before system prompts or
+automation flows should use Maleem-owned explanatory UI before system prompts or
 settings handoffs.
