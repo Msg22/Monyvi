@@ -1,9 +1,11 @@
-# Monyvi Project
+# Maleem Project
 
-Monyvi is an offline-first personal finance companion for the Egyptian market.
+Maleem is an offline-first personal finance companion for the Egyptian market.
 It tracks cash, bank accounts, digital wallets, transactions, budgets, recurring
 payments, metal holdings, live gold/silver and currency rates, and inflation
 rate guidance, with low-friction entry through voice and SMS.
+
+The user-facing product name is **Maleem / مليم** (issue #416). Existing technical identifiers, repository paths, package names, app IDs, deep links, and storage keys retain their `monyvi` names for compatibility. Visual assets remain pending the owner-selected logo.
 
 ## Current Status
 
@@ -369,7 +371,7 @@ npm run supabase:runtime:setup-local
 
 - If Metro starts but npm exits with an error, make sure no old Metro process is
   occupying port `8081`.
-- If the app opens Expo Go instead of Monyvi, install or launch the development
+- If the app opens Expo Go instead of Maleem, install or launch the development
   build, not Expo Go.
 - If local Google sign-in cannot reach the callback on an emulator or
   USB-connected Android device, run `adb reverse tcp:54321 tcp:54321`.
