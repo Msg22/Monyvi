@@ -1,0 +1,10 @@
+{
+  "android": {
+    "app_name": "Maleem"
+  },
+  "ios": {
+    "CFBundleDisplayName": "Maleem",
+    "NSMicrophoneUsageDescription": "Maleem needs microphone access for voice input",
+    "NSSpeechRecognitionUsageDescription": "Maleem needs speech recognition to convert your voice to transactions"
+  }
+}
