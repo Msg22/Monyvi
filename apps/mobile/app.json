@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "Monyvi",
+    "name": "Maleem",
     "slug": "monyvi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "monyvi",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "extra": {
       "supportsRTL": true
     },
@@ -15,8 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.monyvi.app",
       "infoPlist": {
-        "NSSpeechRecognitionUsageDescription": "Monyvi needs speech recognition to convert your voice to transactions",
-        "NSMicrophoneUsageDescription": "Monyvi needs microphone access for voice input"
+        "NSSpeechRecognitionUsageDescription": "Maleem needs speech recognition to convert your voice to transactions",
+        "NSMicrophoneUsageDescription": "Maleem needs microphone access for voice input",
+        "CFBundleAllowMixedLocalizations": true
       }
     },
     "android": {
@@ -47,7 +50,12 @@
           "imageWidth": 200
         }
       ],
-      ["expo-secure-store", { "configureAndroidBackup": false }],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-localization",
       [
@@ -57,7 +65,12 @@
           "color": "#0F172A"
         }
       ],
-      ["expo-dev-client", { "toolsButton": false }],
+      [
+        "expo-dev-client",
+        {
+          "toolsButton": false
+        }
+      ],
       "./plugins/withSmsBroadcastReceiver",
       "./plugins/withDisableBackup",
       [
@@ -71,6 +84,10 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "locales": {
+      "en": "./native-locales/en.json",
+      "ar": "./native-locales/ar.json"
     }
   }
 }
