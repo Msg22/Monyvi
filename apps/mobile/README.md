@@ -1,6 +1,6 @@
-# Monyvi Mobile App
+# Maleem Mobile App
 
-Expo React Native app for Monyvi.
+Expo React Native app for Maleem (مليم). Existing `monyvi` package and platform identifiers remain unchanged for compatibility; logo assets await owner approval.
 
 All dependencies are managed from the root workspace. Run commands from the
 repository root unless noted otherwise.

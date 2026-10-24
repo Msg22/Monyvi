@@ -42,7 +42,7 @@ function buildHostedAuthSmtpConfig(environment) {
     smtpPort,
     smtpUser: environment.MONYVI_AUTH_SMTP_USER?.trim() || "resend",
     smtpPassword: environment.MONYVI_AUTH_SMTP_PASSWORD.trim(),
-    senderName: environment.MONYVI_AUTH_SMTP_SENDER_NAME?.trim() || "Monyvi",
+    senderName: environment.MONYVI_AUTH_SMTP_SENDER_NAME?.trim() || "Maleem",
   };
 }
 

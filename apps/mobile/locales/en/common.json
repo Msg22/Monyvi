@@ -140,7 +140,7 @@
   "voice_ui_parsing_title": "Turning your words into a transaction",
   "voice_ui_parsing_description": "Getting the details ready…",
   "voice_ui_permission_title": "Allow your microphone",
-  "voice_ui_permission_description": "Monyvi needs access to your microphone to record your transaction.",
+  "voice_ui_permission_description": "Maleem needs access to your microphone to record your transaction.",
   "voice_ui_permission_action": "Allow microphone",
   "voice_ui_examples_dismiss": "Dismiss examples",
   "voice_ui_idle_title": "Tap and speak your transaction",

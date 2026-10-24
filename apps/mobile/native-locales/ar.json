@@ -1,0 +1,10 @@
+{
+  "android": {
+    "app_name": "مليم"
+  },
+  "ios": {
+    "CFBundleDisplayName": "مليم",
+    "NSMicrophoneUsageDescription": "يحتاج مليم إلى الوصول إلى الميكروفون للإدخال الصوتي.",
+    "NSSpeechRecognitionUsageDescription": "يحتاج مليم إلى التعرّف على الكلام لتحويل صوتك إلى معاملات."
+  }
+}
