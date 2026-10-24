@@ -18,7 +18,7 @@ appId: com.monyvi.app
 
 - assertVisible: "Allow SMS sync?"
 - assertVisible:
-    "Monyvi scans financial SMS from supported banks and wallets. Matching
+    "Maleem scans financial SMS from supported banks and wallets. Matching
     messages are sent to our AI provider for parsing so you can review suggested
     transactions."
 - assertVisible: "Allow SMS access"

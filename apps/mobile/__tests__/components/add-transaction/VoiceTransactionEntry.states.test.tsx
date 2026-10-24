@@ -333,13 +333,13 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     [
       "en",
       "Allow your microphone",
-      "Monyvi needs access to your microphone to record your transaction.",
+      "Maleem needs access to your microphone to record your transaction.",
       "Allow microphone",
     ],
     [
       "ar",
       "اسمح باستخدام الميكروفون",
-      "يحتاج Monyvi إلى الميكروفون لتسجيل معاملتك.",
+      "يحتاج مليم إلى الميكروفون لتسجيل معاملتك.",
       "السماح بالميكروفون",
     ],
   ] as const)(

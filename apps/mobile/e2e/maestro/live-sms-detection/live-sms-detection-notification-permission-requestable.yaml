@@ -21,7 +21,7 @@ appId: com.monyvi.app
 
 - assertVisible: "Allow notifications?"
 - assertVisible:
-    "Monyvi needs notifications to show you new transactions as they arrive."
+    "Maleem needs notifications to show you new transactions as they arrive."
 - assertVisible: "Allow notifications"
 - assertVisible: "Not now"
 

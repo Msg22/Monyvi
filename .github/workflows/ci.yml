@@ -206,6 +206,7 @@ jobs:
             monyvi-debug-apk-v1-${{ runner.os }}-${{
             hashFiles('package-lock.json', 'apps/mobile/package.json',
             'apps/mobile/app.json', 'apps/mobile/plugins/**',
+            'apps/mobile/native-locales/**',
             'apps/mobile/assets/**', 'patches/**', 'apps/mobile/android/**') }}
 
       - name: Setup Node.js
@@ -341,6 +342,7 @@ jobs:
             monyvi-debug-apk-v1-${{ runner.os }}-${{
             hashFiles('package-lock.json', 'apps/mobile/package.json',
             'apps/mobile/app.json', 'apps/mobile/plugins/**',
+            'apps/mobile/native-locales/**',
             'apps/mobile/assets/**', 'patches/**', 'apps/mobile/android/**') }}
           fail-on-cache-miss: true
 
