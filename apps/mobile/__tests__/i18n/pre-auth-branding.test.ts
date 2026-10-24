@@ -19,11 +19,11 @@ function collectStrings(value: unknown): string[] {
 }
 
 describe("pre-auth Arabic branding", () => {
-  it("uses Monyvi instead of the legacy Razky name", () => {
+  it("uses Maleem instead of the legacy Razky name", () => {
     const visibleCopy = collectStrings({ arAuth, arOnboarding });
 
     expect(visibleCopy.some((value) => value.includes("رزقي"))).toBe(false);
-    expect(arAuth.welcome_title).toBe("أهلًا بك في مونيڤي");
+    expect(arAuth.welcome_title).toBe("أهلًا بك في مليم");
   });
 
   it("preserves the approved bilingual auth copy", () => {
