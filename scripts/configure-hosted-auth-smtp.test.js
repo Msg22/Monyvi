@@ -28,7 +28,7 @@ test("builds the Supabase Auth SMTP payload from environment configuration", () 
     smtp_port: 465,
     smtp_user: "resend",
     smtp_pass: "test-smtp-password",
-    smtp_sender_name: "Monyvi",
+    smtp_sender_name: "Maleem",
   });
 });
 
