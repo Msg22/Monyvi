@@ -1,6 +1,6 @@
-# Monyvi Business Decisions
+# Maleem Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-10-20
+**Status:** Active product source of truth **Last updated:** 2026-10-24
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -10,6 +10,13 @@ implementation. When this file and the code disagree, investigate the code,
 update this file, and call out any product decision that needs owner input.
 
 ## 1. Product Definition
+
+### Product display-name decision — 2026-10-24 (#416)
+
+The owner approved **Maleem** (English) and **مليم** (Arabic) as the user-facing product name, superseding Monyvi display copy. The rename does not change installed app identity, authentication/deep links, signing, EAS/OTA configuration, package/import names, database/Supabase IDs, or storage/session keys. Generated Android `rootProject.name` and iOS `PRODUCT_NAME` may follow the display-name configuration only; no other native identifier renames are approved. The existing visual logo and app assets remain pending the owner's final logo selection. Tracked email copy is not evidence of hosted configuration or delivery.
+
+Historical sections below retain their original product name where needed to preserve implementation and decision provenance.
+
 
 Monyvi is an authenticated, offline-first personal finance companion for users
 who want a low-friction way to understand their money across cash, bank
